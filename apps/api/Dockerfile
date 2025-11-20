@@ -42,22 +42,21 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy workspace files for dependency installation
+# Copy workspace files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/api/package.json ./apps/api/
 
-# Install production dependencies (install all workspace deps, then filter)
-# This ensures all transitive dependencies are available
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
-    pnpm prune --prod --filter vett-api...
+# Install ONLY production dependencies for the specific package
+# Don't use --filter with install, install everything then we'll only use what we need
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Copy built files
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
-# Verify @sentry/node is installed
-RUN ls -la node_modules/@sentry/ || echo "Warning: @sentry/node not found"
+# Verify critical dependencies exist
+RUN test -d node_modules/@sentry/node || (echo "ERROR: @sentry/node not found" && ls -la node_modules/@sentry/ && exit 1)
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
