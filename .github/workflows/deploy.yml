@@ -1,0 +1,67 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'  # Deploy on version tags (e.g., v1.0.0)
+  workflow_dispatch:  # Allow manual deployment
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build
+        run: |
+          pnpm --filter @vett/shared build
+          pnpm --filter vett-api build
+          pnpm --filter vett-worker build
+      
+      - name: Build Docker images
+        run: |
+          docker build -t vett-api:${{ github.sha }} -f apps/api/Dockerfile .
+          docker build -t vett-worker:${{ github.sha }} -f apps/worker/Dockerfile .
+      
+      - name: Deploy
+        run: |
+          echo "🚀 Deployment placeholder"
+          echo "Environment: ${{ github.event.inputs.environment || 'production' }}"
+          echo "Tag: ${{ github.ref }}"
+          echo "SHA: ${{ github.sha }}"
+          echo ""
+          echo "Next steps:"
+          echo "1. Push Docker images to registry"
+          echo "2. Deploy to your hosting platform"
+          echo "3. Run database migrations"
+          echo "4. Update environment variables"
+          echo ""
+          echo "See docs/DEPLOYMENT.md for deployment instructions"
+

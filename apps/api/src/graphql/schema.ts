@@ -1,0 +1,242 @@
+export const schema = `
+  type HealthCheck {
+    status: String!
+    timestamp: String!
+  }
+
+  type AnalysisSummary {
+    id: ID!
+    score: Int
+    verdict: String
+    confidence: Float
+    bias: String
+    status: String!
+    createdAt: String!
+    summary: String
+    recommendation: String
+    imageUrl: String
+    imageAttribution: ImageAttribution
+    hasWatermark: Boolean!
+    claims: [Claim!]!
+    sources: [AnalysisSource!]!
+    explanationSteps: [ExplanationStep!]!
+    attachments: [AnalysisAttachment!]!
+    ingestionMeta: IngestionMetadata
+    ingestionRecords: [IngestionRecord!]!
+    classificationMeta: ClassificationMeta
+    claimExtractionMeta: ClaimExtractionMeta
+    reasonerMeta: ReasonerMeta
+  }
+
+  type Claim {
+    id: ID!
+    text: String!
+    extractionConfidence: Float
+    verdict: String
+    confidence: Float
+    createdAt: String!
+  }
+
+  type AnalysisSource {
+    id: ID!
+    provider: String!
+    title: String!
+    url: String!
+    reliability: Float
+    summary: String
+    createdAt: String!
+    evaluation: SourceEvaluation
+  }
+
+  type ExplanationStep {
+    id: ID!
+    claimId: ID
+    description: String!
+    supportingSourceIds: [String!]
+    confidence: Float
+    createdAt: String!
+  }
+
+  type ClassificationMeta {
+    model: String!
+    confidence: Float
+    rationale: String
+    fallbackUsed: Boolean!
+  }
+
+  type ClaimExtractionMeta {
+    model: String!
+    totalClaims: Int!
+    usedFallback: Boolean!
+    warnings: [String!]
+  }
+
+  type ReasonerMeta {
+    model: String!
+    confidence: Float
+    fallbackUsed: Boolean!
+    rationale: String
+  }
+
+  type SourceEvaluation {
+    reliability: Float
+    relevance: Float
+    assessment: String
+  }
+
+  type AnalysisAttachment {
+    id: ID!
+    kind: String!
+    url: String!
+    mediaType: String
+    title: String
+    summary: String
+    altText: String
+    caption: String
+    createdAt: String!
+  }
+
+  type IngestionMetadata {
+    totalAttachments: Int!
+    processedLinks: Int!
+    processedImages: Int!
+    processedDocuments: Int!
+    successful: Int!
+    failed: Int!
+    totalCharacters: Int!
+    warnings: [String!]
+  }
+
+  type IngestionRecord {
+    attachment: AnalysisAttachment
+    wordCount: Int
+    truncated: Boolean!
+    error: String
+    quality: IngestionQuality
+  }
+
+  type IngestionQuality {
+    level: IngestionQualityLevel!
+    score: Float!
+    reasons: [String!]
+    recommendation: IngestionRecommendation
+    message: String
+  }
+
+  enum IngestionQualityLevel {
+    EXCELLENT
+    GOOD
+    FAIR
+    POOR
+    INSUFFICIENT
+  }
+
+  enum IngestionRecommendation {
+    SCREENSHOT
+    API_KEY
+    NONE
+  }
+
+  type ImageAttribution {
+    photographer: String
+    photographerProfileUrl: String
+    unsplashPhotoUrl: String
+    isGenerated: Boolean
+  }
+
+  enum AnalysisAttachmentKind {
+    LINK
+    IMAGE
+    DOCUMENT
+  }
+
+  input AnalysisAttachmentInput {
+    kind: AnalysisAttachmentKind!
+    url: String!
+    mediaType: String
+    title: String
+    summary: String
+    altText: String
+    caption: String
+  }
+
+  input SubmitAnalysisInput {
+    contentUri: String
+    text: String
+    mediaType: String!
+    topicHint: String
+    attachments: [AnalysisAttachmentInput!]
+  }
+
+  type SubmitAnalysisPayload {
+    analysisId: ID!
+    status: String!
+  }
+
+  type SubscriptionInfo {
+    plan: SubscriptionPlan!
+    status: SubscriptionStatus!
+    billingCycle: BillingCycle!
+    currentPeriodStart: String!
+    currentPeriodEnd: String!
+    cancelAtPeriodEnd: Boolean!
+    limits: PlanLimits!
+    prices: PlanPrices!
+    usage: UsageInfo!
+  }
+
+  type PlanLimits {
+    maxAnalysesPerMonth: Int
+    hasWatermark: Boolean!
+    historyRetentionDays: Int
+    hasPriorityProcessing: Boolean!
+    hasAdvancedBiasAnalysis: Boolean!
+    hasExtendedSummaries: Boolean!
+    hasCrossPlatformSync: Boolean!
+    hasCustomAlerts: Boolean!
+    maxSources: Int!
+  }
+
+  type PlanPrices {
+    monthly: Float!
+    annual: Float!
+  }
+
+  type UsageInfo {
+    analysesCount: Int!
+    maxAnalyses: Int
+    periodStart: String!
+    periodEnd: String!
+    hasUnlimited: Boolean!
+  }
+
+  enum SubscriptionPlan {
+    FREE
+    PLUS
+    PRO
+  }
+
+  enum SubscriptionStatus {
+    ACTIVE
+    CANCELLED
+    PAST_DUE
+    TRIALING
+  }
+
+  enum BillingCycle {
+    MONTHLY
+    ANNUAL
+  }
+
+  type Query {
+    health: HealthCheck!
+    analysis(id: ID!): AnalysisSummary
+    subscription: SubscriptionInfo!
+    usage: UsageInfo!
+  }
+
+  type Mutation {
+    submitAnalysis(input: SubmitAnalysisInput!): SubmitAnalysisPayload!
+  }
+`;
+

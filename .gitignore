@@ -1,0 +1,16 @@
+node_modules
+.pnpm-store
+dist
+.turbo
+.expo
+.expo-shared
+coverage
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+tmp
+
+apps/api/uploads/
+

@@ -1,0 +1,118 @@
+import { openai } from "../../clients/openai.js";
+import type { PipelineClaim, PipelineSource } from "../types.js";
+import { parseJsonContent } from "../utils/openai.js";
+
+export const VERDICT_MODEL = "gpt-4.1-mini";
+
+const VERDICT_PROMPT = `
+You are a fact-checking adjudicator. Given claims and evaluated evidence, produce a grounded verdict.
+Respond in English JSON ONLY, matching the schema. Cite evidence using the provided \`key\` values.
+If evidence contradicts a claim, LOWER the numeric score. If evidence strongly supports it, raise the score.
+Map scores to verdicts as follows:
+- 0-25 => "False"
+- 26-50 => "Partially True"
+- 51-75 => "Mostly Accurate"
+- 76-100 => "Verified"
+Confidence must be 0-1.
+Explain rationale succinctly (<=200 chars).
+`;
+
+const JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    verdict: {
+      type: "string",
+      enum: ["Verified", "Mostly Accurate", "Partially True", "False"]
+    },
+    score: { type: "number", minimum: 0, maximum: 100 },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    summary: { type: "string", maxLength: 300 },
+    recommendation: { type: "string", maxLength: 200 },
+    rationale: { type: "string", maxLength: 200 },
+    evidenceSupport: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          claimId: { type: "string" },
+          supportingSources: {
+            type: "array",
+            items: { type: "string" }
+          }
+        },
+        required: ["claimId", "supportingSources"],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["verdict", "score", "confidence", "summary", "recommendation", "rationale", "evidenceSupport"],
+  additionalProperties: false
+} as const;
+
+export type ReasonerVerdictOutput = {
+  verdict: "Verified" | "Mostly Accurate" | "Partially True" | "False";
+  score: number;
+  confidence: number;
+  summary: string;
+  recommendation: string;
+  rationale?: string;
+  evidenceSupport: Array<{ claimId: string; supportingSources: string[] }>;
+};
+
+export async function reasonVerdict(
+  claims: PipelineClaim[],
+  sources: PipelineSource[]
+): Promise<ReasonerVerdictOutput | null> {
+  if (claims.length === 0 || sources.length === 0) {
+    return null;
+  }
+
+  const payload = {
+    claims: claims.map((claim) => ({
+      id: claim.id,
+      text: claim.text,
+      verdict_hint: claim.verdict,
+      confidence: claim.confidence
+    })),
+    evidence: sources.map((source) => ({
+      key: source.key,
+      provider: source.provider,
+      reliability: source.reliability,
+      summary: source.summary ?? "",
+      url: source.url
+    }))
+  };
+
+  try {
+    const response = await openai.responses.create({
+      model: VERDICT_MODEL,
+      input: [
+        { role: "system", content: VERDICT_PROMPT },
+        { role: "user", content: JSON.stringify(payload) }
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "verdict_reasoning",
+          schema: JSON_SCHEMA,
+          strict: true
+        }
+      }
+    });
+
+    const firstOutput = response.output?.[0];
+    const firstContent = firstOutput?.content?.[0];
+    if (!firstOutput || !firstContent) {
+      return null;
+    }
+
+    const parsed = await parseJsonContent<ReasonerVerdictOutput>(firstContent, "verdict_reasoning");
+    return parsed;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("Verdict reasoning failed:", error);
+    return null;
+  }
+}
+
+

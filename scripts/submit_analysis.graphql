@@ -1,0 +1,7 @@
+mutation SubmitAnalysis($text: String!, $mediaType: String! = "text") {
+  submitAnalysis(input: { mediaType: $mediaType, text: $text }) {
+    analysisId
+    status
+  }
+}
+

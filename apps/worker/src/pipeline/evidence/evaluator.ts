@@ -1,0 +1,148 @@
+import { openai } from "../../clients/openai.js";
+import type { EvidenceResult } from "../retrievers/types.js";
+import { parseJsonContent } from "../utils/openai.js";
+import { recordEvidenceReliability } from "../retrievers/trust.js";
+
+const MODEL_NAME = "gpt-4.1-mini";
+const MAX_EVIDENCE_PER_REQUEST = 3;
+
+const EVIDENCE_PROMPT = `
+You are assisting in fact-checking. Evaluate each evidence item relative to the provided claim.
+For every evidence entry respond in English JSON matching the schema. Score reliability and relevance between 0 and 1.
+Reliability considers the trustworthiness of the source itself; relevance reflects how directly it supports or refutes the claim.
+Return concise assessments (<=140 chars).
+If the evidence is in another language, translate the assessment to English.
+`;
+
+type EvaluationOutput = {
+  reliability: number;
+  relevance: number;
+  assessment: string;
+};
+
+const JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    evaluations: {
+      type: "array",
+      minItems: 1,
+      maxItems: MAX_EVIDENCE_PER_REQUEST,
+      items: {
+        type: "object",
+        properties: {
+          index: { type: "integer", minimum: 0 },
+          reliability: { type: "number", minimum: 0, maximum: 1 },
+          relevance: { type: "number", minimum: 0, maximum: 1 },
+          assessment: { type: "string", maxLength: 140 }
+        },
+        required: ["index", "reliability", "relevance", "assessment"],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["evaluations"],
+  additionalProperties: false
+} as const;
+
+function clampScore(value: number | undefined, fallback = 0.6): number {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+export async function evaluateEvidenceForClaim(
+  claimText: string,
+  evidence: EvidenceResult[]
+): Promise<EvidenceResult[]> {
+  if (evidence.length === 0) {
+    return evidence;
+  }
+
+  const batches: EvidenceResult[][] = [];
+  for (let i = 0; i < evidence.length; i += MAX_EVIDENCE_PER_REQUEST) {
+    batches.push(evidence.slice(i, i + MAX_EVIDENCE_PER_REQUEST));
+  }
+
+  const evaluated: EvidenceResult[] = [];
+
+  for (const batch of batches) {
+    try {
+      const response = await openai.responses.create({
+        model: MODEL_NAME,
+        input: [
+          {
+            role: "system",
+            content: EVIDENCE_PROMPT
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              claim: claimText,
+              evidence: batch.map((item, index) => ({
+                index,
+                provider: item.provider,
+                title: item.title,
+                url: item.url,
+                summary: item.summary ?? ""
+              }))
+            })
+          }
+        ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "evidence_evaluation",
+          schema: JSON_SCHEMA,
+          strict: true
+        }
+      }
+      });
+
+      const firstOutput = response.output?.[0];
+      const firstContent = firstOutput?.content?.[0];
+      if (!firstOutput || !firstContent) {
+        evaluated.push(...batch);
+        continue;
+      }
+
+      const parsed = await parseJsonContent<{
+        evaluations?: Array<{ index?: number; reliability?: number; relevance?: number; assessment?: string }>;
+      }>(firstContent, "evidence_evaluation");
+      if (!parsed) {
+        evaluated.push(...batch);
+        continue;
+      }
+
+      const evaluations = parsed.evaluations ?? [];
+
+      batch.forEach((item, idx) => {
+        const evaluation = evaluations.find((entry) => entry.index === idx);
+        if (evaluation) {
+          item.evaluation = {
+            reliability: clampScore(evaluation.reliability, item.reliability),
+            relevance: clampScore(evaluation.relevance, 0.6),
+            assessment:
+              typeof evaluation.assessment === "string" && evaluation.assessment.length > 0
+                ? evaluation.assessment
+                : "No assessment provided."
+          };
+          const baseReliability = typeof item.reliability === "number" ? item.reliability : 0.6;
+          const blendedReliability = (item.evaluation.reliability + baseReliability) / 2;
+          item.reliability = Number(blendedReliability.toFixed(2));
+          recordEvidenceReliability(item.url, item.evaluation.reliability);
+        }
+      });
+
+      evaluated.push(...batch);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("Evidence evaluation failed:", error);
+      evaluated.push(...batch);
+    }
+  }
+
+  return evaluated;
+}
+
+

@@ -1,0 +1,99 @@
+import { useEffect } from "react";
+import { Text, View } from "react-native";
+import Animated, { useAnimatedProps, useSharedValue, withTiming } from "react-native-reanimated";
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from "react-native-svg";
+
+import { useTheme } from "../hooks/use-theme";
+import { getScoreGradient } from "../utils/scoreColors";
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+interface ScoreRingProps {
+  score: number;
+  label?: string;
+  size?: number;
+}
+
+export function ScoreRing({ score, label = "Vett Score", size = 140 }: ScoreRingProps) {
+  const theme = useTheme();
+  const radius = (size - 16) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = useSharedValue(0);
+  const gradientId = `ringGradient-${Math.round(score)}-${size}`;
+
+  useEffect(() => {
+    progress.value = withTiming(score / 100, { duration: 800 });
+  }, [score, progress]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circumference * (1 - progress.value)
+  }));
+
+  const { start, end } = getScoreGradient(score);
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        justifyContent: "center"
+      }}
+      accessible
+      accessibilityLabel={`${label} ${score}`}
+    >
+      <Svg width={size} height={size}>
+        <Defs>
+          <SvgLinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor={start} />
+            <Stop offset="100%" stopColor={end} />
+          </SvgLinearGradient>
+        </Defs>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={theme.colors.border}
+          strokeWidth={12}
+          fill="transparent"
+        />
+        <AnimatedCircle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={`url(#${gradientId})`}
+          strokeWidth={12}
+          strokeLinecap="round"
+          fill="transparent"
+          strokeDasharray={`${circumference}, ${circumference}`}
+          animatedProps={animatedProps}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
+      <View
+        style={{
+          position: "absolute",
+          alignItems: "center"
+        }}
+      >
+        <Text
+          style={{
+            color: theme.colors.subtitle,
+            fontSize: 13,
+            fontFamily: "SpaceGrotesk_400Regular"
+          }}
+        >
+          {label}
+        </Text>
+        <Text
+          style={{
+            color: end,
+            fontSize: 32,
+            fontFamily: "SpaceGrotesk_600SemiBold"
+          }}
+        >
+          {score}
+        </Text>
+      </View>
+    </View>
+  );
+}
+

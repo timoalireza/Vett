@@ -1,0 +1,88 @@
+/**
+ * Authentication Plugin Template
+ * 
+ * This is a template for implementing authentication with Clerk.dev
+ * 
+ * Steps to implement:
+ * 1. Install Clerk: pnpm --filter vett-api add @clerk/fastify
+ * 2. Copy this file to auth.ts (remove .example)
+ * 3. Update env.ts to include CLERK_SECRET_KEY
+ * 4. Register this plugin in index.ts before GraphQL
+ */
+
+import fp from "fastify-plugin";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+
+// Uncomment when Clerk is installed:
+// import { getAuth } from "@clerk/fastify";
+
+export interface AuthenticatedRequest extends FastifyRequest {
+  userId?: string;
+  user?: {
+    id: string;
+    email?: string;
+    externalId: string;
+  };
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    userId?: string;
+    user?: {
+      id: string;
+      email?: string;
+      externalId: string;
+    };
+  }
+}
+
+export default fp(async (fastify: FastifyInstance) => {
+  // Option 1: Clerk Integration
+  // await fastify.register(require("@clerk/fastify").clerkPlugin, {
+  //   secretKey: process.env.CLERK_SECRET_KEY
+  // });
+
+  // Option 2: Custom JWT validation
+  // Add your JWT validation logic here
+
+  // Add authentication hook
+  fastify.addHook("onRequest", async (request: AuthenticatedRequest, reply) => {
+    // Skip auth for health checks and public endpoints
+    if (
+      request.url.startsWith("/health") ||
+      request.url.startsWith("/graphql") && request.method === "GET" // GraphiQL
+    ) {
+      return;
+    }
+
+    // Extract token from Authorization header
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      // For now, allow unauthenticated requests (remove in production)
+      // Uncomment below when auth is ready:
+      // return reply.code(401).send({ error: "Unauthorized" });
+      return;
+    }
+
+    const token = authHeader.substring(7);
+
+    // TODO: Validate token and extract user info
+    // Example with Clerk:
+    // const { userId } = await getAuth(request);
+    // if (!userId) {
+    //   return reply.code(401).send({ error: "Unauthorized" });
+    // }
+
+    // Set user context
+    // request.userId = userId;
+    // request.user = { id: userId, externalId: userId };
+  });
+
+  // Helper to require authentication
+  fastify.decorate("requireAuth", async (request: AuthenticatedRequest, reply: any) => {
+    if (!request.userId) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+  });
+});
+

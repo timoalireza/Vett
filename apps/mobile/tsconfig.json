@@ -1,0 +1,26 @@
+{
+  "extends": "@tsconfig/react-native/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": [
+        "./src/*"
+      ],
+      "@app/*": [
+        "./app/*"
+      ]
+    },
+    "types": [
+      "expo",
+      "react",
+      "react-native",
+      "react-native-reanimated"
+    ]
+  },
+  "include": [
+    "app",
+    "src",
+    "metro.config.js"
+  ]
+}

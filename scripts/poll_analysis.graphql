@@ -1,0 +1,34 @@
+query Analysis($id: ID!) {
+  analysis(id: $id) {
+    id
+    status
+    score
+    verdict
+    confidence
+    summary
+    recommendation
+    claims {
+      id
+      text
+      extractionConfidence
+      verdict
+      confidence
+    }
+    sources {
+      id
+      provider
+      title
+      url
+      reliability
+    }
+    explanationSteps {
+      id
+      claimId
+      description
+      supportingSourceIds
+      confidence
+    }
+    createdAt
+  }
+}
+
