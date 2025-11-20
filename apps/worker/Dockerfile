@@ -14,26 +14,23 @@ WORKDIR /app
 
 # Copy workspace files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/shared ./packages/shared
+COPY packages/shared/package.json ./packages/shared/
 COPY apps/worker/package.json ./apps/worker/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --filter vett-worker...
+# Install all dependencies (including devDependencies for building shared package)
+RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
 
 # Copy workspace files and dependencies
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages ./packages
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY --from=deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY pnpm-workspace.yaml package.json ./
 COPY packages ./packages
 COPY apps/worker ./apps/worker
 
-# Verify tsup is available
-RUN which tsup || (echo "tsup not found, reinstalling..." && pnpm install --frozen-lockfile --filter vett-worker...)
-
-# Build shared package first
+# Build shared package first (needs tsup from devDependencies)
 RUN pnpm --filter @vett/shared build
 
 # Build Worker
