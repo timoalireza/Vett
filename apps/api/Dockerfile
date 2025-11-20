@@ -48,20 +48,12 @@ COPY packages/shared/package.json ./packages/shared/
 COPY apps/api/package.json ./apps/api/
 
 # Install production dependencies
-# Install all workspace deps to ensure transitive dependencies are available
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+# Use --shamefully-hoist to ensure all dependencies are in node_modules root
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts --shamefully-hoist
 
 # Copy built files
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-
-# Debug: List installed packages
-RUN echo "=== Checking installed packages ===" && \
-    pnpm list --depth=0 2>&1 | head -20 || true && \
-    echo "=== Checking @sentry ===" && \
-    ls -la node_modules/@sentry/ 2>&1 || echo "No @sentry directory" && \
-    echo "=== Checking node_modules structure ===" && \
-    ls -la node_modules/ | head -10
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
