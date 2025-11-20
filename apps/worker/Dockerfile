@@ -23,8 +23,9 @@ RUN pnpm install --frozen-lockfile --prod --filter vett-worker...
 FROM base AS builder
 WORKDIR /app
 
-# Copy workspace files
+# Copy workspace files (including tsconfig.base.json)
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY tsconfig.base.json ./tsconfig.base.json
 COPY packages ./packages
 COPY apps/worker ./apps/worker
 
