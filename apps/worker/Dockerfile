@@ -47,9 +47,12 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/worker/package.json ./apps/worker/
 
-# Install production dependencies
-# Use --shamefully-hoist to ensure all dependencies are in node_modules root
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts --shamefully-hoist
+# Copy node_modules from builder (includes all dependencies)
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+
+# Prune devDependencies to reduce image size
+RUN pnpm prune --prod
 
 # Copy built files
 COPY --from=builder /app/apps/worker/dist ./dist
