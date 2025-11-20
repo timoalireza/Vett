@@ -47,8 +47,8 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/worker/package.json ./apps/worker/
 
-# Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod --filter vett-worker...
+# Install production dependencies only (skip prepare scripts like husky)
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter vett-worker...
 
 # Copy built files
 COPY --from=builder /app/apps/worker/dist ./dist
