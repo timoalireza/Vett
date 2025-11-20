@@ -42,12 +42,17 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Copy workspace files for dependency installation
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/worker/package.json ./apps/worker/
+
+# Install production dependencies only
+RUN pnpm install --frozen-lockfile --prod --filter vett-worker...
+
 # Copy built files
 COPY --from=builder /app/apps/worker/dist ./dist
-COPY --from=builder /app/apps/worker/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
