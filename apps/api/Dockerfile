@@ -47,12 +47,17 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/api/package.json ./apps/api/
 
-# Install production dependencies only (skip prepare scripts like husky)
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter vett-api...
+# Install production dependencies (install all workspace deps, then filter)
+# This ensures all transitive dependencies are available
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
+    pnpm prune --prod --filter vett-api...
 
 # Copy built files
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+
+# Verify @sentry/node is installed
+RUN ls -la node_modules/@sentry/ || echo "Warning: @sentry/node not found"
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
