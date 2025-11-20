@@ -9,31 +9,30 @@ FROM node:20-alpine AS base
 RUN npm install -g pnpm@9.12.0 && \
     apk add --no-cache libc6-compat python3 make g++
 
-FROM base AS deps
-WORKDIR /app
-
-# Copy workspace files (minimal for dependency installation)
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/shared/package.json ./packages/shared/
-COPY apps/api/package.json ./apps/api/
-
-# Install production dependencies only (for final image)
-RUN pnpm install --frozen-lockfile --prod --filter vett-api...
-
 FROM base AS builder
 WORKDIR /app
 
-# Copy workspace files (including tsconfig.base.json)
+# Copy workspace configuration files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY tsconfig.base.json ./tsconfig.base.json
-COPY packages ./packages
-COPY apps/api ./apps/api
+COPY tsconfig.base.json ./
+
+# Copy package files
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared/tsconfig.json ./packages/shared/
+COPY packages/shared/tsup.config.ts ./packages/shared/
+COPY packages/shared/src ./packages/shared/src
+
+COPY apps/api/package.json ./apps/api/
+COPY apps/api/tsconfig.json ./apps/api/
 
 # Install all dependencies (including devDependencies for building)
 RUN pnpm install --frozen-lockfile
 
-# Build shared package first (needs tsup from devDependencies)
+# Build shared package first
 RUN pnpm --filter @vett/shared build
+
+# Copy API source files
+COPY apps/api/src ./apps/api/src
 
 # Build API
 RUN pnpm --filter vett-api build
@@ -48,7 +47,7 @@ COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -59,4 +58,3 @@ USER nodejs
 EXPOSE 4000
 
 CMD ["node", "dist/index.js"]
-
