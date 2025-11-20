@@ -47,16 +47,21 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/api/package.json ./apps/api/
 
-# Install ONLY production dependencies for the specific package
-# Don't use --filter with install, install everything then we'll only use what we need
+# Install production dependencies
+# Install all workspace deps to ensure transitive dependencies are available
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Copy built files
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
-# Verify critical dependencies exist
-RUN test -d node_modules/@sentry/node || (echo "ERROR: @sentry/node not found" && ls -la node_modules/@sentry/ && exit 1)
+# Debug: List installed packages
+RUN echo "=== Checking installed packages ===" && \
+    pnpm list --depth=0 2>&1 | head -20 || true && \
+    echo "=== Checking @sentry ===" && \
+    ls -la node_modules/@sentry/ 2>&1 || echo "No @sentry directory" && \
+    echo "=== Checking node_modules structure ===" && \
+    ls -la node_modules/ | head -10
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \

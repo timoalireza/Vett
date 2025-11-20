@@ -47,13 +47,17 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/worker/package.json ./apps/worker/
 
-# Install ONLY production dependencies
+# Install production dependencies
 # Install all workspace deps to ensure transitive dependencies are available
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Copy built files
 COPY --from=builder /app/apps/worker/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+
+# Debug: List installed packages
+RUN echo "=== Checking installed packages ===" && \
+    pnpm list --depth=0 2>&1 | head -20 || true
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
