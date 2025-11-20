@@ -22,6 +22,11 @@ COPY packages/shared/tsconfig.json ./packages/shared/
 COPY packages/shared/tsup.config.ts ./packages/shared/
 COPY packages/shared/src ./packages/shared/src
 
+# Worker needs API's db schema, so copy API files too
+COPY apps/api/package.json ./apps/api/
+COPY apps/api/tsconfig.json ./apps/api/
+COPY apps/api/src/db ./apps/api/src/db
+
 COPY apps/worker/package.json ./apps/worker/
 COPY apps/worker/tsconfig.json ./apps/worker/
 
@@ -30,6 +35,9 @@ RUN pnpm install --frozen-lockfile
 
 # Build shared package first
 RUN pnpm --filter @vett/shared build
+
+# Build API db schema (needed by worker)
+RUN pnpm --filter vett-api build
 
 # Copy worker source files
 COPY apps/worker/src ./apps/worker/src
@@ -56,6 +64,14 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 # Copy built files
 COPY --from=builder /app/apps/worker/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+
+# Worker imports from ../../api/src/db/schema.js, so copy API's db schema
+COPY --from=builder /app/apps/api/dist/db ./apps/api/dist/db
+COPY --from=builder /app/apps/api/src/db ./apps/api/src/db
+
+# Worker needs API's database schema (it imports from ../../api/src/db/schema.js)
+# Copy the built schema files from API
+COPY --from=builder /app/apps/api/dist/db ./dist/db
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
