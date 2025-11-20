@@ -12,23 +12,24 @@ RUN npm install -g pnpm@9.12.0 && \
 FROM base AS deps
 WORKDIR /app
 
-# Copy workspace files
+# Copy workspace files (minimal for dependency installation)
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/worker/package.json ./apps/worker/
 
-# Install all dependencies (including devDependencies for building shared package)
-RUN pnpm install --frozen-lockfile
+# Install production dependencies only (for final image)
+RUN pnpm install --frozen-lockfile --prod --filter vett-worker...
 
 FROM base AS builder
 WORKDIR /app
 
-# Copy workspace files and dependencies
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY pnpm-workspace.yaml package.json ./
+# Copy workspace files
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages ./packages
 COPY apps/worker ./apps/worker
+
+# Install all dependencies (including devDependencies for building)
+RUN pnpm install --frozen-lockfile
 
 # Build shared package first (needs tsup from devDependencies)
 RUN pnpm --filter @vett/shared build
