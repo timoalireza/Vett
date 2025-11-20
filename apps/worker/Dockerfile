@@ -5,8 +5,9 @@
 
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN npm install -g pnpm@9.12.0
+# Install pnpm and build dependencies
+RUN npm install -g pnpm@9.12.0 && \
+    apk add --no-cache libc6-compat python3 make g++
 
 FROM base AS deps
 WORKDIR /app
