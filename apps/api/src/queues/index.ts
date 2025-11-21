@@ -12,35 +12,10 @@ let sharedConnection: IORedis | null = null;
  */
 function getSharedConnection(): IORedis {
   if (!sharedConnection) {
+    // Create connection with maxRetriesPerRequest: null via our factory
     sharedConnection = createRedisClient(env.REDIS_URL, {
       maxRetriesPerRequest: null, // MUST be null - unlimited retries
       enableReadyCheck: false
-    });
-    
-    // CRITICAL: Force verify and set maxRetriesPerRequest
-    if ((sharedConnection as any).options?.maxRetriesPerRequest !== null) {
-      (sharedConnection as any).options.maxRetriesPerRequest = null;
-    }
-    
-    // Ensure connection options are correct
-    (sharedConnection as any).options = {
-      ...(sharedConnection as any).options,
-      maxRetriesPerRequest: null, // Force null
-      enableReadyCheck: false,
-      lazyConnect: true
-    };
-    
-    // CRITICAL: Patch the connection to prevent maxRetriesPerRequest from being changed
-    const originalOptions = (sharedConnection as any).options;
-    Object.defineProperty(sharedConnection, "options", {
-      get: () => {
-        const opts = originalOptions;
-        if (opts && opts.maxRetriesPerRequest !== null) {
-          opts.maxRetriesPerRequest = null;
-        }
-        return opts;
-      },
-      configurable: true
     });
   }
   
@@ -50,19 +25,12 @@ function getSharedConnection(): IORedis {
 /**
  * Connection factory for BullMQ
  * Always returns the shared connection with proper configuration
- * CRITICAL: BullMQ may create internal connections, so we ensure they all use maxRetriesPerRequest: null
+ * The shared connection is created with maxRetriesPerRequest: null via createRedisClient
  */
 const connectionFactory: ConnectionOptions = {
-  createClient: (type: string) => {
-    const conn = getSharedConnection();
-    
-    // Ensure maxRetriesPerRequest is null
-    if ((conn as any).options?.maxRetriesPerRequest !== null) {
-      (conn as any).options.maxRetriesPerRequest = null;
-    }
-    
-    // Return the shared connection - BullMQ should reuse it
-    return conn;
+  createClient: () => {
+    // Return the shared connection - BullMQ will reuse it
+    return getSharedConnection();
   }
 };
 

@@ -1,51 +1,5 @@
-import IORedisModule, { type RedisOptions } from "ioredis";
+import IORedis, { type RedisOptions } from "ioredis";
 import { URL } from "node:url";
-
-// CRITICAL: Patch IORedis constructor to always set maxRetriesPerRequest: null
-// This ensures ALL Redis connections (including those created by BullMQ internally) use unlimited retries
-const OriginalIORedis = IORedisModule;
-
-// Create a wrapper that patches the constructor
-const PatchedIORedis = function(this: any, url?: string | RedisOptions, options?: RedisOptions) {
-  // Normalize arguments - IORedis can be called with (url, options) or (options)
-  let finalUrl: string | RedisOptions | undefined = url;
-  let finalOptions: RedisOptions | undefined = options;
-  
-  if (typeof url !== "string" && url && typeof url === "object") {
-    // Called as new IORedis(options)
-    finalOptions = url as RedisOptions;
-    finalUrl = undefined;
-  }
-  
-  // CRITICAL: Force maxRetriesPerRequest to null for ALL connections
-  if (finalOptions) {
-    finalOptions.maxRetriesPerRequest = null;
-  } else if (finalUrl && typeof finalUrl === "object") {
-    (finalUrl as RedisOptions).maxRetriesPerRequest = null;
-  } else {
-    finalOptions = { maxRetriesPerRequest: null };
-  }
-  
-  // Call original constructor
-  const instance = new OriginalIORedis(finalUrl as any, finalOptions);
-  
-  // Double-check after construction and force if needed
-  if (instance.options && instance.options.maxRetriesPerRequest !== null) {
-    instance.options.maxRetriesPerRequest = null;
-  }
-  
-  return instance;
-} as any;
-
-// Copy all static properties and methods from OriginalIORedis
-Object.setPrototypeOf(PatchedIORedis, OriginalIORedis);
-Object.assign(PatchedIORedis, OriginalIORedis);
-PatchedIORedis.prototype = OriginalIORedis.prototype;
-
-// Export patched version
-const IORedis = PatchedIORedis as typeof IORedisModule;
-export { IORedis };
-export type { RedisOptions };
 
 /**
  * Normalize Redis URL for Upstash - converts redis:// to rediss:// if needed
