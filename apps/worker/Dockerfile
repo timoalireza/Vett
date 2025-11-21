@@ -47,8 +47,10 @@ RUN pnpm --filter vett-api build
 # Copy worker source files
 COPY apps/worker/src ./apps/worker/src
 
-# Build Worker
-RUN pnpm --filter vett-worker build
+# Build Worker (ensure we're in the right directory)
+WORKDIR /app/apps/worker
+RUN pnpm build
+WORKDIR /app
 
 FROM base AS runner
 WORKDIR /app

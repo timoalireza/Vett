@@ -1,18 +1,75 @@
-import { config } from "dotenv";
+import { z } from "zod";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { z } from "zod";
+import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
-const workerEnvPath = resolve(currentDir, "../.env");
+// Create require function for ESM compatibility
+const require = createRequire(import.meta.url);
 
-config({ path: workerEnvPath });
-config();
+// Only load dotenv in development (Railway provides env vars in production)
+if (process.env.NODE_ENV !== "production") {
+  try {
+    // Use createRequire to load dotenv (CommonJS module)
+    const dotenv = require("dotenv");
+    
+    // Try multiple possible locations for .env file
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const possiblePaths = [
+      // Current working directory (where command is run from)
+      resolve(process.cwd(), ".env"),
+      // apps/worker/.env (relative to cwd)
+      resolve(process.cwd(), "apps/worker/.env"),
+      // Relative to source file location
+      resolve(currentDir, "../.env"),
+      // Fallback: just try .env in cwd
+      ".env"
+    ];
+    
+    // Find the first .env file that exists
+    let loaded = false;
+    for (const envPath of possiblePaths) {
+      if (existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+        console.log(`✅ Loaded .env from: ${envPath}`);
+        loaded = true;
+        break;
+      }
+    }
+    
+    if (!loaded) {
+      // If no .env found, try default behavior (looks in cwd)
+      dotenv.config();
+      console.warn("⚠️  No .env file found in common paths, trying default dotenv behavior.");
+    }
+  } catch (error) {
+    // dotenv not available or failed - log but don't fail
+    console.warn("⚠️  Could not load .env file:", error);
+  }
+}
 
 const envSchema = z.object({
-  REDIS_URL: z.string().url(),
-  DATABASE_URL: z.string().url(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  REDIS_URL: z
+    .string()
+    .refine(
+      (val) => {
+        // Accept redis://, rediss://, or http(s):// for Upstash REST API
+        try {
+          const url = new URL(val);
+          return (
+            url.protocol === "redis:" ||
+            url.protocol === "rediss:" ||
+            url.protocol === "http:" ||
+            url.protocol === "https:"
+          );
+        } catch {
+          return false;
+        }
+      },
+      { message: "REDIS_URL must be a valid Redis URL (redis://, rediss://, or http(s):// for Upstash REST)" }
+    ),
+  DATABASE_URL: z.string().url(),
   OPENAI_API_KEY: z.string().min(1),
   BRAVE_SEARCH_API_KEY: z.string().optional(),
   SERPER_API_KEY: z.string().optional(),
