@@ -322,7 +322,7 @@ async function buildServer() {
 export { buildServer };
 
 // Global error handlers for Redis connection errors - suppress all Redis errors
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", (reason, _promise) => {
   // Silently suppress all Redis-related errors - they are non-fatal
   if (reason && typeof reason === "object" && "message" in reason) {
     const error = reason as Error;
