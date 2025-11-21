@@ -1,19 +1,17 @@
 import { z } from "zod";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
+
+// Create require function for ESM compatibility
+const require = createRequire(import.meta.url);
 
 // Only load dotenv in development (Railway provides env vars in production)
-// Use a function to handle the conditional import
-function loadDotenv() {
-  if (process.env.NODE_ENV === "production") {
-    return; // Railway provides env vars, no need for dotenv
-  }
-  
+if (process.env.NODE_ENV !== "production") {
   try {
-    // Use require for CommonJS compatibility (works in ESM too)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    // Use createRequire to load dotenv (CommonJS module)
     const dotenv = require("dotenv");
-    const fs = require("fs");
     
     // Try multiple possible locations for .env file
     const possiblePaths = [
@@ -28,27 +26,25 @@ function loadDotenv() {
     ];
     
     // Find the first .env file that exists
+    let loaded = false;
     for (const envPath of possiblePaths) {
-      try {
-        if (fs.existsSync(envPath)) {
-          dotenv.config({ path: envPath });
-          console.log(`✅ Loaded .env from: ${envPath}`);
-          return;
-        }
-      } catch {
-        // Continue to next path
+      if (existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+        console.log(`✅ Loaded .env from: ${envPath}`);
+        loaded = true;
+        break;
       }
     }
     
     // If no .env found, try default behavior (looks in cwd)
-    dotenv.config();
+    if (!loaded) {
+      dotenv.config();
+    }
   } catch (error) {
     // dotenv not available or failed - log but don't fail
     console.warn("⚠️  Could not load .env file:", error);
   }
 }
-
-loadDotenv();
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
