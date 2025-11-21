@@ -69,4 +69,8 @@ USER nodejs
 
 EXPOSE 4000
 
-CMD ["node", "dist/index.js"]
+# Ensure we're in /app directory (where dist/ is located)
+WORKDIR /app
+
+# Use absolute path to be explicit
+CMD ["node", "/app/dist/index.js"]
