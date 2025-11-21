@@ -61,9 +61,16 @@ COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 # This fixes the MODULE_TYPELESS_PACKAGE_JSON warning
 COPY apps/api/package.json ./package.json
 
+# Create uploads directory with proper permissions before switching to non-root user
+RUN mkdir -p /app/uploads && \
+    chmod 755 /app/uploads
+
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs
+
+# Change ownership of uploads directory to nodejs user
+RUN chown -R nodejs:nodejs /app/uploads
 
 USER nodejs
 

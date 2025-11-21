@@ -33,6 +33,12 @@ function resolveUploadDirectory(): string {
       : path.resolve(process.cwd(), env.UPLOADS_DIR);
   }
 
+  // In production, use /app/uploads (created in Dockerfile with proper permissions)
+  // In development, use apps/api/uploads inside the repo
+  if (env.NODE_ENV === "production") {
+    return "/app/uploads";
+  }
+
   // Default to apps/api/uploads inside the repo
   return path.resolve(process.cwd(), "apps/api/uploads");
 }
@@ -70,7 +76,22 @@ export interface UploadResponse {
 
 export default fp(async (fastify) => {
   const uploadDir = resolveUploadDirectory();
-  await fs.mkdir(uploadDir, { recursive: true });
+  // Create directory if it doesn't exist (with error handling for permission issues)
+  try {
+    await fs.mkdir(uploadDir, { recursive: true });
+  } catch (error: any) {
+    // If directory creation fails due to permissions, log warning but continue
+    // The directory should be created in Dockerfile for production
+    if (error.code === "EACCES" || error.code === "EPERM") {
+      fastify.log.warn(
+        { uploadDir, error: error.message },
+        "Could not create uploads directory (permission denied). Directory should be pre-created in Dockerfile."
+      );
+    } else {
+      // Re-throw other errors
+      throw error;
+    }
+  }
 
   await fastify.register(multipart, {
     limits: {
