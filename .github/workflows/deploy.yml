@@ -50,18 +50,25 @@ jobs:
           docker build -t vett-api:${{ github.sha }} -f apps/api/Dockerfile .
           docker build -t vett-worker:${{ github.sha }} -f apps/worker/Dockerfile .
       
-      - name: Deploy
+      - name: Deploy to Railway
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         run: |
-          echo "🚀 Deployment placeholder"
-          echo "Environment: ${{ github.event.inputs.environment || 'production' }}"
+          echo "🚀 Deploying to Railway..."
           echo "Tag: ${{ github.ref }}"
           echo "SHA: ${{ github.sha }}"
           echo ""
-          echo "Next steps:"
-          echo "1. Push Docker images to registry"
-          echo "2. Deploy to your hosting platform"
-          echo "3. Run database migrations"
-          echo "4. Update environment variables"
+          echo "Railway auto-deploys on push to main branch."
+          echo "For manual deployment, see docs/RAILWAY_DEPLOYMENT.md"
+      
+      - name: Deployment Summary
+        run: |
+          echo "✅ Build completed successfully"
           echo ""
-          echo "See docs/DEPLOYMENT.md for deployment instructions"
+          echo "Next steps:"
+          echo "1. Ensure Railway is connected to this repository"
+          echo "2. Configure environment variables in Railway"
+          echo "3. Verify deployment at Railway dashboard"
+          echo "4. Test health endpoints"
+          echo ""
+          echo "See docs/PRODUCTION_DEPLOYMENT.md for complete guide"
 

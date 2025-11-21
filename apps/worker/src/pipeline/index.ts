@@ -168,8 +168,11 @@ function synthesizeVerdict(claims: PipelineClaim[], sources: PipelineSource[]): 
   const corroborationBonus = Math.min(15, highTrustSources.length * 4);
 
   const baseScore = ((avgClaimConfidence + avgReliability) / 2) * 100;
-  const score = Math.round(Math.min(100, Math.max(0, baseScore + corroborationBonus)));
-  const verdict = verdictFromScore(score);
+  const calculatedScore = Math.round(Math.min(100, Math.max(0, baseScore + corroborationBonus)));
+  const verdict = verdictFromScore(calculatedScore);
+  
+  // Ensure Verified verdicts (facts) always have a score of 100
+  const score = verdict === "Verified" ? 100 : calculatedScore;
 
   const summary = `Evidence from ${sources.length} source${sources.length === 1 ? "" : "s"} indicates the information is ${verdict.toLowerCase()} with a Vett score of ${score}.`;
   const recommendation =
@@ -278,9 +281,14 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
           );
         }
 
+        // Ensure Verified verdicts (facts) always have a score of 100
+        // Use the verdict (either from model or derived) to determine if it's Verified
+        const finalVerdict = derivedVerdict;
+        const finalScore = finalVerdict === "Verified" ? 100 : rawScore;
+
         return {
-          score: rawScore,
-          verdict: derivedVerdict,
+          score: finalScore,
+          verdict: finalVerdict,
           confidence: Number(reasoned.confidence.toFixed(2)),
           summary: reasoned.summary,
           recommendation: reasoned.recommendation
@@ -288,13 +296,19 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       })()
     : synthesizeVerdict(claims, rankedSources);
 
+  // Adjust scores: False with high confidence gets 0, Verified (facts) always gets 100
   const adjustedVerdictData =
     verdictData.verdict === "False" && verdictData.confidence >= 0.9
       ? {
           ...verdictData,
           score: 0
         }
-      : verdictData;
+      : verdictData.verdict === "Verified"
+        ? {
+            ...verdictData,
+            score: 100
+          }
+        : verdictData;
 
   // Find best image for the analysis card
   const claimTexts = claims.map((c) => c.text);

@@ -3,9 +3,11 @@ import { initSentry } from "./config/sentry.js";
 initSentry();
 
 import { randomUUID } from "crypto";
+import { constants } from "zlib";
 import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
+import compress from "@fastify/compress";
 import * as Sentry from "@sentry/node";
 
 import { env } from "./env.js";
@@ -17,6 +19,7 @@ import { registerGraphql } from "./plugins/graphql.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import uploadsPlugin from "./plugins/uploads.js";
 import { queues } from "./queues/index.js";
+import { cacheService } from "./services/cache-service.js";
 
 async function buildServer() {
   const app = Fastify({
@@ -88,6 +91,25 @@ async function buildServer() {
     global: true,
     contentSecurityPolicy: false
   });
+
+  // Enable response compression (gzip, deflate, brotli)
+  await app.register(compress, {
+    global: true,
+    // Compression threshold: only compress responses > 1KB
+    threshold: 1024,
+    // Compression encodings to support
+    encodings: ["gzip", "deflate", "br"],
+    // Custom compression options
+    zlibOptions: {
+      level: 6 // Balance between compression ratio and CPU usage (1-9, 6 is good default)
+    },
+    // Brotli options (if available)
+    brotliOptions: {
+      params: {
+        [constants.BROTLI_PARAM_QUALITY]: 4 // 0-11, 4 is good default
+      }
+    }
+  });
   
   // Configure CORS based on environment
   await app.register(cors, {
@@ -152,8 +174,12 @@ async function buildServer() {
   await registerGraphql(app);
   await registerHealthRoutes(app);
 
+  // Initialize cache service
+  await cacheService.initialize();
+
   app.addHook("onClose", async () => {
     await queues.analysis.close();
+    await cacheService.close();
   });
 
   return app;

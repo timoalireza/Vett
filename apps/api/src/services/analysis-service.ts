@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and, lt, gt } from "drizzle-orm";
 
 import { AnalysisAttachmentInput, AnalysisJobInput, analysisJobInputSchema } from "@vett/shared";
 
@@ -14,6 +14,8 @@ import {
 import { queues } from "../queues/index.js";
 import { subscriptionService } from "./subscription-service.js";
 import { userService } from "./user-service.js";
+import type { PaginationArgs, PaginatedResult } from "../utils/pagination.js";
+import { validatePaginationArgs, createPageInfo, createCursor } from "../utils/pagination.js";
 
 type SubmitAnalysisInput = AnalysisJobInput;
 
@@ -491,6 +493,77 @@ class AnalysisService {
       classificationMeta,
       claimExtractionMeta,
       reasonerMeta
+    };
+  }
+
+  /**
+   * Get paginated list of analyses for a user
+   */
+  async getAnalyses(
+    userId: string,
+    paginationArgs: PaginationArgs,
+    clerkUserId?: string
+  ): Promise<PaginatedResult<AnalysisSummary>> {
+    const { limit, cursor, direction } = validatePaginationArgs(paginationArgs);
+
+    // Build where conditions
+    const conditions = [eq(analyses.userId, userId)];
+
+    // Add cursor condition for pagination
+    // Ordering is DESC (newest first), so:
+    // - Forward (after cursor): get items older than cursor (createdAt < cursor.createdAt)
+    // - Backward (before cursor): get items newer than cursor (createdAt > cursor.createdAt)
+    if (cursor && typeof cursor.id === "string" && typeof cursor.createdAt === "string") {
+      if (direction === "forward") {
+        // Forward pagination: get items after cursor (older items in DESC order)
+        conditions.push(lt(analyses.createdAt, new Date(cursor.createdAt)));
+      } else {
+        // Backward pagination: get items before cursor (newer items in DESC order)
+        conditions.push(gt(analyses.createdAt, new Date(cursor.createdAt)));
+      }
+    }
+
+    // Fetch one extra to determine if there are more pages
+    const limitPlusOne = limit + 1;
+
+    // Query analyses ordered by createdAt descending (newest first)
+    const results = await db.query.analyses.findMany({
+      where: and(...conditions),
+      orderBy: (analyses, { desc }) => [desc(analyses.createdAt)],
+      limit: limitPlusOne
+    });
+
+    // Check if there are more results
+    const hasMore = results.length > limit;
+    const items = hasMore ? results.slice(0, limit) : results;
+
+    // For backward pagination, reverse the results to get correct order
+    const orderedItems = direction === "backward" ? [...items].reverse() : items;
+
+    // Get full analysis summaries (this could be optimized to batch load)
+    const summaries = await Promise.all(
+      orderedItems.map((item) => this.getAnalysisSummary(item.id, clerkUserId))
+    );
+
+    // Filter out nulls (shouldn't happen, but TypeScript)
+    const validSummaries = summaries.filter((s): s is AnalysisSummary => s !== null);
+
+    // Create edges with cursors
+    const edges = validSummaries.map((summary) => ({
+      node: summary,
+      cursor: createCursor({
+        id: summary.id,
+        createdAt: summary.createdAt
+      })
+    }));
+
+    // Create page info
+    const pageInfo = createPageInfo(validSummaries, hasMore, direction);
+
+    return {
+      edges,
+      pageInfo,
+      totalCount: undefined // Could add total count if needed (expensive for large datasets)
     };
   }
 }

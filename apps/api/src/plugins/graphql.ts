@@ -24,7 +24,9 @@ export async function registerGraphql(app: FastifyInstance) {
       // Create DataLoaders per request (they cache within a single request)
       loaders: createDataLoaders()
     }),
-    // Explicitly set empty validation rules array - no depth/complexity limits
+    // Explicitly disable all validation rules - no depth/complexity limits
+    // Mercurius passes validationRules to GraphQL's validate function
+    // Empty array means no custom validation rules are applied
     validationRules: [],
     // Custom cache function for GraphQL queries
     cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {

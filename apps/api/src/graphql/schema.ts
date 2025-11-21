@@ -228,9 +228,33 @@ export const schema = `
     ANNUAL
   }
 
+  type PageInfo {
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+    startCursor: String
+    endCursor: String
+  }
+
+  type AnalysisEdge {
+    node: AnalysisSummary!
+    cursor: String!
+  }
+
+  type AnalysisConnection {
+    edges: [AnalysisEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int
+  }
+
   type Query {
     health: HealthCheck!
     analysis(id: ID!): AnalysisSummary
+    analyses(
+      first: Int
+      after: String
+      last: Int
+      before: String
+    ): AnalysisConnection!
     subscription: SubscriptionInfo!
     usage: UsageInfo!
   }

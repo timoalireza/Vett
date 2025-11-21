@@ -3,6 +3,9 @@ import type { IResolvers } from "mercurius";
 import { analysisService } from "../services/analysis-service.js";
 import { userService } from "../services/user-service.js";
 import { subscriptionService } from "../services/subscription-service.js";
+import { cacheService } from "../services/cache-service.js";
+import type { DataLoaderContext } from "../loaders/index.js";
+import type { PaginationArgs } from "../utils/pagination.js";
 
 interface GraphQLContext {
   userId?: string;
@@ -11,6 +14,7 @@ interface GraphQLContext {
     email?: string;
     externalId: string;
   };
+  loaders: DataLoaderContext;
 }
 
 export const resolvers: IResolvers<GraphQLContext> = {
@@ -20,11 +24,20 @@ export const resolvers: IResolvers<GraphQLContext> = {
       timestamp: new Date().toISOString()
     }),
     analysis: async (_parent, args, context) => {
-      const analysis = await analysisService.getAnalysisSummary(args.id, context.userId);
+      // Use DataLoader for batching (though single query here, it helps with consistency)
+      const analysis = await context.loaders.analysisById.load({
+        id: args.id,
+        userId: context.userId
+      });
+      
+      if (!analysis) {
+        return null;
+      }
       
       // Authorization check: users can only access their own analyses
-      if (analysis && context.userId) {
-        const user = await userService.getUserByExternalId(context.userId);
+      if (context.userId) {
+        // Use DataLoader for user lookup (batches multiple user lookups)
+        const user = await context.loaders.userByExternalId.load(context.userId);
         if (user && analysis.userId !== user.id) {
           // Check if analysis is public (for future public collections feature)
           // For now, only allow access to own analyses
@@ -34,12 +47,45 @@ export const resolvers: IResolvers<GraphQLContext> = {
       
       return analysis;
     },
+    analyses: async (_parent, args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      // Use DataLoader for user lookup
+      const user = await ctx.loaders.userByExternalId.load(ctx.userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Get paginated analyses
+      const paginationArgs: PaginationArgs = {
+        first: args.first ?? null,
+        after: args.after ?? null,
+        last: args.last ?? null,
+        before: args.before ?? null
+      };
+
+      const result = await analysisService.getAnalyses(
+        user.id,
+        paginationArgs,
+        ctx.userId
+      );
+
+      return {
+        edges: result.edges,
+        pageInfo: result.pageInfo,
+        totalCount: result.totalCount ?? null
+      };
+    },
     subscription: async (_parent, _args, context) => {
       const ctx = context as GraphQLContext;
       if (!ctx.userId) {
         throw new Error("Authentication required");
       }
-      const user = await userService.getUserByExternalId(ctx.userId);
+      // Use DataLoader for user lookup (batches multiple user lookups in same request)
+      const user = await ctx.loaders.userByExternalId.load(ctx.userId);
       if (!user) {
         throw new Error("User not found");
       }
@@ -61,7 +107,8 @@ export const resolvers: IResolvers<GraphQLContext> = {
       if (!ctx.userId) {
         throw new Error("Authentication required");
       }
-      const user = await userService.getUserByExternalId(ctx.userId);
+      // Use DataLoader for user lookup (batches multiple user lookups in same request)
+      const user = await ctx.loaders.userByExternalId.load(ctx.userId);
       if (!user) {
         throw new Error("User not found");
       }
@@ -95,6 +142,8 @@ export const resolvers: IResolvers<GraphQLContext> = {
       // Increment usage if user is authenticated
       if (userId) {
         await subscriptionService.incrementUsage(userId);
+        // Invalidate user's cache since usage changed
+        await cacheService.invalidateUserCache(userId);
       }
       
       return {
