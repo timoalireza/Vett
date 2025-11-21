@@ -1,16 +1,23 @@
 import { z } from "zod";
 
 // Only load dotenv in development (Railway provides env vars in production)
-// Use dynamic import to avoid requiring dotenv in production
-if (process.env.NODE_ENV !== "production") {
+// Use a function to handle the conditional import
+function loadDotenv() {
+  if (process.env.NODE_ENV === "production") {
+    return; // Railway provides env vars, no need for dotenv
+  }
+  
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // Use require for CommonJS compatibility (works in ESM too)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const dotenv = require("dotenv");
     dotenv.config();
   } catch {
-    // dotenv not available, skip (env vars provided by platform)
+    // dotenv not available - this is fine, env vars provided by platform
   }
 }
+
+loadDotenv();
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
