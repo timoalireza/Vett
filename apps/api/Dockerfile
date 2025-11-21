@@ -57,6 +57,10 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
+# Copy package.json to root for Node.js module type detection
+# This fixes the MODULE_TYPELESS_PACKAGE_JSON warning
+COPY apps/api/package.json ./package.json
+
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs

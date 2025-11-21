@@ -30,7 +30,25 @@ const envSchema = z.object({
     .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
     .default("info"),
   DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+  REDIS_URL: z
+    .string()
+    .refine(
+      (val) => {
+        // Accept redis://, rediss://, or http:// URLs
+        try {
+          const url = new URL(val);
+          return (
+            url.protocol === "redis:" ||
+            url.protocol === "rediss:" ||
+            url.protocol === "http:" ||
+            url.protocol === "https:"
+          );
+        } catch {
+          return false;
+        }
+      },
+      { message: "REDIS_URL must be a valid Redis URL (redis://, rediss://, or http://)" }
+    ),
   CLERK_SECRET_KEY: z.string().min(1),
   PINECONE_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
