@@ -27,6 +27,8 @@ export async function registerGraphql(app: FastifyInstance) {
     // Explicitly disable all validation rules - no depth/complexity limits
     // Mercurius passes validationRules to GraphQL's validate function
     // Empty array means no custom validation rules are applied
+    // GraphQL itself has NO default depth limit - if you see depth errors,
+    // they must be coming from a custom validation rule or cached response
     validationRules: [],
     // Custom cache function for GraphQL queries
     cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
