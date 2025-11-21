@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
 // Only load dotenv in development (Railway provides env vars in production)
 // Use a function to handle the conditional import
@@ -11,9 +13,11 @@ function loadDotenv() {
     // Use require for CommonJS compatibility (works in ESM too)
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const dotenv = require("dotenv");
-    const path = require("path");
+    // Get directory of current file (ESM compatible)
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
     // Load .env from the api directory (where this file is located)
-    const envPath = path.resolve(__dirname, "../.env");
+    const envPath = resolve(__dirname, "../.env");
     dotenv.config({ path: envPath });
   } catch {
     // dotenv not available - this is fine, env vars provided by platform
