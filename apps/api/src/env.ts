@@ -11,7 +11,10 @@ function loadDotenv() {
     // Use require for CommonJS compatibility (works in ESM too)
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const dotenv = require("dotenv");
-    dotenv.config();
+    const path = require("path");
+    // Load .env from the api directory (where this file is located)
+    const envPath = path.resolve(__dirname, "../.env");
+    dotenv.config({ path: envPath });
   } catch {
     // dotenv not available - this is fine, env vars provided by platform
   }
