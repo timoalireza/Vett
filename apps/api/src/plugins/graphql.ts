@@ -1,15 +1,16 @@
 import mercurius from "mercurius";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { env } from "../env.js";
 import { schema } from "../graphql/schema.js";
 import { resolvers } from "../resolvers/index.js";
 import { getSecurityValidationRules } from "./graphql-security.js";
 import { cacheService } from "../services/cache-service.js";
+import { createDataLoaders } from "../loaders/index.js";
 
 export async function registerGraphql(app: FastifyInstance) {
-  // Get security validation rules (always enabled, but stricter in production)
-  const securityRules = getSecurityValidationRules();
+  // Security validation rules disabled - no depth or complexity limits
+  // Per user request to remove all query depth limits
 
   await app.register(mercurius, {
     schema,
@@ -20,14 +21,34 @@ export async function registerGraphql(app: FastifyInstance) {
     // Pass request context to resolvers
     context: (request) => ({
       userId: request.userId,
-      user: request.user
+      user: request.user,
+      // Create DataLoaders per request (they cache within a single request)
+      loaders: createDataLoaders()
     }),
-    // Add query depth/complexity limits for security
-    validationRules: securityRules,
-    // Cache configuration
-    cache: cacheService.isEnabled(),
+    // No validation rules - depth and complexity limits removed
+    validationRules: [],
     // Custom cache function for GraphQL queries
-    cacheControl: true,
+    cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
+      // Skip caching for mutations
+      if (query.trim().startsWith("mutation")) {
+        return null;
+      }
+      
+      // Get cached result
+      const cached = await cacheService.getCachedGraphQLQuery(
+        query,
+        variables,
+        (request as any).userId
+      );
+      
+      if (cached) {
+        return cached;
+      }
+      
+      // Return null to proceed with normal execution
+      // The result will be cached in the onResponse hook
+      return null;
+    } : false,
     // Custom error formatter for better error messages
     errorFormatter: (execution, _context) => {
       const errors = execution.errors.map((error) => {
@@ -74,5 +95,43 @@ export async function registerGraphql(app: FastifyInstance) {
       };
     }
   });
+
+  // Add hook to cache successful GraphQL query responses
+  if (cacheService.isEnabled()) {
+    app.addHook("onResponse", async (request, reply) => {
+      // Only cache GraphQL POST requests (queries, not mutations)
+      if (
+        request.url === "/graphql" &&
+        request.method === "POST" &&
+        request.body &&
+        typeof request.body === "object"
+      ) {
+        const body = request.body as { query?: string; variables?: Record<string, unknown> };
+        if (body.query && !body.query.trim().startsWith("mutation")) {
+          try {
+            // Get the response payload
+            const response = reply.getPayload();
+            if (response && typeof response === "string") {
+              const parsed = JSON.parse(response);
+              // Only cache if there are no errors and data exists
+              if (parsed && parsed.data && !parsed.errors) {
+                // Cache for 5 minutes (300 seconds)
+                await cacheService.cacheGraphQLQuery(
+                  body.query,
+                  body.variables,
+                  parsed.data,
+                  300,
+                  (request as any).userId
+                );
+              }
+            }
+          } catch (error) {
+            // Ignore cache errors - don't break the request
+            app.log.debug({ error }, "Failed to cache GraphQL response");
+          }
+        }
+      }
+    });
+  }
 }
 

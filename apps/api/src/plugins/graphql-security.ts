@@ -12,7 +12,8 @@ import { createComplexityRule, simpleEstimator } from "graphql-query-complexity"
  */
 
 // Maximum query depth (prevents deeply nested queries)
-export const MAX_QUERY_DEPTH = 10;
+// Increased to 15 to accommodate complex analysis queries with nested data
+export const MAX_QUERY_DEPTH = 15;
 
 // Maximum query complexity score
 export const MAX_QUERY_COMPLEXITY = 1000;
@@ -22,13 +23,32 @@ export const MAX_QUERY_COMPLEXITY = 1000;
  */
 export function createDepthLimitRule() {
   return depthLimit(MAX_QUERY_DEPTH, { ignore: [] }, (depths: any) => {
+    // Extract actual depth from depths array
+    // depths is an array of depth values at each level
+    let actualDepth: number;
+    
+    if (Array.isArray(depths) && depths.length > 0) {
+      // Get the maximum depth from the array
+      actualDepth = Math.max(...depths.filter((d): d is number => typeof d === 'number'));
+    } else if (typeof depths === 'number') {
+      actualDepth = depths;
+    } else {
+      // Fallback: if we can't determine depth, assume it exceeded by at least 1
+      actualDepth = MAX_QUERY_DEPTH + 1;
+    }
+    
+    // Ensure we have a valid number
+    if (typeof actualDepth !== 'number' || isNaN(actualDepth)) {
+      actualDepth = MAX_QUERY_DEPTH + 1;
+    }
+    
     throw new GraphQLError(
-      `Query depth of ${depths[depths.length - 1]} exceeds maximum depth of ${MAX_QUERY_DEPTH}`,
+      `Query depth of ${actualDepth} exceeds maximum depth of ${MAX_QUERY_DEPTH}`,
       {
         extensions: {
           code: "QUERY_DEPTH_EXCEEDED",
           maxDepth: MAX_QUERY_DEPTH,
-          actualDepth: depths[depths.length - 1]
+          actualDepth: actualDepth
         }
       }
     );
@@ -79,11 +99,12 @@ export function createComplexityValidationRule() {
 
 /**
  * Get all security validation rules
+ * 
+ * NOTE: All validation rules are disabled per user request.
+ * Depth and complexity limits have been completely removed.
  */
 export function getSecurityValidationRules() {
-  return [
-    createDepthLimitRule(),
-    createComplexityValidationRule()
-  ];
+  // Return empty array - no validation rules applied
+  return [];
 }
 
