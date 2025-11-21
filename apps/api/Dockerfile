@@ -85,5 +85,9 @@ EXPOSE 4000
 # Ensure we're in /app directory (where dist/ is located)
 WORKDIR /app
 
-# Use absolute path to be explicit
-CMD ["node", "/app/dist/index.js"]
+# Verify dist files exist (for debugging)
+RUN ls -la /app/dist/ || echo "WARNING: dist directory not found"
+
+# Use node with better error handling
+# Try both absolute and relative paths
+CMD ["sh", "-c", "if [ -f /app/dist/index.js ]; then node /app/dist/index.js; elif [ -f dist/index.js ]; then node dist/index.js; else echo 'ERROR: index.js not found' && ls -la /app && exit 1; fi"]

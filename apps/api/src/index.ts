@@ -371,17 +371,32 @@ process.on("uncaughtException", (error) => {
 
 async function start() {
   try {
+    console.log(`[Startup] Initializing server on port ${env.PORT}...`);
     const app = await buildServer();
+    console.log(`[Startup] Server built successfully, starting listener...`);
     await app.listen({ port: env.PORT, host: "0.0.0.0" });
     app.log.info(`🚀 Vett API ready at http://localhost:${env.PORT}/graphql`);
+    console.log(`[Startup] Server started successfully on port ${env.PORT}`);
     // Sentry status is logged in initSentry() function
   } catch (error) {
-    console.error("Failed to start server:", error);
-    if (env.SENTRY_DSN) {
-      Sentry.captureException(error as Error);
-      await Sentry.flush(2000); // Wait for Sentry to send
+    console.error("[Startup] Failed to start server:", error);
+    if (error instanceof Error) {
+      console.error("[Startup] Error name:", error.name);
+      console.error("[Startup] Error message:", error.message);
+      console.error("[Startup] Error stack:", error.stack);
     }
-    process.exit(1);
+    if (env.SENTRY_DSN) {
+      try {
+        Sentry.captureException(error as Error);
+        await Sentry.flush(2000); // Wait for Sentry to send
+      } catch (sentryError) {
+        console.error("[Startup] Failed to send error to Sentry:", sentryError);
+      }
+    }
+    // Give time for logs to flush before exiting
+    setTimeout(() => {
+      process.exit(1);
+    }, 1000);
   }
 }
 
