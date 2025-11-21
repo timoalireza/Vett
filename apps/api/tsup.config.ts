@@ -7,6 +7,7 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
+  tsconfig: "tsconfig.json",
   // Ensure all files are included in the build
   noExternal: [],
   // Resolve .js imports to .ts files
