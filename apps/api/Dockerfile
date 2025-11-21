@@ -38,8 +38,10 @@ COPY apps/api/src ./apps/api/src
 # Verify loaders directory was copied (for debugging)
 RUN test -d apps/api/src/loaders || (echo "ERROR: loaders directory not found" && ls -la apps/api/src/ && exit 1)
 
-# Build API
-RUN pnpm --filter vett-api build
+# Build API (ensure we're in the right directory)
+WORKDIR /app/apps/api
+RUN pnpm build
+WORKDIR /app
 
 FROM base AS runner
 WORKDIR /app
