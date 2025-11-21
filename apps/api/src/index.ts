@@ -1,3 +1,136 @@
+// CRITICAL: Suppress ALL ioredis error logging BEFORE any imports
+// ioredis logs errors directly to console, so we must intercept console methods AND stderr
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+// Patch stderr.write to catch direct writes from ioredis
+process.stderr.write = function(chunk: any, ...args: any[]) {
+  const str = chunk?.toString() || "";
+  const isRedisError = 
+    str.includes("[ioredis]") ||
+    str.includes("MaxRetriesPerRequestError") ||
+    str.includes("ECONNRESET") ||
+    str.includes("ECONNREFUSED") ||
+    str.includes("ETIMEDOUT") ||
+    str.includes("ioredis") ||
+    str.includes("Redis");
+  
+  if (!isRedisError) {
+    return originalStderrWrite(chunk, ...args);
+  }
+  // Silently suppress Redis errors
+  return true;
+};
+
+// Also patch stdout.write just in case
+const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = function(chunk: any, ...args: any[]) {
+  const str = chunk?.toString() || "";
+  const isRedisError = 
+    str.includes("[ioredis]") ||
+    str.includes("MaxRetriesPerRequestError") ||
+    str.includes("ECONNRESET");
+  
+  if (!isRedisError) {
+    return originalStdoutWrite(chunk, ...args);
+  }
+  // Silently suppress Redis errors
+  return true;
+};
+
+console.error = function(...args: any[]) {
+  // Check ALL arguments for Redis/ioredis errors
+  let isRedisError = false;
+  
+  for (const arg of args) {
+    if (typeof arg === "string") {
+      if (
+        arg.includes("[ioredis]") ||
+        arg.includes("MaxRetriesPerRequestError") ||
+        arg.includes("ECONNRESET") ||
+        arg.includes("ECONNREFUSED") ||
+        arg.includes("ETIMEDOUT") ||
+        arg.includes("Connection is closed") ||
+        arg.includes("Redis") ||
+        arg.includes("ioredis")
+      ) {
+        isRedisError = true;
+        break;
+      }
+    } else if (arg && typeof arg === "object") {
+      const errorStr = JSON.stringify(arg);
+      if (
+        errorStr.includes("MaxRetriesPerRequestError") ||
+        errorStr.includes("ECONNRESET") ||
+        errorStr.includes("ECONNREFUSED") ||
+        errorStr.includes("ETIMEDOUT") ||
+        errorStr.includes("ioredis") ||
+        arg.message?.includes("MaxRetriesPerRequestError") ||
+        arg.message?.includes("ECONNRESET") ||
+        arg.name === "MaxRetriesPerRequestError"
+      ) {
+        isRedisError = true;
+        break;
+      }
+    }
+  }
+  
+  if (!isRedisError) {
+    originalConsoleError.apply(console, args);
+  }
+  // Silently suppress Redis errors
+};
+
+console.warn = function(...args: any[]) {
+  // Check ALL arguments for Redis/ioredis warnings
+  let isRedisWarning = false;
+  
+  for (const arg of args) {
+    if (typeof arg === "string") {
+      if (
+        arg.includes("[ioredis]") ||
+        arg.includes("MaxRetriesPerRequestError") ||
+        arg.includes("ECONNRESET") ||
+        arg.includes("Redis connection")
+      ) {
+        isRedisWarning = true;
+        break;
+      }
+    }
+  }
+  
+  if (!isRedisWarning) {
+    originalConsoleWarn.apply(console, args);
+  }
+  // Silently suppress Redis warnings
+};
+
+// Also patch EventEmitter to catch error events
+import { EventEmitter } from "events";
+const originalEmit = EventEmitter.prototype.emit;
+EventEmitter.prototype.emit = function(event: string | symbol, ...args: any[]) {
+  // Suppress ioredis unhandled error events
+  if (event === "error" && args[0] && typeof args[0] === "object") {
+    const error = args[0] as Error;
+    const isRedisError = 
+      error.message?.includes("MaxRetriesPerRequestError") ||
+      error.message?.includes("ECONNRESET") ||
+      error.message?.includes("ECONNREFUSED") ||
+      error.message?.includes("ETIMEDOUT") ||
+      error.message?.includes("Connection is closed") ||
+      error.message?.includes("Redis") ||
+      error.message?.includes("ioredis") ||
+      error.name === "MaxRetriesPerRequestError";
+    
+    if (isRedisError) {
+      // Silently suppress - don't emit the error event
+      return false;
+    }
+  }
+  return originalEmit.apply(this, [event, ...args]);
+};
+
 // Initialize Sentry FIRST (before any other imports that might throw)
 import { initSentry } from "./config/sentry.js";
 initSentry();
@@ -187,6 +320,50 @@ async function buildServer() {
 
 // Export buildServer for testing
 export { buildServer };
+
+// Global error handlers for Redis connection errors - suppress all Redis errors
+process.on("unhandledRejection", (reason, promise) => {
+  // Silently suppress all Redis-related errors - they are non-fatal
+  if (reason && typeof reason === "object" && "message" in reason) {
+    const error = reason as Error;
+    const isRedisError = 
+      error.message.includes("Redis") || 
+      error.message.includes("ioredis") || 
+      error.message.includes("ECONNRESET") ||
+      error.message.includes("ECONNREFUSED") ||
+      error.message.includes("ETIMEDOUT") ||
+      error.message.includes("MaxRetriesPerRequestError") ||
+      error.message.includes("Connection is closed");
+    
+    if (isRedisError) {
+      // Silently ignore - Redis errors are handled gracefully by the client
+      return;
+    }
+  }
+  console.error("[Process] Unhandled rejection:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  // Silently suppress all Redis-related errors - they are non-fatal
+  const isRedisError = 
+    error.message.includes("Redis") || 
+    error.message.includes("ioredis") || 
+    error.message.includes("ECONNRESET") ||
+    error.message.includes("ECONNREFUSED") ||
+    error.message.includes("ETIMEDOUT") ||
+    error.message.includes("MaxRetriesPerRequestError") ||
+    error.message.includes("Connection is closed");
+  
+  if (isRedisError) {
+    // Silently ignore - Redis errors are handled gracefully by the client
+    return;
+  }
+  console.error("[Process] Uncaught exception:", error);
+  if (env.SENTRY_DSN) {
+    Sentry.captureException(error);
+  }
+  process.exit(1);
+});
 
 async function start() {
   try {

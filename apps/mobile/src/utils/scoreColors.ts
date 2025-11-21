@@ -12,3 +12,4 @@ export function getScoreGradient(score: number): { start: string; end: string } 
 
 
 
+

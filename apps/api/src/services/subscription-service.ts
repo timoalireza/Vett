@@ -17,15 +17,15 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   FREE: {
-    maxAnalysesPerMonth: 10,
+    maxAnalysesPerMonth: null, // REMOVED - unlimited
     hasWatermark: true,
-    historyRetentionDays: 30,
+    historyRetentionDays: null, // REMOVED - unlimited
     hasPriorityProcessing: false,
     hasAdvancedBiasAnalysis: false,
     hasExtendedSummaries: false,
     hasCrossPlatformSync: false,
     hasCustomAlerts: false,
-    maxSources: 5
+    maxSources: null // REMOVED - unlimited
   },
   PLUS: {
     maxAnalysesPerMonth: null, // unlimited
@@ -105,32 +105,7 @@ class SubscriptionService {
    * Check if user can perform analysis
    */
   async canPerformAnalysis(userId: string): Promise<{ allowed: boolean; reason?: string }> {
-    const subscription = await this.getOrCreateSubscription(userId);
-    const limits = PLAN_LIMITS[subscription.plan];
-
-    // Check subscription status
-    if (subscription.status !== "ACTIVE" && subscription.status !== "TRIALING") {
-      return {
-        allowed: false,
-        reason: "Subscription is not active"
-      };
-    }
-
-    // Check if plan has unlimited analyses
-    if (limits.maxAnalysesPerMonth === null) {
-      return { allowed: true };
-    }
-
-    // Check usage for current period
-    const usage = await this.getOrCreateUsage(userId, subscription.currentPeriodStart, subscription.currentPeriodEnd);
-
-    if (usage.analysesCount >= limits.maxAnalysesPerMonth) {
-      return {
-        allowed: false,
-        reason: `Monthly limit of ${limits.maxAnalysesPerMonth} analyses reached. Upgrade to continue.`
-      };
-    }
-
+    // All limits removed - always allow analyses
     return { allowed: true };
   }
 

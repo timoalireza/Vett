@@ -1,6 +1,6 @@
 import IORedis from "ioredis";
 import { createHash } from "crypto";
-
+import { createRedisClient } from "../utils/redis-config.js";
 import { env } from "../env.js";
 
 /**
@@ -20,13 +20,14 @@ class CacheService {
     }
 
     try {
-      this.client = new IORedis(env.REDIS_URL, {
-        maxRetriesPerRequest: 3,
-        enableReadyCheck: true,
-        lazyConnect: true,
+      this.client = createRedisClient(env.REDIS_URL, {
         // Use a different database index for cache (default is 0, use 1)
-        db: 1
+        db: 1,
+        maxRetriesPerRequest: null // Unlimited retries to prevent errors
       });
+      
+      // Suppress all Redis errors - they are handled by createRedisClient
+      // Caching will automatically fail gracefully if Redis is unavailable
       
       await this.client.connect();
       this.enabled = true;

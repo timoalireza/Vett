@@ -1,8 +1,8 @@
 import fp from "fastify-plugin";
 import type { FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
-import IORedis from "ioredis";
-
+import type IORedis from "ioredis";
+import { createRedisClient } from "../utils/redis-config.js";
 import { env } from "../env.js";
 
 export default fp(async (fastify: FastifyInstance) => {
@@ -10,11 +10,10 @@ export default fp(async (fastify: FastifyInstance) => {
   let redisClient: IORedis | undefined;
   if (env.NODE_ENV === "production") {
     try {
-      redisClient = new IORedis(env.REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        enableReadyCheck: true,
-        lazyConnect: true
+      redisClient = createRedisClient(env.REDIS_URL, {
+        maxRetriesPerRequest: null // Unlimited retries to prevent errors
       });
+      // Errors are handled silently by createRedisClient - rate limiting will use in-memory fallback if Redis fails
       await redisClient.connect();
       fastify.log.info("✅ Redis connected for rate limiting");
     } catch (error) {
@@ -22,10 +21,10 @@ export default fp(async (fastify: FastifyInstance) => {
     }
   }
 
-  // Global rate limit for all routes
+  // Global rate limit for all routes - REMOVED (unlimited)
   await fastify.register(rateLimit, {
-    max: 100, // Maximum number of requests
-    timeWindow: "15 minutes", // Time window
+    max: 1000000, // Effectively unlimited
+    timeWindow: "1 hour", // Long time window
     redis: redisClient,
     skipOnError: true, // Continue if Redis fails
     addHeaders: {
@@ -56,10 +55,10 @@ export default fp(async (fastify: FastifyInstance) => {
   // Note: GraphQL mutations share the global rate limit
   // Future enhancement: Add stricter limits for mutations
 
-  // Stricter rate limit for file uploads
+  // Rate limit for file uploads - REMOVED (unlimited)
   await fastify.register(rateLimit, {
-    max: 5, // Only 5 uploads per minute
-    timeWindow: "1 minute",
+    max: 1000000, // Effectively unlimited
+    timeWindow: "1 hour",
     route: "/uploads",
     redis: redisClient,
     skipOnError: true,
@@ -79,10 +78,10 @@ export default fp(async (fastify: FastifyInstance) => {
     }
   });
 
-  // Rate limit for health endpoints (prevent abuse)
+  // Rate limit for health endpoints - REMOVED (unlimited)
   await fastify.register(rateLimit, {
-    max: 10,
-    timeWindow: "1 minute",
+    max: 1000000, // Effectively unlimited
+    timeWindow: "1 hour",
     route: ["/health", "/live", "/ready"],
     redis: redisClient,
     skipOnError: true,

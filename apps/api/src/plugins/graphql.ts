@@ -76,8 +76,28 @@ export async function registerGraphql(app: FastifyInstance) {
           };
         }
         
-        // Don't expose internal errors in production
+        // Log the actual error for debugging (even in production)
+        console.error("[GraphQL] Error:", {
+          message: error.message,
+          stack: error.stack,
+          path: error.path,
+          locations: error.locations
+        });
+        
+        // Don't expose internal errors in production, but provide more helpful messages
         if (env.NODE_ENV === "production") {
+          // Check if it's a known error type and provide better message
+          const errorMessage = error.message.toLowerCase();
+          if (errorMessage.includes("unable to process") || errorMessage.includes("try again")) {
+            // User-friendly error - pass it through
+            return {
+              message: error.message,
+              extensions: {
+                code: "SERVICE_UNAVAILABLE"
+              }
+            };
+          }
+          
           return {
             message: "An error occurred while processing your request",
             extensions: {

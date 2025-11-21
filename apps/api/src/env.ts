@@ -46,6 +46,12 @@ if (process.env.NODE_ENV !== "production") {
   }
 }
 
+// Helper to normalize environment variables (handle empty strings from Railway)
+function getEnv(key: string): string | undefined {
+  const value = process.env[key];
+  return value && value.trim() !== "" ? value : undefined;
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z
@@ -56,9 +62,14 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
     .default("info"),
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.string().url().refine((val) => val && val.trim() !== "", {
+    message: "DATABASE_URL cannot be empty"
+  }),
   REDIS_URL: z
     .string()
+    .refine((val) => val && val.trim() !== "", {
+      message: "REDIS_URL cannot be empty"
+    })
     .refine(
       (val) => {
         // Accept redis://, rediss://, or http:// URLs
@@ -76,7 +87,9 @@ const envSchema = z.object({
       },
       { message: "REDIS_URL must be a valid Redis URL (redis://, rediss://, or http://)" }
     ),
-  CLERK_SECRET_KEY: z.string().min(1),
+  CLERK_SECRET_KEY: z.string().min(1).refine((val) => val && val.trim() !== "", {
+    message: "CLERK_SECRET_KEY cannot be empty"
+  }),
   PINECONE_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
@@ -112,11 +125,72 @@ const envSchema = z.object({
     .pipe(z.number().min(0).max(1).optional())
 });
 
-const parsed = envSchema.safeParse(process.env);
+// Debug: Log available environment variables (without sensitive values)
+if (process.env.NODE_ENV === "production") {
+  const envKeys = Object.keys(process.env).filter(key => 
+    key.includes("DATABASE") || 
+    key.includes("REDIS") || 
+    key.includes("CLERK") ||
+    key === "NODE_ENV" ||
+    key === "PORT"
+  );
+  console.log("🔍 Environment check (production):");
+  console.log(`  NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`  PORT: ${process.env.PORT}`);
+  
+  // Check if variables exist and are not empty
+  const dbUrl = getEnv("DATABASE_URL");
+  const redisUrl = getEnv("REDIS_URL");
+  const clerkKey = getEnv("CLERK_SECRET_KEY");
+  
+  console.log(`  DATABASE_URL: ${dbUrl ? "✅ Set" : process.env.DATABASE_URL ? "⚠️ Empty string" : "❌ Missing"}`);
+  console.log(`  REDIS_URL: ${redisUrl ? "✅ Set" : process.env.REDIS_URL ? "⚠️ Empty string" : "❌ Missing"}`);
+  console.log(`  CLERK_SECRET_KEY: ${clerkKey ? "✅ Set" : process.env.CLERK_SECRET_KEY ? "⚠️ Empty string" : "❌ Missing"}`);
+  console.log(`  All env keys containing DATABASE/REDIS/CLERK: ${envKeys.join(", ")}`);
+  
+  // Show actual values (truncated for security)
+  if (process.env.DATABASE_URL) {
+    const dbPreview = process.env.DATABASE_URL.substring(0, 50) + "...";
+    console.log(`  DATABASE_URL value preview: ${dbPreview}`);
+  }
+  if (process.env.REDIS_URL) {
+    const redisPreview = process.env.REDIS_URL.substring(0, 50) + "...";
+    console.log(`  REDIS_URL value preview: ${redisPreview}`);
+  }
+  if (process.env.CLERK_SECRET_KEY) {
+    const clerkPreview = process.env.CLERK_SECRET_KEY.substring(0, 20) + "...";
+    console.log(`  CLERK_SECRET_KEY value preview: ${clerkPreview}`);
+  }
+}
+
+// Create a normalized env object (handle empty strings)
+const normalizedEnv = {
+  ...process.env,
+  DATABASE_URL: getEnv("DATABASE_URL"),
+  REDIS_URL: getEnv("REDIS_URL"),
+  CLERK_SECRET_KEY: getEnv("CLERK_SECRET_KEY")
+};
+
+const parsed = envSchema.safeParse(normalizedEnv);
 
 if (!parsed.success) {
   // eslint-disable-next-line no-console
   console.error("❌ Invalid environment configuration:", parsed.error.flatten().fieldErrors);
+  
+  // Additional debugging: show what we actually got
+  if (process.env.NODE_ENV === "production") {
+    console.error("🔍 Debug info:");
+    const dbUrl = getEnv("DATABASE_URL");
+    const redisUrl = getEnv("REDIS_URL");
+    const clerkKey = getEnv("CLERK_SECRET_KEY");
+    
+    console.error(`  process.env.DATABASE_URL: ${process.env.DATABASE_URL ? (dbUrl ? "exists (valid)" : "exists but empty") : "undefined"}`);
+    console.error(`  process.env.REDIS_URL: ${process.env.REDIS_URL ? (redisUrl ? "exists (valid)" : "exists but empty") : "undefined"}`);
+    console.error(`  process.env.CLERK_SECRET_KEY: ${process.env.CLERK_SECRET_KEY ? (clerkKey ? "exists (valid)" : "exists but empty") : "undefined"}`);
+    console.error(`  All process.env keys (first 30): ${Object.keys(process.env).slice(0, 30).join(", ")}...`);
+    console.error(`  Total env keys: ${Object.keys(process.env).length}`);
+  }
+  
   throw new Error("Invalid environment configuration");
 }
 

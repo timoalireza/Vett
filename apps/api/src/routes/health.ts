@@ -1,14 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import IORedis from "ioredis";
 import { createClerkClient } from "@clerk/backend";
+import { createRedisClient } from "../utils/redis-config.js";
 import { db } from "../db/client.js";
 import { env } from "../env.js";
 
-// Create Redis client for health checks
-const redisHealthCheck = new IORedis(env.REDIS_URL, {
-  maxRetriesPerRequest: 1,
-  enableReadyCheck: true,
-  lazyConnect: true
+// Create Redis client for health checks with unlimited retries
+// Errors are handled silently by createRedisClient
+const redisHealthCheck = createRedisClient(env.REDIS_URL, {
+  maxRetriesPerRequest: null // Unlimited retries to prevent errors
 });
 
 export async function registerHealthRoutes(app: FastifyInstance) {

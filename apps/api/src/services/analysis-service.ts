@@ -191,7 +191,9 @@ class AnalysisService {
     }
 
     try {
-      await queues.analysis.add("analysis", {
+      // Add job to queue with retry logic for Redis connection issues
+      // BullMQ will handle Redis reconnection automatically
+      const job = await queues.analysis.add("analysis", {
         analysisId: id,
         input: {
           contentUri: normalizedInput.contentUri ?? null,
@@ -200,16 +202,49 @@ class AnalysisService {
           topicHint: normalizedInput.topicHint ?? null,
           attachments: normalizedInput.attachments
         }
+      }, {
+        // Retry job if Redis connection fails
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 2000
+        },
+        // Remove completed jobs after 24 hours
+        removeOnComplete: {
+          age: 24 * 3600, // 24 hours in seconds
+          count: 1000
+        }
       });
+      
+      // Log successful enqueue (for debugging)
+      console.log(`[AnalysisService] Analysis ${id} enqueued as job ${job.id}`);
     } catch (error) {
+      // Log the actual error for debugging (even in production)
+      console.error("[AnalysisService] Failed to enqueue analysis:", {
+        analysisId: id,
+        error: error instanceof Error ? {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        } : error
+      });
+      
+      // Update analysis status to FAILED
       await db
         .update(analyses)
         .set({
           status: "FAILED",
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          summary: "Failed to queue analysis for processing. Please try again."
         })
         .where(eq(analyses.id, id));
-      throw error;
+      
+      // Throw a user-friendly error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("Redis") || errorMessage.includes("ECONNRESET") || errorMessage.includes("Connection") || errorMessage.includes("ioredis")) {
+        throw new Error("Unable to process analysis at this time. Please try again in a moment.");
+      }
+      throw new Error(`Failed to queue analysis: ${errorMessage}`);
     }
 
     return id;
