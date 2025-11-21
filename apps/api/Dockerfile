@@ -88,6 +88,6 @@ WORKDIR /app
 # Verify dist files exist (for debugging)
 RUN ls -la /app/dist/ || echo "WARNING: dist directory not found"
 
-# Use node with better error handling
-# Try both absolute and relative paths
-CMD ["sh", "-c", "if [ -f /app/dist/index.js ]; then node /app/dist/index.js; elif [ -f dist/index.js ]; then node dist/index.js; else echo 'ERROR: index.js not found' && ls -la /app && exit 1; fi"]
+# Railway sets PORT automatically, but we need to ensure the file exists
+# Use relative path since WORKDIR is set to /app
+CMD ["node", "dist/index.js"]
