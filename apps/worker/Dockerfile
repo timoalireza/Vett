@@ -25,16 +25,21 @@ COPY packages/shared/src ./packages/shared/src
 # Worker needs API's db schema, so copy API files too
 COPY apps/api/package.json ./apps/api/
 COPY apps/api/tsconfig.json ./apps/api/
+COPY apps/api/tsup.config.ts ./apps/api/
 COPY apps/api/src/db ./apps/api/src/db
 
 COPY apps/worker/package.json ./apps/worker/
 COPY apps/worker/tsconfig.json ./apps/worker/
+COPY apps/worker/tsup.config.ts ./apps/worker/
 
 # Install all dependencies (including devDependencies for building)
 RUN pnpm install --frozen-lockfile
 
 # Build shared package first
 RUN pnpm --filter @vett/shared build
+
+# Copy API source files (needed for building API)
+COPY apps/api/src ./apps/api/src
 
 # Build API db schema (needed by worker)
 RUN pnpm --filter vett-api build
