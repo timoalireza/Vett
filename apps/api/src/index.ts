@@ -106,22 +106,26 @@ console.warn = function(...args: any[]) {
   // Silently suppress Redis warnings
 };
 
-// Also patch EventEmitter to catch error events
+// Also patch EventEmitter to catch error events BEFORE any Redis connections are created
 import { EventEmitter } from "events";
 const originalEmit = EventEmitter.prototype.emit;
 EventEmitter.prototype.emit = function(event: string | symbol, ...args: any[]) {
   // Suppress ioredis unhandled error events
-  if (event === "error" && args[0] && typeof args[0] === "object") {
+  if (event === "error" && args[0]) {
     const error = args[0] as Error;
+    const errorMessage = error?.message || String(args[0]);
+    const errorName = error?.name || "";
+    
     const isRedisError = 
-      error.message?.includes("MaxRetriesPerRequestError") ||
-      error.message?.includes("ECONNRESET") ||
-      error.message?.includes("ECONNREFUSED") ||
-      error.message?.includes("ETIMEDOUT") ||
-      error.message?.includes("Connection is closed") ||
-      error.message?.includes("Redis") ||
-      error.message?.includes("ioredis") ||
-      error.name === "MaxRetriesPerRequestError";
+      errorMessage.includes("MaxRetriesPerRequestError") ||
+      errorMessage.includes("ECONNRESET") ||
+      errorMessage.includes("ECONNREFUSED") ||
+      errorMessage.includes("ETIMEDOUT") ||
+      errorMessage.includes("Connection is closed") ||
+      errorMessage.includes("Redis") ||
+      errorMessage.includes("ioredis") ||
+      errorMessage.includes("[ioredis]") ||
+      errorName === "MaxRetriesPerRequestError";
     
     if (isRedisError) {
       // Silently suppress - don't emit the error event

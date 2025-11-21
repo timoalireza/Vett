@@ -29,6 +29,19 @@ function getSharedConnection(): IORedis {
       enableReadyCheck: false,
       lazyConnect: true
     };
+    
+    // CRITICAL: Patch the connection to prevent maxRetriesPerRequest from being changed
+    const originalOptions = (sharedConnection as any).options;
+    Object.defineProperty(sharedConnection, "options", {
+      get: () => {
+        const opts = originalOptions;
+        if (opts && opts.maxRetriesPerRequest !== null) {
+          opts.maxRetriesPerRequest = null;
+        }
+        return opts;
+      },
+      configurable: true
+    });
   }
   
   return sharedConnection;
@@ -37,19 +50,18 @@ function getSharedConnection(): IORedis {
 /**
  * Connection factory for BullMQ
  * Always returns the shared connection with proper configuration
+ * CRITICAL: BullMQ may create internal connections, so we ensure they all use maxRetriesPerRequest: null
  */
 const connectionFactory: ConnectionOptions = {
   createClient: (type: string) => {
     const conn = getSharedConnection();
-    
-    // Log connection creation for debugging
-    console.log(`[BullMQ] Creating ${type} connection with maxRetriesPerRequest: ${(conn as any).options?.maxRetriesPerRequest}`);
     
     // Ensure maxRetriesPerRequest is null
     if ((conn as any).options?.maxRetriesPerRequest !== null) {
       (conn as any).options.maxRetriesPerRequest = null;
     }
     
+    // Return the shared connection - BullMQ should reuse it
     return conn;
   }
 };
