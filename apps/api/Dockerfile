@@ -24,6 +24,7 @@ COPY packages/shared/src ./packages/shared/src
 
 COPY apps/api/package.json ./apps/api/
 COPY apps/api/tsconfig.json ./apps/api/
+COPY apps/api/tsup.config.ts ./apps/api/
 
 # Install all dependencies (including devDependencies for building)
 RUN pnpm install --frozen-lockfile
