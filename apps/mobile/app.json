@@ -28,7 +28,7 @@
       "expo-router"
     ],
     "extra": {
-      "apiUrl": "http://localhost:4000",
+      "apiUrl": "https://vett-api-production.up.railway.app",
       "eas": {
         "projectId": "vett-mobile-dev"
       }
