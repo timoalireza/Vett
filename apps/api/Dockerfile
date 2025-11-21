@@ -31,8 +31,11 @@ RUN pnpm install --frozen-lockfile
 # Build shared package first
 RUN pnpm --filter @vett/shared build
 
-# Copy API source files
+# Copy API source files (including loaders directory)
 COPY apps/api/src ./apps/api/src
+
+# Verify loaders directory was copied (for debugging)
+RUN test -d apps/api/src/loaders || (echo "ERROR: loaders directory not found" && ls -la apps/api/src/ && exit 1)
 
 # Build API
 RUN pnpm --filter vett-api build
