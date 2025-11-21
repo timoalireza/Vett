@@ -4,12 +4,11 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { env } from "../env.js";
 import { schema } from "../graphql/schema.js";
 import { resolvers } from "../resolvers/index.js";
-import { getSecurityValidationRules } from "./graphql-security.js";
 import { cacheService } from "../services/cache-service.js";
 import { createDataLoaders } from "../loaders/index.js";
 
 export async function registerGraphql(app: FastifyInstance) {
-  // Security validation rules disabled - no depth or complexity limits
+  // Security validation rules completely disabled - no depth or complexity limits
   // Per user request to remove all query depth limits
 
   await app.register(mercurius, {
@@ -25,7 +24,7 @@ export async function registerGraphql(app: FastifyInstance) {
       // Create DataLoaders per request (they cache within a single request)
       loaders: createDataLoaders()
     }),
-    // No validation rules - depth and complexity limits removed
+    // Explicitly set empty validation rules array - no depth/complexity limits
     validationRules: [],
     // Custom cache function for GraphQL queries
     cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
