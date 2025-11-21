@@ -13,14 +13,38 @@ function loadDotenv() {
     // Use require for CommonJS compatibility (works in ESM too)
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const dotenv = require("dotenv");
-    // Get directory of current file (ESM compatible)
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    // Load .env from the api directory (where this file is located)
-    const envPath = resolve(__dirname, "../.env");
-    dotenv.config({ path: envPath });
-  } catch {
-    // dotenv not available - this is fine, env vars provided by platform
+    const fs = require("fs");
+    
+    // Try multiple possible locations for .env file
+    const possiblePaths = [
+      // Current working directory (where command is run from)
+      resolve(process.cwd(), ".env"),
+      // apps/api/.env (relative to cwd)
+      resolve(process.cwd(), "apps/api/.env"),
+      // Relative to source file location
+      resolve(dirname(fileURLToPath(import.meta.url)), "../.env"),
+      // Fallback: just try .env in cwd
+      ".env"
+    ];
+    
+    // Find the first .env file that exists
+    for (const envPath of possiblePaths) {
+      try {
+        if (fs.existsSync(envPath)) {
+          dotenv.config({ path: envPath });
+          console.log(`✅ Loaded .env from: ${envPath}`);
+          return;
+        }
+      } catch {
+        // Continue to next path
+      }
+    }
+    
+    // If no .env found, try default behavior (looks in cwd)
+    dotenv.config();
+  } catch (error) {
+    // dotenv not available or failed - log but don't fail
+    console.warn("⚠️  Could not load .env file:", error);
   }
 }
 
