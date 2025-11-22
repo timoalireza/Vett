@@ -203,8 +203,12 @@ function getSharedConnection(): IORedis {
  * We ensure all connections use maxRetriesPerRequest: null
  */
 const connectionFactory = {
-  createClient: (_type: string) => {
+  createClient: (type: string) => {
     const conn = getSharedConnection();
+    
+    // Log when BullMQ requests a connection (for debugging)
+    logger.debug({ type, redisStatus: conn.status }, "[BullMQ] Connection factory called");
+    console.log(`[BullMQ] Connection factory called: type=${type}, redisStatus=${conn.status}`);
     
     // CRITICAL: Force maxRetriesPerRequest to null every time
     // BullMQ might create multiple connection instances internally
@@ -216,6 +220,15 @@ const connectionFactory = {
     const originalOptions = (conn as any).options;
     if (originalOptions && originalOptions.maxRetriesPerRequest !== null) {
       originalOptions.maxRetriesPerRequest = null;
+    }
+    
+    // CRITICAL: If Redis isn't ready, log a warning
+    if (conn.status !== "ready") {
+      logger.warn({ type, redisStatus: conn.status }, "[BullMQ] ⚠️ Creating connection but Redis not ready");
+      console.log(`[BullMQ] ⚠️ Creating connection but Redis status is ${conn.status}`);
+    } else {
+      logger.debug({ type }, "[BullMQ] ✅ Connection created with ready Redis");
+      console.log(`[BullMQ] ✅ Connection created with ready Redis (type=${type})`);
     }
     
     return conn;
