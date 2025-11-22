@@ -571,17 +571,40 @@ async function startWorker() {
       // Don't throw - Redis will retry automatically
     }
     
-    // Wait for worker to be ready (with timeout)
+    // Wait for Redis connection to be fully ready first
+    try {
+      const redisConn = getSharedConnection();
+      // Wait for Redis to be ready (with timeout)
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          if (redisConn.status === "ready") {
+            resolve();
+          } else {
+            redisConn.once("ready", () => resolve());
+          }
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Redis ready timeout")), 10000)
+        )
+      ]);
+      logger.info("[Startup] ✅ Redis connection ready");
+    } catch (error) {
+      logger.warn({ error }, "[Startup] ⚠️ Redis ready check timeout (will continue)");
+    }
+    
+    // Wait for worker to be ready (with longer timeout and better error handling)
     try {
       await Promise.race([
         worker.waitUntilReady(),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Worker initialization timeout")), 30000)
+          setTimeout(() => reject(new Error("Worker initialization timeout")), 60000)
         )
       ]);
       logger.info("[Startup] ✅ Worker ready and listening for jobs");
     } catch (error) {
       logger.warn({ error }, "[Startup] ⚠️ Worker initialization timeout or error (will continue trying)");
+      // Check if worker is actually running despite timeout
+      logger.info(`[Startup] Worker state: ${(worker as any).isRunning() ? "running" : "not running"}`);
       // Don't throw - worker will continue trying to connect
     }
     

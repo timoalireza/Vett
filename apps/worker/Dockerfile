@@ -77,6 +77,10 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter vett-worker.
 COPY --from=builder /app/apps/worker/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
+# Copy worker package.json to root for Node.js module type detection
+# This fixes the MODULE_TYPELESS_PACKAGE_JSON warning
+COPY apps/worker/package.json ./package.json
+
 # Worker imports from ../../api/src/db/schema.js, so copy API's db schema (source files, not dist)
 # The API build doesn't create dist/db, so we copy the source db directory
 COPY --from=builder /app/apps/api/src/db ./apps/api/src/db
