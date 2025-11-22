@@ -372,6 +372,28 @@ function createWorker(): Worker {
     });
     console.log("[Worker] Connection factory ready:", !!connectionFactory);
     
+    // CRITICAL: Verify Redis connection is ready before creating Worker
+    // BullMQ Worker needs Redis to be connected when it's created
+    const redisConn = getSharedConnection();
+    logger.info({ redisStatus: redisConn.status }, "[Worker] Redis status before creating Worker");
+    console.log(`[Worker] Redis status before creating Worker: ${redisConn.status}`);
+    
+    if (redisConn.status !== "ready") {
+      logger.warn({ redisStatus: redisConn.status }, "[Worker] ⚠️ Redis not ready when creating Worker!");
+      console.warn(`[Worker] ⚠️ Redis status is ${redisConn.status} - Worker may not connect properly`);
+    }
+    
+    // CRITICAL: Test connection factory by calling it manually
+    // This ensures it works and logs when called
+    try {
+      const testConn = connectionFactory.createClient("test");
+      logger.info({ testConnStatus: testConn.status }, "[Worker] Connection factory test result");
+      console.log(`[Worker] Connection factory test: Redis status=${testConn.status}`);
+    } catch (error) {
+      logger.error({ error }, "[Worker] ❌ Connection factory test failed!");
+      console.error(`[Worker] ❌ Connection factory test failed: ${error}`);
+    }
+    
     worker = new Worker(
   "analysis",
   async (job) => {
@@ -773,8 +795,23 @@ async function startWorker() {
         
         // CRITICAL: Always check queue status, even after timeout
         // This helps diagnose if jobs are being enqueued but not processed
+        logger.info("[Startup] Attempting to check queue status...");
+        console.log("[Startup] Attempting to check queue status...");
         try {
           const queue = queues.analysis;
+          logger.info("[Startup] Queue instance obtained, querying status...");
+          console.log("[Startup] Queue instance obtained, querying status...");
+          
+          // Verify queue has a Redis client
+          const queueClient = (queue as any).client;
+          if (queueClient) {
+            logger.info({ redisStatus: queueClient.status }, "[Startup] Queue Redis client status");
+            console.log(`[Startup] Queue Redis client status: ${queueClient.status}`);
+          } else {
+            logger.warn("[Startup] ⚠️ Queue has no Redis client!");
+            console.warn("[Startup] ⚠️ Queue has no Redis client!");
+          }
+          
           const waiting = await queue.getWaiting();
           const active = await queue.getActive();
           const delayed = await queue.getDelayed();
@@ -793,9 +830,14 @@ async function startWorker() {
             logger.warn({ waiting: waiting.length }, "[Startup] ⚠️ Worker is running but NOT processing waiting jobs!");
             console.warn(`[Startup] ⚠️ Worker is running but NOT processing ${waiting.length} waiting jobs!`);
           }
-        } catch (queueError) {
-          logger.error({ error: queueError }, "[Startup] ❌ Could not check queue status - Redis connection issue?");
-          console.error(`[Startup] ❌ Could not check queue status: ${queueError}`);
+        } catch (queueError: any) {
+          logger.error({ 
+            error: queueError?.message || String(queueError),
+            stack: queueError?.stack,
+            name: queueError?.name
+          }, "[Startup] ❌ Could not check queue status - Redis connection issue?");
+          console.error(`[Startup] ❌ Could not check queue status: ${queueError?.message || queueError}`);
+          console.error(`[Startup] Error stack: ${queueError?.stack || 'No stack trace'}`);
         }
         
         // Even if waitUntilReady() times out, check if worker can process jobs
