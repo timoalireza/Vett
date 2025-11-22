@@ -77,13 +77,13 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter vett-worker.
 COPY --from=builder /app/apps/worker/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
-# Worker imports from ../../api/src/db/schema.js, so copy API's db schema
-COPY --from=builder /app/apps/api/dist/db ./apps/api/dist/db
+# Worker imports from ../../api/src/db/schema.js, so copy API's db schema (source files, not dist)
+# The API build doesn't create dist/db, so we copy the source db directory
 COPY --from=builder /app/apps/api/src/db ./apps/api/src/db
 
 # Worker needs API's database schema (it imports from ../../api/src/db/schema.js)
-# Copy the built schema files from API
-COPY --from=builder /app/apps/api/dist/db ./dist/db
+# Copy the source schema files (not dist, since db files are TypeScript source)
+COPY --from=builder /app/apps/api/src/db ./dist/db
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
