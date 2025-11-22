@@ -584,9 +584,17 @@ async function startWorker() {
       // Don't throw - Redis will retry automatically
     }
     
-    // Wait for Redis connection to be fully ready first
+    // CRITICAL: Ensure Redis connection is actually established before initializing BullMQ
     try {
       const redisConn = getSharedConnection();
+      
+      // If lazyConnect is enabled, we need to explicitly connect
+      if (redisConn.status === "end" || redisConn.status === "wait") {
+        logger.info("[Startup] Connecting to Redis...");
+        console.log("[Startup] Connecting to Redis...");
+        await redisConn.connect();
+      }
+      
       // Wait for Redis to be ready (with timeout)
       await Promise.race([
         new Promise<void>((resolve) => {
@@ -597,12 +605,18 @@ async function startWorker() {
           }
         }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Redis ready timeout")), 10000)
+          setTimeout(() => reject(new Error("Redis ready timeout")), 30000)
         )
       ]);
-      logger.info("[Startup] ✅ Redis connection ready");
+      
+      // Verify connection with a ping
+      const pingResult = await redisConn.ping();
+      logger.info({ pingResult }, "[Startup] ✅ Redis connection ready and verified");
+      console.log(`[Startup] ✅ Redis connection ready and verified (ping: ${pingResult})`);
     } catch (error) {
-      logger.warn({ error }, "[Startup] ⚠️ Redis ready check timeout (will continue)");
+      logger.error({ error }, "[Startup] ❌ Redis connection failed - worker may not process jobs");
+      console.log(`[Startup] ❌ Redis connection failed: ${error}`);
+      // Don't throw - let it retry, but log clearly
     }
     
     // Wait for worker to be ready (with longer timeout and better error handling)

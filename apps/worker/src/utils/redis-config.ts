@@ -73,9 +73,9 @@ export function createRedisClient(url: string, options: Partial<RedisOptions> = 
     keepAlive: 30000, // Send keepalive packets every 30 seconds
     family: 4, // Force IPv4 (Upstash may have IPv6 issues)
     // Handle connection errors gracefully
-    enableOfflineQueue: false, // Don't queue commands when disconnected
-    enableReadyCheck: redisOptions.enableReadyCheck ?? false, // BullMQ handles ready checks
-    lazyConnect: redisOptions.lazyConnect ?? true, // Don't connect immediately
+    enableOfflineQueue: true, // Queue commands when disconnected (BullMQ needs this)
+    enableReadyCheck: redisOptions.enableReadyCheck ?? true, // Wait for Redis to be ready
+    lazyConnect: redisOptions.lazyConnect ?? false, // Connect immediately for BullMQ
     // Increase connection timeout
     connectTimeout: redisOptions.connectTimeout ?? 60000, // 60 second timeout for initial connection
   };
