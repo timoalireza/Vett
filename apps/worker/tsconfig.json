@@ -4,9 +4,10 @@
     "outDir": "dist",
     "rootDir": ".",
     "composite": false,
-    "types": ["node"]
+    "types": ["node"],
+    "skipLibCheck": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../api/src/db/schema.ts"],
   "exclude": ["dist", "node_modules"]
 }
 

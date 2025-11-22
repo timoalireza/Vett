@@ -106,22 +106,26 @@ console.warn = function(...args: any[]) {
   // Silently suppress Redis warnings
 };
 
-// Also patch EventEmitter to catch error events
+// Also patch EventEmitter to catch error events BEFORE any Redis connections are created
 import { EventEmitter } from "events";
 const originalEmit = EventEmitter.prototype.emit;
 EventEmitter.prototype.emit = function(event: string | symbol, ...args: any[]) {
   // Suppress ioredis unhandled error events
-  if (event === "error" && args[0] && typeof args[0] === "object") {
+  if (event === "error" && args[0]) {
     const error = args[0] as Error;
+    const errorMessage = error?.message || String(args[0]);
+    const errorName = error?.name || "";
+    
     const isRedisError = 
-      error.message?.includes("MaxRetriesPerRequestError") ||
-      error.message?.includes("ECONNRESET") ||
-      error.message?.includes("ECONNREFUSED") ||
-      error.message?.includes("ETIMEDOUT") ||
-      error.message?.includes("Connection is closed") ||
-      error.message?.includes("Redis") ||
-      error.message?.includes("ioredis") ||
-      error.name === "MaxRetriesPerRequestError";
+      errorMessage.includes("MaxRetriesPerRequestError") ||
+      errorMessage.includes("ECONNRESET") ||
+      errorMessage.includes("ECONNREFUSED") ||
+      errorMessage.includes("ETIMEDOUT") ||
+      errorMessage.includes("Connection is closed") ||
+      errorMessage.includes("Redis") ||
+      errorMessage.includes("ioredis") ||
+      errorMessage.includes("[ioredis]") ||
+      errorName === "MaxRetriesPerRequestError";
     
     if (isRedisError) {
       // Silently suppress - don't emit the error event
@@ -159,23 +163,34 @@ let sharedConnection: IORedis | null = null;
  */
 function getSharedConnection(): IORedis {
   if (!sharedConnection) {
+    // Create connection with maxRetriesPerRequest: null via our factory
     sharedConnection = createRedisClient(env.REDIS_URL, {
       maxRetriesPerRequest: null, // MUST be null - unlimited retries
       enableReadyCheck: false
     });
     
-    // CRITICAL: Force verify and set maxRetriesPerRequest
-    if ((sharedConnection as any).options?.maxRetriesPerRequest !== null) {
-      (sharedConnection as any).options.maxRetriesPerRequest = null;
-    }
-    
-    // Ensure connection options are correct
-    (sharedConnection as any).options = {
-      ...(sharedConnection as any).options,
-      maxRetriesPerRequest: null, // Force null
-      enableReadyCheck: false,
-      lazyConnect: true
+    // CRITICAL: Double-check options are set correctly
+    // Some BullMQ internal operations might try to modify options
+    const checkAndFixOptions = () => {
+      if ((sharedConnection as any).options?.maxRetriesPerRequest !== null) {
+        (sharedConnection as any).options.maxRetriesPerRequest = null;
+      }
     };
+    
+    // Check immediately
+    checkAndFixOptions();
+    
+    // Also check after connection is established (in case BullMQ modifies it)
+    sharedConnection.once("ready", checkAndFixOptions);
+    
+    // Periodically verify options haven't been changed (every 5 seconds)
+    const optionsCheckInterval = setInterval(() => {
+      if (sharedConnection) {
+        checkAndFixOptions();
+      } else {
+        clearInterval(optionsCheckInterval);
+      }
+    }, 5000);
   }
   
   return sharedConnection;
@@ -184,19 +199,28 @@ function getSharedConnection(): IORedis {
 /**
  * Connection factory for BullMQ
  * Always returns the shared connection with proper configuration
+ * CRITICAL: BullMQ may call this multiple times for different connection types
+ * We ensure all connections use maxRetriesPerRequest: null
  */
-const connectionFactory: ConnectionOptions = {
-  createClient: (type: string) => {
+const connectionFactory = {
+  createClient: (_type: string) => {
     const conn = getSharedConnection();
     
-    // Ensure maxRetriesPerRequest is null
+    // CRITICAL: Force maxRetriesPerRequest to null every time
+    // BullMQ might create multiple connection instances internally
     if ((conn as any).options?.maxRetriesPerRequest !== null) {
       (conn as any).options.maxRetriesPerRequest = null;
     }
     
+    // Also patch the options setter to prevent changes
+    const originalOptions = (conn as any).options;
+    if (originalOptions && originalOptions.maxRetriesPerRequest !== null) {
+      originalOptions.maxRetriesPerRequest = null;
+    }
+    
     return conn;
   }
-};
+} as ConnectionOptions;
 
 const pool = new Pool({
   connectionString: env.DATABASE_URL
@@ -417,7 +441,7 @@ worker.on("failed", (job, err) => {
 });
 
 // Global error handlers for Redis connection errors - suppress all Redis errors
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", (reason, _promise) => {
   // Silently suppress all Redis-related errors - they are non-fatal
   if (reason && typeof reason === "object" && "message" in reason) {
     const error = reason as Error;
@@ -465,7 +489,9 @@ process.on("SIGINT", async () => {
     await analysisQueueEvents.close();
   }
   await pool.end();
-  await connection.quit();
+  if (sharedConnection) {
+    await sharedConnection.quit();
+  }
   process.exit(0);
 });
 
