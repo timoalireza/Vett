@@ -666,16 +666,30 @@ async function startWorker() {
         logger.info("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
         console.log("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
         
-        // Try to check queue status
-        try {
-          const queue = queues.analysis;
-          const waiting = await queue.getWaiting();
-          const active = await queue.getActive();
-          logger.info({ waiting: waiting.length, active: active.length }, "[Startup] Queue status");
-          console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active jobs`);
-        } catch (queueError) {
-          logger.warn({ error: queueError }, "[Startup] Could not check queue status");
-        }
+      // Try to check queue status and verify worker can access Redis
+      try {
+        const queue = queues.analysis;
+        const waiting = await queue.getWaiting();
+        const active = await queue.getActive();
+        const delayed = await queue.getDelayed();
+        const completed = await queue.getCompleted();
+        logger.info({ 
+          waiting: waiting.length, 
+          active: active.length,
+          delayed: delayed.length,
+          completed: completed.length
+        }, "[Startup] Queue status");
+        console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active, ${delayed.length} delayed, ${completed.length} completed`);
+        
+        // Verify worker can actually access the queue
+        const workerIsRunning = (worker as any).isRunning?.() ?? false;
+        const workerName = (worker as any).name ?? "unknown";
+        logger.info({ workerIsRunning, workerName }, "[Startup] Worker details");
+        console.log(`[Startup] Worker details: isRunning=${workerIsRunning}, name=${workerName}`);
+      } catch (queueError) {
+        logger.error({ error: queueError }, "[Startup] Could not check queue status - Redis connection issue");
+        console.log(`[Startup] Could not check queue status: ${queueError}`);
+      }
       }
     }
     
