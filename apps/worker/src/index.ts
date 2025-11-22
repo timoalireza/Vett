@@ -748,21 +748,6 @@ startWorker().catch((error) => {
   // The worker will continue trying to connect and process jobs
 });
 
-// CRITICAL: Keep the process alive
-// The worker needs to run continuously to process jobs
-// Don't let the process exit even if there are errors
-process.on("SIGTERM", () => {
-  logger.info("SIGTERM received - shutting down gracefully");
-  worker.close();
-  process.exit(0);
-});
-
-process.on("SIGINT", () => {
-  logger.info("SIGINT received - shutting down gracefully");
-  worker.close();
-  process.exit(0);
-});
-
 // CRITICAL: Keep the process alive - worker needs to run continuously
 // Set up signal handlers for graceful shutdown
 process.on("SIGTERM", async () => {
