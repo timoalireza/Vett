@@ -227,38 +227,7 @@ const pool = new Pool({
 });
 const db = drizzle(pool, { schema });
 
-// CRITICAL: Ensure Redis connection is established BEFORE creating queues/workers
-// This ensures BullMQ can properly connect when queues/workers are created
-async function ensureRedisConnection() {
-  const conn = getSharedConnection();
-  
-  // If not connected, connect now
-  if (conn.status !== "ready" && conn.status !== "connecting") {
-    logger.info("[Init] Connecting to Redis before creating queues/workers...");
-    console.log("[Init] Connecting to Redis before creating queues/workers...");
-    await conn.connect();
-  }
-  
-  // Wait for ready state
-  if (conn.status !== "ready") {
-    await new Promise<void>((resolve) => {
-      if (conn.status === "ready") {
-        resolve();
-      } else {
-        conn.once("ready", () => resolve());
-      }
-    });
-  }
-  
-  // Verify with ping
-  await conn.ping();
-  logger.info("[Init] ✅ Redis connection established - ready for BullMQ");
-  console.log("[Init] ✅ Redis connection established - ready for BullMQ");
-}
-
-// Initialize Redis connection synchronously (but don't block module load)
-// This will be awaited before creating the worker
-let redisConnectionPromise: Promise<void> | null = null;
+// Removed ensureRedisConnection - using initializeRedisForBullMQ instead
 
 export const queues = {
   analysis: new Queue("analysis", { connection: connectionFactory })
@@ -521,12 +490,63 @@ export function getWorker(): Worker {
   return createWorker();
 }
 
-// CRITICAL: Don't create worker immediately - wait for Redis to connect first
-// The worker will be created in startWorker() after Redis is ready
-// This ensures BullMQ can properly connect to Redis when the worker is created
+// Worker event listeners will be set up in startWorker() after worker is created
+// This ensures Redis is connected before we set up listeners
+function setupWorkerEventListeners(workerInstance: Worker) {
+  workerInstance.on("ready", () => {
+    logger.info("✅ Worker is ready to process jobs");
+    console.log("[WORKER] ✅ Worker ready event fired - should be processing jobs now");
+  });
 
-// Worker will be created in startWorker() after Redis connects
-// Event listeners will be set up via setupWorkerEventListeners()
+  workerInstance.on("stalled", (jobId) => {
+    logger.warn({ jobId }, "Worker job stalled");
+    console.log(`[WORKER] ⚠️ Job stalled: ${jobId}`);
+  });
+
+  workerInstance.on("closing", () => {
+    logger.info("Worker is closing");
+    console.log("[WORKER] Worker closing");
+  });
+
+  workerInstance.on("error", (error) => {
+    // Suppress Redis connection errors - they're handled by the connection client
+    const isRedisError = 
+      error.message?.includes("Connection is closed") ||
+      error.message?.includes("ECONNRESET") ||
+      error.message?.includes("ECONNREFUSED") ||
+      error.message?.includes("ETIMEDOUT") ||
+      error.message?.includes("MaxRetriesPerRequestError");
+    
+    if (!isRedisError) {
+      logger.error({ error }, "Worker error");
+    }
+  });
+
+  workerInstance.on("completed", (job) => {
+    logger.info({ jobId: job.id }, "Analysis job completed");
+  });
+
+  workerInstance.on("failed", (job, err) => {
+    if (job?.data?.analysisId) {
+      db
+        .update(schema.analyses)
+        .set({
+          status: "FAILED",
+          updatedAt: new Date()
+        })
+        .where(eq(schema.analyses.id, job.data.analysisId))
+        .catch((error) => logger.error({ error }, "Failed to update analysis status to FAILED"));
+    }
+
+    logger.error({ jobId: job?.id, err }, "Analysis job failed");
+  });
+
+  // Log when worker starts processing
+  workerInstance.on("active", (job) => {
+    logger.info({ jobId: job.id, analysisId: job.data?.analysisId }, "🟢 Job active: {jobId}");
+    console.log(`[WORKER] 🟢 Job active: ${job.id}, analysisId: ${job.data?.analysisId}`);
+  });
+}
 
 // Global error handlers for Redis connection errors - suppress all Redis errors
 process.on("unhandledRejection", (reason, _promise) => {
