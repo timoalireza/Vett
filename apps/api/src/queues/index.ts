@@ -56,6 +56,36 @@ const connectionFactory: ConnectionOptions = {
   }
 };
 
+// CRITICAL: Ensure Redis connection is ready before creating Queue
+// BullMQ Queue.add() will hang if Redis isn't connected when add() is called
+const sharedConn = getSharedConnection();
+if (sharedConn.status !== "ready") {
+  console.log(`[BullMQ-API] Redis not ready (status: ${sharedConn.status}), waiting for connection...`);
+  // Wait for Redis to be ready (with timeout)
+  const waitForReady = new Promise<void>((resolve) => {
+    if (sharedConn.status === "ready") {
+      resolve();
+      return;
+    }
+    
+    const timeout = setTimeout(() => {
+      console.warn(`[BullMQ-API] ⚠️ Redis ready timeout after 5s, proceeding anyway`);
+      resolve();
+    }, 5000);
+    
+    sharedConn.once("ready", () => {
+      clearTimeout(timeout);
+      console.log(`[BullMQ-API] ✅ Redis ready, creating Queue`);
+      resolve();
+    });
+  });
+  
+  // Don't await - let Queue creation proceed, but connection will be ready soon
+  waitForReady.catch(() => {
+    console.warn(`[BullMQ-API] ⚠️ Error waiting for Redis ready`);
+  });
+}
+
 export const queues = {
   analysis: new Queue("analysis", {
     connection: connectionFactory,
