@@ -663,10 +663,36 @@ async function startWorker() {
     // This ensures BullMQ can properly connect to Redis when the worker is created
     logger.info("[Startup] Creating BullMQ Worker...");
     console.log("[Startup] Creating BullMQ Worker...");
+    
+    // Verify Redis is actually ready before creating worker
+    const redisConn = getSharedConnection();
+    if (redisConn.status !== "ready") {
+      logger.error("[Startup] ❌ Redis not ready - cannot create worker");
+      console.log(`[Startup] ❌ Redis status: ${redisConn.status} - waiting for ready...`);
+      await new Promise<void>((resolve) => {
+        redisConn.once("ready", () => {
+          logger.info("[Startup] ✅ Redis ready - now creating worker");
+          console.log("[Startup] ✅ Redis ready - now creating worker");
+          resolve();
+        });
+      });
+    }
+    
+    // Create worker - this will use the connectionFactory which returns the shared Redis connection
     const workerInstance = createWorker();
+    
+    // CRITICAL: Store worker instance in module-level variable for signal handlers
+    worker = workerInstance;
     
     // Set up event listeners
     setupWorkerEventListeners(workerInstance);
+    
+    // Log worker creation details
+    logger.info({ 
+      workerName: (workerInstance as any).name,
+      queueName: (workerInstance as any).queueName 
+    }, "[Startup] Worker created");
+    console.log(`[Startup] Worker created: name=${(workerInstance as any).name}, queue=${(workerInstance as any).queueName}`);
     
     // Wait for worker to be ready (with longer timeout and better error handling)
     try {
@@ -684,30 +710,60 @@ async function startWorker() {
       
       // Verify worker is actually running
       const isRunning = (workerInstance as any).isRunning?.() ?? false;
-      logger.info(`[Startup] Worker isRunning: ${isRunning}`);
+      logger.info({ isRunning }, "[Startup] Worker isRunning status");
       console.log(`[Startup] Worker isRunning: ${isRunning}`);
+      
+      // CRITICAL: Verify worker can access the queue
+      try {
+        const queue = queues.analysis;
+        const waiting = await queue.getWaiting();
+        const active = await queue.getActive();
+        logger.info({ 
+          waiting: waiting.length, 
+          active: active.length 
+        }, "[Startup] Queue status after worker ready");
+        console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active jobs`);
+      } catch (queueError) {
+        logger.error({ error: queueError }, "[Startup] Could not check queue status");
+        console.log(`[Startup] Could not check queue status: ${queueError}`);
+      }
     } catch (error) {
       logger.warn({ error }, "[Startup] ⚠️ Worker initialization timeout or error (will continue trying)");
       console.log(`[Startup] ⚠️ Worker initialization timeout: ${error}`);
       
       // Check if worker is actually running despite timeout
       try {
-        const isRunning = (worker as any).isRunning?.() ?? false;
-        logger.info(`[Startup] Worker state after timeout: isRunning=${isRunning}`);
+        const isRunning = (workerInstance as any).isRunning?.() ?? false;
+        logger.info({ isRunning }, "[Startup] Worker state after timeout");
         console.log(`[Startup] Worker state after timeout: isRunning=${isRunning}`);
+        
+        // Even if waitUntilReady() times out, check if worker can process jobs
+        if (isRunning) {
+          logger.info("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
+          console.log("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
+          
+          // Try to check queue status
+          try {
+            const queue = queues.analysis;
+            const waiting = await queue.getWaiting();
+            const active = await queue.getActive();
+            logger.info({ 
+              waiting: waiting.length, 
+              active: active.length 
+            }, "[Startup] Queue status (after timeout)");
+            console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active jobs`);
+          } catch (queueError) {
+            logger.warn({ error: queueError }, "[Startup] Could not check queue status");
+            console.warn(`[Startup] Could not check queue status: ${queueError}`);
+          }
+        } else {
+          logger.error("[Startup] ❌ Worker is NOT running - jobs will not be processed");
+          console.error("[Startup] ❌ Worker is NOT running - jobs will not be processed");
+        }
       } catch (e) {
         logger.warn({ error: e }, "[Startup] Could not check worker state");
+        console.warn(`[Startup] Could not check worker state: ${e}`);
       }
-      
-      // Don't throw - worker will continue trying to connect
-      // But log that it might not be processing jobs
-      logger.warn("[Startup] ⚠️ Worker initialization timeout - but worker may still be processing jobs");
-      console.log("[Startup] ⚠️ Worker initialization timeout - but worker may still be processing jobs");
-      
-      // Check if worker is actually running and can process jobs
-      // Even if waitUntilReady() times out, the worker might still work
-      const workerInstance = createWorker();
-      const isRunning = (workerInstance as any).isRunning?.() ?? false;
       if (isRunning) {
         logger.info("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
         console.log("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
