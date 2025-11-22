@@ -44,12 +44,8 @@ RUN pnpm --filter @vett/shared build
 # Build API (needed for worker's db schema)
 RUN pnpm --filter vett-api build
 
-# Build worker if SERVICE=worker
-ARG SERVICE=api
-RUN if [ "$SERVICE" = "worker" ]; then \
-      cd /app/apps/worker && \
-      pnpm build; \
-    fi
+# Always build worker (needed for API's db schema and to ensure dist exists)
+RUN cd /app/apps/worker && pnpm build
 
 FROM base AS runner
 WORKDIR /app
