@@ -227,9 +227,94 @@ const pool = new Pool({
 });
 const db = drizzle(pool, { schema });
 
+// CRITICAL: Ensure Redis connection is established BEFORE creating queues/workers
+// This ensures BullMQ can properly connect when queues/workers are created
+async function ensureRedisConnection() {
+  const conn = getSharedConnection();
+  
+  // If not connected, connect now
+  if (conn.status !== "ready" && conn.status !== "connecting") {
+    logger.info("[Init] Connecting to Redis before creating queues/workers...");
+    console.log("[Init] Connecting to Redis before creating queues/workers...");
+    await conn.connect();
+  }
+  
+  // Wait for ready state
+  if (conn.status !== "ready") {
+    await new Promise<void>((resolve) => {
+      if (conn.status === "ready") {
+        resolve();
+      } else {
+        conn.once("ready", () => resolve());
+      }
+    });
+  }
+  
+  // Verify with ping
+  await conn.ping();
+  logger.info("[Init] ✅ Redis connection established - ready for BullMQ");
+  console.log("[Init] ✅ Redis connection established - ready for BullMQ");
+}
+
+// Initialize Redis connection synchronously (but don't block module load)
+// This will be awaited before creating the worker
+let redisConnectionPromise: Promise<void> | null = null;
+
 export const queues = {
   analysis: new Queue("analysis", { connection: connectionFactory })
 };
+
+// CRITICAL: Ensure Redis connection is established BEFORE creating Worker
+// BullMQ Worker needs an active Redis connection to receive jobs
+let redisInitialized = false;
+
+async function initializeRedisForBullMQ() {
+  if (redisInitialized) return;
+  
+  try {
+    const conn = getSharedConnection();
+    
+    // Connect if not already connected
+    if (conn.status !== "ready" && conn.status !== "connecting") {
+      logger.info("[Init] Connecting to Redis for BullMQ...");
+      console.log("[Init] Connecting to Redis for BullMQ...");
+      await conn.connect();
+    }
+    
+    // Wait for ready state
+    if (conn.status !== "ready") {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Redis ready timeout"));
+        }, 30000);
+        
+        if (conn.status === "ready") {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          conn.once("ready", () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          conn.once("error", (err) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+        }
+      });
+    }
+    
+    // Verify with ping
+    const pingResult = await conn.ping();
+    logger.info({ pingResult }, "[Init] ✅ Redis ready for BullMQ");
+    console.log(`[Init] ✅ Redis ready for BullMQ (ping: ${pingResult})`);
+    redisInitialized = true;
+  } catch (error) {
+    logger.error({ error }, "[Init] ❌ Redis initialization failed - Worker may not work");
+    console.log(`[Init] ❌ Redis initialization failed: ${error}`);
+    throw error;
+  }
+}
 
 // Initialize QueueEvents with shared connection
 let analysisQueueEvents: QueueEvents | null = null;
@@ -288,7 +373,13 @@ initializeQueueEvents().catch(() => {
   // Errors are handled in initializeQueueEvents
 });
 
-export const worker = new Worker(
+// CRITICAL: Create Worker AFTER Redis is initialized
+// This ensures BullMQ can properly connect to Redis
+let worker: Worker | null = null;
+
+function createWorker(): Worker {
+  if (!worker) {
+    worker = new Worker(
   "analysis",
   async (job) => {
     const payload = analysisJobPayloadSchema.parse(job.data);
@@ -589,37 +680,14 @@ async function startWorker() {
     }
     
     // CRITICAL: Ensure Redis connection is actually established before initializing BullMQ
+    // This MUST happen before worker.waitUntilReady() or BullMQ can't confirm readiness
     try {
-      const redisConn = getSharedConnection();
-      
-      // If lazyConnect is enabled, we need to explicitly connect
-      if (redisConn.status === "end" || redisConn.status === "wait") {
-        logger.info("[Startup] Connecting to Redis...");
-        console.log("[Startup] Connecting to Redis...");
-        await redisConn.connect();
-      }
-      
-      // Wait for Redis to be ready (with timeout)
-      await Promise.race([
-        new Promise<void>((resolve) => {
-          if (redisConn.status === "ready") {
-            resolve();
-          } else {
-            redisConn.once("ready", () => resolve());
-          }
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Redis ready timeout")), 30000)
-        )
-      ]);
-      
-      // Verify connection with a ping
-      const pingResult = await redisConn.ping();
-      logger.info({ pingResult }, "[Startup] ✅ Redis connection ready and verified");
-      console.log(`[Startup] ✅ Redis connection ready and verified (ping: ${pingResult})`);
+      await initializeRedisForBullMQ();
+      logger.info("[Startup] ✅ Redis initialized for BullMQ");
+      console.log("[Startup] ✅ Redis initialized for BullMQ");
     } catch (error) {
-      logger.error({ error }, "[Startup] ❌ Redis connection failed - worker may not process jobs");
-      console.log(`[Startup] ❌ Redis connection failed: ${error}`);
+      logger.error({ error }, "[Startup] ❌ Redis initialization failed - worker may not process jobs");
+      console.log(`[Startup] ❌ Redis initialization failed: ${error}`);
       // Don't throw - let it retry, but log clearly
     }
     
