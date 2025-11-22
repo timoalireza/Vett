@@ -229,8 +229,11 @@ class AnalysisService {
       
       // CRITICAL: Ensure Redis is ready before adding job
       // BullMQ Queue.add() will hang if Redis isn't connected
-      const redisConn = (queues.analysis as any).client; // Get the Redis client from the queue
-      if (redisConn && redisConn.status !== "ready") {
+      // Get the Redis client from the queue - it might be undefined or not an EventEmitter
+      const redisConn = (queues.analysis as any).client;
+      
+      // Only wait if we have a valid Redis client that's an EventEmitter
+      if (redisConn && typeof redisConn.once === "function" && redisConn.status !== "ready") {
         console.log(`[AnalysisService] ⚠️ Redis not ready (status: ${redisConn.status}), waiting...`);
         await new Promise<void>((resolve) => {
           if (redisConn.status === "ready") {
@@ -245,6 +248,12 @@ class AnalysisService {
           }
         });
         console.log(`[AnalysisService] ✅ Redis ready, proceeding with job enqueue`);
+      } else if (redisConn && redisConn.status === "ready") {
+        console.log(`[AnalysisService] ✅ Redis already ready, proceeding with job enqueue`);
+      } else if (!redisConn) {
+        console.log(`[AnalysisService] ⚠️ Queue client not available, proceeding anyway (BullMQ will create connection)`);
+      } else {
+        console.log(`[AnalysisService] ⚠️ Redis client exists but status unknown, proceeding anyway`);
       }
       
       // Add job to queue with retry logic for Redis connection issues
