@@ -252,28 +252,28 @@ class AnalysisService {
       console.log(`[AnalysisService] Calling queues.analysis.add()...`);
       const job = await Promise.race([
         queues.analysis.add("analysis", {
-        analysisId: id,
-        input: {
-          contentUri: normalizedInput.contentUri ?? null,
-          text: normalizedInput.text ?? null,
-          mediaType: normalizedInput.mediaType,
-          topicHint: normalizedInput.topicHint ?? null,
-          attachments: normalizedInput.attachments
-        }
-      }, {
-        // Retry job if Redis connection fails
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 2000
-        },
-        // Remove completed jobs after 24 hours
-        removeOnComplete: {
-          age: 24 * 3600, // 24 hours in seconds
-          count: 1000
-        }
-      }),
-      new Promise((_, reject) => 
+          analysisId: id,
+          input: {
+            contentUri: normalizedInput.contentUri ?? null,
+            text: normalizedInput.text ?? null,
+            mediaType: normalizedInput.mediaType,
+            topicHint: normalizedInput.topicHint ?? null,
+            attachments: normalizedInput.attachments
+          }
+        }, {
+          // Retry job if Redis connection fails
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 2000
+          },
+          // Remove completed jobs after 24 hours
+          removeOnComplete: {
+            age: 24 * 3600, // 24 hours in seconds
+            count: 1000
+          }
+        }) as Promise<{ id: string }>,
+      new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error("Queue.add() timeout after 30 seconds")), 30000)
       )
       ]);
