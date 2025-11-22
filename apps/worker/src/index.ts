@@ -421,6 +421,33 @@ export const worker = new Worker(
   { connection: connectionFactory }
 );
 
+// Wait for worker to be ready before processing jobs
+worker.waitUntilReady()
+  .then(() => {
+    logger.info("✅ Worker ready and listening for jobs");
+  })
+  .catch((error) => {
+    logger.error({ error }, "Failed to initialize worker");
+  });
+
+worker.on("ready", () => {
+  logger.info("✅ Worker is ready to process jobs");
+});
+
+worker.on("error", (error) => {
+  // Suppress Redis connection errors - they're handled by the connection client
+  const isRedisError = 
+    error.message?.includes("Connection is closed") ||
+    error.message?.includes("ECONNRESET") ||
+    error.message?.includes("ECONNREFUSED") ||
+    error.message?.includes("ETIMEDOUT") ||
+    error.message?.includes("MaxRetriesPerRequestError");
+  
+  if (!isRedisError) {
+    logger.error({ error }, "Worker error");
+  }
+});
+
 worker.on("completed", (job) => {
   logger.info({ jobId: job.id }, "Analysis job completed");
 });
@@ -438,6 +465,11 @@ worker.on("failed", (job, err) => {
   }
 
   logger.error({ jobId: job?.id, err }, "Analysis job failed");
+});
+
+// Log when worker starts processing
+worker.on("active", (job) => {
+  logger.info({ jobId: job.id, analysisId: job.data?.analysisId }, "Worker started processing job");
 });
 
 // Global error handlers for Redis connection errors - suppress all Redis errors
@@ -480,6 +512,60 @@ process.on("uncaughtException", (error) => {
   logger.error({ error }, "[Process] Uncaught exception");
   process.exit(1);
 });
+
+// Startup function to ensure worker is ready
+async function startWorker() {
+  try {
+    logger.info("[Startup] Initializing worker...");
+    
+    // Test database connection using pool directly
+    try {
+      await pool.query("SELECT 1");
+      logger.info("[Startup] ✅ Database connection successful");
+    } catch (error) {
+      logger.error({ error }, "[Startup] ❌ Database connection failed");
+      throw error;
+    }
+    
+    // Test Redis connection by getting shared connection
+    try {
+      const conn = getSharedConnection();
+      // Try to ping, but don't fail if it's not ready yet
+      try {
+        await conn.ping();
+        logger.info("[Startup] ✅ Redis connection successful");
+      } catch (pingError) {
+        logger.warn({ error: pingError }, "[Startup] ⚠️ Redis ping failed (will retry automatically)");
+        // Don't throw - Redis will retry automatically
+      }
+    } catch (error) {
+      logger.warn({ error }, "[Startup] ⚠️ Redis connection test failed (will retry)");
+      // Don't throw - Redis will retry automatically
+    }
+    
+    // Wait for worker to be ready (with timeout)
+    try {
+      await Promise.race([
+        worker.waitUntilReady(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Worker initialization timeout")), 30000)
+        )
+      ]);
+      logger.info("[Startup] ✅ Worker ready and listening for jobs");
+    } catch (error) {
+      logger.warn({ error }, "[Startup] ⚠️ Worker initialization timeout or error (will continue trying)");
+      // Don't throw - worker will continue trying to connect
+    }
+    
+    logger.info("[Startup] 🚀 Worker startup complete");
+  } catch (error) {
+    logger.error({ error }, "[Startup] Failed to start worker");
+    // Don't exit - let it retry
+  }
+}
+
+// Start the worker
+startWorker();
 
 process.on("SIGINT", async () => {
   logger.info("Shutting down worker...");
