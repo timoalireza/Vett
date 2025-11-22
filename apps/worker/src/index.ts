@@ -207,7 +207,8 @@ const connectionFactory = {
     const conn = getSharedConnection();
     
     // Log when BullMQ requests a connection (for debugging)
-    logger.debug({ type, redisStatus: conn.status }, "[BullMQ] Connection factory called");
+    // Use info level so it shows in production logs
+    logger.info({ type, redisStatus: conn.status }, "[BullMQ] Connection factory called");
     console.log(`[BullMQ] Connection factory called: type=${type}, redisStatus=${conn.status}`);
     
     // CRITICAL: Force maxRetriesPerRequest to null every time
@@ -227,7 +228,7 @@ const connectionFactory = {
       logger.warn({ type, redisStatus: conn.status }, "[BullMQ] ⚠️ Creating connection but Redis not ready");
       console.log(`[BullMQ] ⚠️ Creating connection but Redis status is ${conn.status}`);
     } else {
-      logger.debug({ type }, "[BullMQ] ✅ Connection created with ready Redis");
+      logger.info({ type }, "[BullMQ] ✅ Connection created with ready Redis");
       console.log(`[BullMQ] ✅ Connection created with ready Redis (type=${type})`);
     }
     
@@ -750,25 +751,37 @@ async function startWorker() {
         logger.info({ isRunning }, "[Startup] Worker state after timeout");
         console.log(`[Startup] Worker state after timeout: isRunning=${isRunning}`);
         
+        // CRITICAL: Always check queue status, even after timeout
+        // This helps diagnose if jobs are being enqueued but not processed
+        try {
+          const queue = queues.analysis;
+          const waiting = await queue.getWaiting();
+          const active = await queue.getActive();
+          const delayed = await queue.getDelayed();
+          const completed = await queue.getCompleted();
+          logger.info({ 
+            waiting: waiting.length, 
+            active: active.length,
+            delayed: delayed.length,
+            completed: completed.length,
+            isRunning
+          }, "[Startup] Queue status (after timeout)");
+          console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active, ${delayed.length} delayed, ${completed.length} completed, isRunning=${isRunning}`);
+          
+          // If there are waiting jobs but worker isn't processing, that's a problem
+          if (waiting.length > 0 && isRunning) {
+            logger.warn({ waiting: waiting.length }, "[Startup] ⚠️ Worker is running but NOT processing waiting jobs!");
+            console.warn(`[Startup] ⚠️ Worker is running but NOT processing ${waiting.length} waiting jobs!`);
+          }
+        } catch (queueError) {
+          logger.error({ error: queueError }, "[Startup] ❌ Could not check queue status - Redis connection issue?");
+          console.error(`[Startup] ❌ Could not check queue status: ${queueError}`);
+        }
+        
         // Even if waitUntilReady() times out, check if worker can process jobs
         if (isRunning) {
           logger.info("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
           console.log("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
-          
-          // Try to check queue status
-          try {
-            const queue = queues.analysis;
-            const waiting = await queue.getWaiting();
-            const active = await queue.getActive();
-            logger.info({ 
-              waiting: waiting.length, 
-              active: active.length 
-            }, "[Startup] Queue status (after timeout)");
-            console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active jobs`);
-          } catch (queueError) {
-            logger.warn({ error: queueError }, "[Startup] Could not check queue status");
-            console.warn(`[Startup] Could not check queue status: ${queueError}`);
-          }
         } else {
           logger.error("[Startup] ❌ Worker is NOT running - jobs will not be processed");
           console.error("[Startup] ❌ Worker is NOT running - jobs will not be processed");
