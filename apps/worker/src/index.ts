@@ -422,13 +422,17 @@ export const worker = new Worker(
   { connection: connectionFactory }
 );
 
-// Wait for worker to be ready before processing jobs
+// Wait for worker to be ready before processing jobs (non-blocking)
+// Don't fail if this times out - worker will continue trying
 worker.waitUntilReady()
   .then(() => {
     logger.info("✅ Worker ready and listening for jobs");
+    console.log("✅ Worker ready and listening for jobs (from waitUntilReady promise)");
   })
   .catch((error) => {
-    logger.error({ error }, "Failed to initialize worker");
+    // Don't log as error - timeout is expected if Redis isn't ready yet
+    logger.debug({ error }, "Worker waitUntilReady pending (will retry)");
+    // Worker will continue trying to connect in the background
   });
 
 worker.on("ready", () => {
@@ -693,9 +697,30 @@ async function startWorker() {
 
 // Start the worker - log explicitly to ensure this runs
 logger.info("🚀 Worker process starting - calling startWorker()...");
+console.log("🚀 Worker process starting - calling startWorker()...");
+
+// CRITICAL: Don't exit on error - let the worker keep running
+// The worker is already created and will continue trying to connect
 startWorker().catch((error) => {
-  logger.error({ error }, "❌ startWorker() failed");
-  process.exit(1);
+  logger.error({ error }, "❌ startWorker() failed - but worker will continue running");
+  console.log(`❌ startWorker() failed: ${error} - but worker will continue running`);
+  // DON'T exit - the worker process should keep running even if initialization fails
+  // The worker will continue trying to connect and process jobs
+});
+
+// CRITICAL: Keep the process alive
+// The worker needs to run continuously to process jobs
+// Don't let the process exit even if there are errors
+process.on("SIGTERM", () => {
+  logger.info("SIGTERM received - shutting down gracefully");
+  worker.close();
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  logger.info("SIGINT received - shutting down gracefully");
+  worker.close();
+  process.exit(0);
 });
 
 process.on("SIGINT", async () => {
