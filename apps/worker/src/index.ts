@@ -515,8 +515,13 @@ process.on("uncaughtException", (error) => {
 
 // Startup function to ensure worker is ready
 async function startWorker() {
+  // CRITICAL: Log immediately to verify this function is called
+  console.log("🔍 [WORKER] startWorker() function called");
+  logger.info("🔍 [WORKER] startWorker() function called");
+  
   try {
     logger.info("[Startup] Initializing worker...");
+    console.log("[Startup] Initializing worker...");
     
     // Test database connection using pool directly
     try {
@@ -588,8 +593,12 @@ async function startWorker() {
   }
 }
 
-// Start the worker
-startWorker();
+// Start the worker - log explicitly to ensure this runs
+logger.info("🚀 Worker process starting - calling startWorker()...");
+startWorker().catch((error) => {
+  logger.error({ error }, "❌ startWorker() failed");
+  process.exit(1);
+});
 
 process.on("SIGINT", async () => {
   logger.info("Shutting down worker...");
