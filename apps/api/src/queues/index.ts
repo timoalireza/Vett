@@ -15,8 +15,18 @@ function getSharedConnection(): IORedis {
     // Create connection with maxRetriesPerRequest: null via our factory
     sharedConnection = createRedisClient(env.REDIS_URL, {
       maxRetriesPerRequest: null, // MUST be null - unlimited retries
-      enableReadyCheck: false
+      enableReadyCheck: true, // Changed to true - we want to know when Redis is ready
+      lazyConnect: false // Changed to false - connect immediately
     });
+    
+    // CRITICAL: Ensure connection is established immediately
+    // BullMQ Queue.add() will hang if Redis isn't connected
+    if (sharedConnection.status === "wait" || sharedConnection.status === "end") {
+      console.log(`[BullMQ-API] Redis status is ${sharedConnection.status}, connecting...`);
+      sharedConnection.connect().catch((err) => {
+        console.error(`[BullMQ-API] Failed to connect Redis: ${err.message}`);
+      });
+    }
   }
   
   return sharedConnection;
