@@ -723,17 +723,50 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-process.on("SIGINT", async () => {
-  logger.info("Shutting down worker...");
-  await worker.close();
-  await queues.analysis.close();
-  if (analysisQueueEvents) {
-    await analysisQueueEvents.close();
-  }
-  await pool.end();
-  if (sharedConnection) {
-    await sharedConnection.quit();
+// CRITICAL: Keep the process alive - worker needs to run continuously
+// Set up signal handlers for graceful shutdown
+process.on("SIGTERM", async () => {
+  logger.info("SIGTERM received - shutting down gracefully");
+  console.log("SIGTERM received - shutting down gracefully");
+  try {
+    await worker.close();
+    await queues.analysis.close();
+    if (analysisQueueEvents) {
+      await analysisQueueEvents.close();
+    }
+    await pool.end();
+    if (sharedConnection) {
+      await sharedConnection.quit();
+    }
+  } catch (error) {
+    logger.error({ error }, "Error during shutdown");
   }
   process.exit(0);
 });
+
+process.on("SIGINT", async () => {
+  logger.info("SIGINT received - shutting down gracefully");
+  console.log("SIGINT received - shutting down gracefully");
+  try {
+    await worker.close();
+    await queues.analysis.close();
+    if (analysisQueueEvents) {
+      await analysisQueueEvents.close();
+    }
+    await pool.end();
+    if (sharedConnection) {
+      await sharedConnection.quit();
+    }
+  } catch (error) {
+    logger.error({ error }, "Error during shutdown");
+  }
+  process.exit(0);
+});
+
+// CRITICAL: Keep process alive - don't let it exit
+// The worker needs to run continuously to process jobs from the queue
+// This ensures the process stays alive even if startWorker() completes
+setInterval(() => {
+  // Keep process alive - this interval never exits
+}, 60000); // Check every minute (just to keep process alive)
 
