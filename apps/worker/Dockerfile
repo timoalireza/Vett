@@ -85,10 +85,18 @@ COPY --from=builder /app/apps/api/src/db ./apps/api/src/db
 # Copy the source schema files (not dist, since db files are TypeScript source)
 COPY --from=builder /app/apps/api/src/db ./dist/db
 
+# Verify dist files exist (for debugging)
+RUN ls -la /app/dist/ || echo "WARNING: dist directory not found"
+
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs
 
 USER nodejs
+
+WORKDIR /app
+
+# Verify we're in the right directory and dist exists
+RUN test -f /app/dist/index.js || (echo "ERROR: /app/dist/index.js not found" && ls -la /app/dist/ && exit 1)
 
 CMD ["node", "dist/index.js"]
