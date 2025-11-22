@@ -80,7 +80,8 @@ COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
 # Select the correct dist based on SERVICE
-RUN if [ "$SERVICE" = "worker" ]; then \
+RUN mkdir -p /app/dist && \
+    if [ "$SERVICE" = "worker" ]; then \
       cp -r /app/apps/worker/dist/* /app/dist/ && \
       cp -r /app/apps/api/src/db /app/dist/db && \
       mkdir -p /app/apps/api/src && \
