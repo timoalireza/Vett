@@ -27,6 +27,8 @@ COPY apps/api/tsconfig.json ./apps/api/
 COPY apps/api/tsup.config.ts ./apps/api/
 
 # Install all dependencies (including devDependencies for building)
+# Add cache-busting ARG to force rebuild when lockfile changes
+ARG CACHE_BUST=1
 RUN pnpm install --frozen-lockfile
 
 # Build shared package first
@@ -57,6 +59,8 @@ COPY packages/shared/package.json ./packages/shared/
 COPY apps/api/package.json ./apps/api/
 
 # Install production dependencies with hoisting enabled
+# Add cache-busting ARG to force rebuild when lockfile changes
+ARG CACHE_BUST=1
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Copy built files
