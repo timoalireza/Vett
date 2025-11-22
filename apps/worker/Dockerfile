@@ -33,6 +33,8 @@ COPY apps/worker/tsconfig.json ./apps/worker/
 COPY apps/worker/tsup.config.ts ./apps/worker/
 
 # Install all dependencies (including devDependencies for building)
+# Add cache-busting ARG to force rebuild when lockfile changes
+ARG CACHE_BUST=20241122
 RUN pnpm install --frozen-lockfile
 
 # Build shared package first
@@ -65,8 +67,11 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/worker/package.json ./apps/worker/
 
-# Install production dependencies with hoisting enabled
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+# Install ONLY worker's production dependencies (not API's dependencies like mercurius)
+# This prevents pnpm from hoisting mercurius from the API package
+# Add cache-busting ARG to force rebuild when lockfile changes
+ARG CACHE_BUST=20241122
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter vett-worker...
 
 # Copy built files
 COPY --from=builder /app/apps/worker/dist ./dist
