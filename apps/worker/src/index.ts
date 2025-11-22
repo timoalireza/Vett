@@ -522,9 +522,32 @@ async function startWorker() {
     try {
       await pool.query("SELECT 1");
       logger.info("[Startup] ✅ Database connection successful");
-    } catch (error) {
-      logger.error({ error }, "[Startup] ❌ Database connection failed");
-      throw error;
+    } catch (error: any) {
+      const errorCode = error?.code || "";
+      const errorMessage = error?.message || "";
+      
+      // Check for password authentication error
+      if (errorCode === "28P01" || errorMessage.includes("password authentication failed")) {
+        logger.error(
+          {
+            error: {
+              code: errorCode,
+              message: "password authentication failed for user \"postgres\"",
+              hint: "Check DATABASE_URL in Railway Worker Service variables"
+            }
+          },
+          "[Startup] ❌ Database password authentication failed - check DATABASE_URL in Railway"
+        );
+        logger.error(
+          {},
+          "[Startup] Fix: Update DATABASE_URL in Railway Worker Service with correct Supabase password"
+        );
+      } else {
+        logger.error({ error }, "[Startup] ❌ Database connection failed");
+      }
+      
+      // Don't throw - let it retry, but log the error clearly
+      logger.warn("[Startup] ⚠️ Worker will continue but database operations may fail");
     }
     
     // Test Redis connection by getting shared connection
@@ -560,7 +583,8 @@ async function startWorker() {
     logger.info("[Startup] 🚀 Worker startup complete");
   } catch (error) {
     logger.error({ error }, "[Startup] Failed to start worker");
-    // Don't exit - let it retry
+    // Don't exit - let it retry, but log clearly
+    logger.warn("[Startup] ⚠️ Worker will continue attempting to connect");
   }
 }
 
