@@ -509,76 +509,24 @@ function createWorker(): Worker {
         .where(eq(schema.analyses.id, payload.analysisId));
       throw error;
     }
-  },
-  { connection: connectionFactory }
-);
-
-// Wait for worker to be ready before processing jobs (non-blocking)
-// Don't fail if this times out - worker will continue trying
-worker.waitUntilReady()
-  .then(() => {
-    logger.info("✅ Worker ready and listening for jobs");
-    console.log("✅ Worker ready and listening for jobs (from waitUntilReady promise)");
-  })
-  .catch((error) => {
-    // Don't log as error - timeout is expected if Redis isn't ready yet
-    logger.debug({ error }, "Worker waitUntilReady pending (will retry)");
-    // Worker will continue trying to connect in the background
-  });
-
-worker.on("ready", () => {
-  logger.info("✅ Worker is ready to process jobs");
-  console.log("[WORKER] ✅ Worker ready event fired - should be processing jobs now");
-});
-
-worker.on("stalled", (jobId) => {
-  logger.warn({ jobId }, "Worker job stalled");
-  console.log(`[WORKER] ⚠️ Job stalled: ${jobId}`);
-});
-
-worker.on("closing", () => {
-  logger.info("Worker is closing");
-  console.log("[WORKER] Worker closing");
-});
-
-worker.on("error", (error) => {
-  // Suppress Redis connection errors - they're handled by the connection client
-  const isRedisError = 
-    error.message?.includes("Connection is closed") ||
-    error.message?.includes("ECONNRESET") ||
-    error.message?.includes("ECONNREFUSED") ||
-    error.message?.includes("ETIMEDOUT") ||
-    error.message?.includes("MaxRetriesPerRequestError");
-  
-  if (!isRedisError) {
-    logger.error({ error }, "Worker error");
+    },
+    { connection: connectionFactory }
+    );
   }
-});
+  return worker;
+}
 
-worker.on("completed", (job) => {
-  logger.info({ jobId: job.id }, "Analysis job completed");
-});
+// Export worker getter - will create worker when called
+export function getWorker(): Worker {
+  return createWorker();
+}
 
-worker.on("failed", (job, err) => {
-  if (job?.data?.analysisId) {
-    db
-      .update(schema.analyses)
-      .set({
-        status: "FAILED",
-        updatedAt: new Date()
-      })
-      .where(eq(schema.analyses.id, job.data.analysisId))
-      .catch((error) => logger.error({ error }, "Failed to update analysis status to FAILED"));
-  }
+// CRITICAL: Don't create worker immediately - wait for Redis to connect first
+// The worker will be created in startWorker() after Redis is ready
+// This ensures BullMQ can properly connect to Redis when the worker is created
 
-  logger.error({ jobId: job?.id, err }, "Analysis job failed");
-});
-
-// Log when worker starts processing
-worker.on("active", (job) => {
-  logger.info({ jobId: job.id, analysisId: job.data?.analysisId }, "Worker started processing job");
-  console.log(`[WORKER] 🟢 Job active: ${job.id}, analysisId: ${job.data?.analysisId}`);
-});
+// Worker will be created in startWorker() after Redis connects
+// Event listeners will be set up via setupWorkerEventListeners()
 
 // Global error handlers for Redis connection errors - suppress all Redis errors
 process.on("unhandledRejection", (reason, _promise) => {
@@ -679,17 +627,26 @@ async function startWorker() {
       // Don't throw - Redis will retry automatically
     }
     
-    // CRITICAL: Ensure Redis connection is actually established before initializing BullMQ
-    // This MUST happen before worker.waitUntilReady() or BullMQ can't confirm readiness
+    // CRITICAL: Ensure Redis connection is actually established BEFORE creating Worker
+    // BullMQ Worker needs Redis to be connected when it's created
     try {
       await initializeRedisForBullMQ();
       logger.info("[Startup] ✅ Redis initialized for BullMQ");
       console.log("[Startup] ✅ Redis initialized for BullMQ");
     } catch (error) {
-      logger.error({ error }, "[Startup] ❌ Redis initialization failed - worker may not process jobs");
+      logger.error({ error }, "[Startup] ❌ Redis initialization failed - cannot create worker");
       console.log(`[Startup] ❌ Redis initialization failed: ${error}`);
-      // Don't throw - let it retry, but log clearly
+      throw error; // Can't create worker without Redis
     }
+    
+    // CRITICAL: Create worker AFTER Redis is connected
+    // This ensures BullMQ can properly connect to Redis when the worker is created
+    logger.info("[Startup] Creating BullMQ Worker...");
+    console.log("[Startup] Creating BullMQ Worker...");
+    const workerInstance = createWorker();
+    
+    // Set up event listeners
+    setupWorkerEventListeners(workerInstance);
     
     // Wait for worker to be ready (with longer timeout and better error handling)
     try {
@@ -697,7 +654,7 @@ async function startWorker() {
       console.log("[Startup] Waiting for worker to be ready...");
       
       await Promise.race([
-        worker.waitUntilReady(),
+        workerInstance.waitUntilReady(),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error("Worker initialization timeout")), 60000)
         )
@@ -706,7 +663,7 @@ async function startWorker() {
       console.log("[Startup] ✅ Worker ready and listening for jobs");
       
       // Verify worker is actually running
-      const isRunning = (worker as any).isRunning?.() ?? false;
+      const isRunning = (workerInstance as any).isRunning?.() ?? false;
       logger.info(`[Startup] Worker isRunning: ${isRunning}`);
       console.log(`[Startup] Worker isRunning: ${isRunning}`);
     } catch (error) {
@@ -729,7 +686,8 @@ async function startWorker() {
       
       // Check if worker is actually running and can process jobs
       // Even if waitUntilReady() times out, the worker might still work
-      const isRunning = (worker as any).isRunning?.() ?? false;
+      const workerInstance = createWorker();
+      const isRunning = (workerInstance as any).isRunning?.() ?? false;
       if (isRunning) {
         logger.info("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
         console.log("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
@@ -750,8 +708,8 @@ async function startWorker() {
         console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active, ${delayed.length} delayed, ${completed.length} completed`);
         
         // Verify worker can actually access the queue
-        const workerIsRunning = (worker as any).isRunning?.() ?? false;
-        const workerName = (worker as any).name ?? "unknown";
+        const workerIsRunning = (workerInstance as any).isRunning?.() ?? false;
+        const workerName = (workerInstance as any).name ?? "unknown";
         logger.info({ workerIsRunning, workerName }, "[Startup] Worker details");
         console.log(`[Startup] Worker details: isRunning=${workerIsRunning}, name=${workerName}`);
       } catch (queueError) {
