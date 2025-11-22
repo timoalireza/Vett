@@ -144,6 +144,13 @@ export interface ReasonerMeta {
 
 class AnalysisService {
   async enqueueAnalysis(_input: SubmitAnalysisInput, userId?: string): Promise<string> {
+    console.log("[AnalysisService] enqueueAnalysis called", { 
+      hasInput: !!_input,
+      inputType: _input?.mediaType,
+      hasUserId: !!userId,
+      attachmentsCount: (_input as any)?.attachments?.length || 0
+    });
+    
     const rawAttachments =
       (_input as SubmitAnalysisInput & { attachments?: Array<Record<string, unknown>> }).attachments ?? [];
 

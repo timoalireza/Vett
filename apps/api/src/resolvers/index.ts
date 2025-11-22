@@ -123,22 +123,33 @@ export const resolvers: IResolvers<GraphQLContext> = {
     }
   },
   Mutation: {
-    submitAnalysis: async (_parent, args, context) => {
-      try {
-        const ctx = context as GraphQLContext;
-        // Get or create user in database
-        let userId: string | undefined;
-        if (ctx.userId) {
-          userId = await userService.getOrCreateUser(ctx.userId);
+      submitAnalysis: async (_parent, args, context) => {
+        try {
+          console.log("[GraphQL] submitAnalysis called", { 
+            hasInput: !!args.input,
+            inputType: args.input?.mediaType,
+            hasUserId: !!(context as GraphQLContext).userId
+          });
           
-          // Check subscription limits
-          const canPerform = await subscriptionService.canPerformAnalysis(userId);
-          if (!canPerform.allowed) {
-            throw new Error(canPerform.reason || "Analysis limit reached");
+          const ctx = context as GraphQLContext;
+          // Get or create user in database
+          let userId: string | undefined;
+          if (ctx.userId) {
+            console.log("[GraphQL] Getting/creating user:", ctx.userId);
+            userId = await userService.getOrCreateUser(ctx.userId);
+            console.log("[GraphQL] User ID:", userId);
+            
+            // Check subscription limits
+            const canPerform = await subscriptionService.canPerformAnalysis(userId);
+            if (!canPerform.allowed) {
+              console.log("[GraphQL] Subscription limit reached:", canPerform.reason);
+              throw new Error(canPerform.reason || "Analysis limit reached");
+            }
           }
-        }
 
-        const analysisId = await analysisService.enqueueAnalysis(args.input, userId);
+          console.log("[GraphQL] Enqueueing analysis...");
+          const analysisId = await analysisService.enqueueAnalysis(args.input, userId);
+          console.log("[GraphQL] ✅ Analysis enqueued:", analysisId);
         
         // Increment usage if user is authenticated
         if (userId) {
