@@ -226,9 +226,32 @@ class AnalysisService {
 
     try {
       console.log(`[AnalysisService] Adding job to queue for analysisId: ${id}...`);
+      
+      // CRITICAL: Ensure Redis is ready before adding job
+      // BullMQ Queue.add() will hang if Redis isn't connected
+      const redisConn = (queues.analysis as any).client; // Get the Redis client from the queue
+      if (redisConn && redisConn.status !== "ready") {
+        console.log(`[AnalysisService] ⚠️ Redis not ready (status: ${redisConn.status}), waiting...`);
+        await new Promise<void>((resolve) => {
+          if (redisConn.status === "ready") {
+            resolve();
+          } else {
+            redisConn.once("ready", () => resolve());
+            // Timeout after 10 seconds
+            setTimeout(() => {
+              console.error(`[AnalysisService] ❌ Redis ready timeout after 10s`);
+              resolve(); // Continue anyway - BullMQ will retry
+            }, 10000);
+          }
+        });
+        console.log(`[AnalysisService] ✅ Redis ready, proceeding with job enqueue`);
+      }
+      
       // Add job to queue with retry logic for Redis connection issues
       // BullMQ will handle Redis reconnection automatically
-      const job = await queues.analysis.add("analysis", {
+      console.log(`[AnalysisService] Calling queues.analysis.add()...`);
+      const job = await Promise.race([
+        queues.analysis.add("analysis", {
         analysisId: id,
         input: {
           contentUri: normalizedInput.contentUri ?? null,
@@ -249,7 +272,11 @@ class AnalysisService {
           age: 24 * 3600, // 24 hours in seconds
           count: 1000
         }
-      });
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Queue.add() timeout after 30 seconds")), 30000)
+      )
+      ]);
       
       // Log successful enqueue (for debugging)
       console.log(`[AnalysisService] ✅ Analysis ${id} enqueued as job ${job.id}`);
