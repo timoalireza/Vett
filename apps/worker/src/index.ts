@@ -362,6 +362,16 @@ let worker: Worker | null = null;
 
 function createWorker(): Worker {
   if (!worker) {
+    logger.info("[Worker] Creating BullMQ Worker instance...");
+    console.log("[Worker] Creating BullMQ Worker instance...");
+    
+    // Log connection factory before creating worker
+    logger.info("[Worker] Connection factory:", { 
+      hasFactory: !!connectionFactory,
+      hasCreateClient: !!connectionFactory.createClient 
+    });
+    console.log("[Worker] Connection factory ready:", !!connectionFactory);
+    
     worker = new Worker(
   "analysis",
   async (job) => {
@@ -495,6 +505,16 @@ function createWorker(): Worker {
     },
     { connection: connectionFactory }
     );
+    
+    logger.info("[Worker] ✅ BullMQ Worker instance created");
+    console.log("[Worker] ✅ BullMQ Worker instance created");
+    
+    // Verify worker was created correctly
+    logger.info({ 
+      workerName: (worker as any).name,
+      hasConnection: !!(worker as any).connection 
+    }, "[Worker] Worker instance details");
+    console.log(`[Worker] Worker name: ${(worker as any).name}, hasConnection: ${!!(worker as any).connection}`);
   }
   return worker;
 }
