@@ -293,6 +293,7 @@ export const worker = new Worker(
   async (job) => {
     const payload = analysisJobPayloadSchema.parse(job.data);
     logger.info({ jobId: job.id, name: job.name, payload }, "Processing analysis job");
+    console.log(`[WORKER] 🔵 Job received: ${job.id}, analysisId: ${payload.analysisId}`);
 
     await db
       .update(schema.analyses)
@@ -432,6 +433,17 @@ worker.waitUntilReady()
 
 worker.on("ready", () => {
   logger.info("✅ Worker is ready to process jobs");
+  console.log("[WORKER] ✅ Worker ready event fired - should be processing jobs now");
+});
+
+worker.on("stalled", (jobId) => {
+  logger.warn({ jobId }, "Worker job stalled");
+  console.log(`[WORKER] ⚠️ Job stalled: ${jobId}`);
+});
+
+worker.on("closing", () => {
+  logger.info("Worker is closing");
+  console.log("[WORKER] Worker closing");
 });
 
 worker.on("error", (error) => {
@@ -470,6 +482,7 @@ worker.on("failed", (job, err) => {
 // Log when worker starts processing
 worker.on("active", (job) => {
   logger.info({ jobId: job.id, analysisId: job.data?.analysisId }, "Worker started processing job");
+  console.log(`[WORKER] 🟢 Job active: ${job.id}, analysisId: ${job.data?.analysisId}`);
 });
 
 // Global error handlers for Redis connection errors - suppress all Redis errors
@@ -594,6 +607,9 @@ async function startWorker() {
     
     // Wait for worker to be ready (with longer timeout and better error handling)
     try {
+      logger.info("[Startup] Waiting for worker to be ready...");
+      console.log("[Startup] Waiting for worker to be ready...");
+      
       await Promise.race([
         worker.waitUntilReady(),
         new Promise((_, reject) => 
@@ -601,11 +617,29 @@ async function startWorker() {
         )
       ]);
       logger.info("[Startup] ✅ Worker ready and listening for jobs");
+      console.log("[Startup] ✅ Worker ready and listening for jobs");
+      
+      // Verify worker is actually running
+      const isRunning = (worker as any).isRunning?.() ?? false;
+      logger.info(`[Startup] Worker isRunning: ${isRunning}`);
+      console.log(`[Startup] Worker isRunning: ${isRunning}`);
     } catch (error) {
       logger.warn({ error }, "[Startup] ⚠️ Worker initialization timeout or error (will continue trying)");
+      console.log(`[Startup] ⚠️ Worker initialization timeout: ${error}`);
+      
       // Check if worker is actually running despite timeout
-      logger.info(`[Startup] Worker state: ${(worker as any).isRunning() ? "running" : "not running"}`);
+      try {
+        const isRunning = (worker as any).isRunning?.() ?? false;
+        logger.info(`[Startup] Worker state after timeout: isRunning=${isRunning}`);
+        console.log(`[Startup] Worker state after timeout: isRunning=${isRunning}`);
+      } catch (e) {
+        logger.warn({ error: e }, "[Startup] Could not check worker state");
+      }
+      
       // Don't throw - worker will continue trying to connect
+      // But log that it might not be processing jobs
+      logger.warn("[Startup] ⚠️ Worker may not be processing jobs - check Redis connection");
+      console.log("[Startup] ⚠️ Worker may not be processing jobs - check Redis connection");
     }
     
     logger.info("[Startup] 🚀 Worker startup complete");
