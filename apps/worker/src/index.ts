@@ -243,8 +243,10 @@ const db = drizzle(pool, { schema });
 
 // Removed ensureRedisConnection - using initializeRedisForBullMQ instead
 
+// CRITICAL: Pass Redis connection directly to Queue instead of connection factory
+// This ensures Queue uses the same ready connection as the Worker
 export const queues = {
-  analysis: new Queue("analysis", { connection: connectionFactory })
+  analysis: new Queue("analysis", { connection: getSharedConnection() })
 };
 
 // CRITICAL: Ensure Redis connection is established BEFORE creating Worker
@@ -304,7 +306,7 @@ let analysisQueueEvents: QueueEvents | null = null;
 
 async function initializeQueueEvents() {
   try {
-    analysisQueueEvents = new QueueEvents("analysis", { connection: connectionFactory });
+    analysisQueueEvents = new QueueEvents("analysis", { connection: getSharedConnection() });
     
     // Wait for QueueEvents to be ready (with timeout)
     // Don't fail if it times out - QueueEvents will retry internally
