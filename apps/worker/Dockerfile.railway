@@ -1,6 +1,6 @@
 # Dockerfile for Vett Worker (Railway-optimized)
 # This version works when Root Directory is set to apps/worker
-# Build context is apps/worker directory, not repo root
+# Build context is apps/worker directory, so paths are relative to that
 
 FROM node:20-alpine AS base
 
@@ -11,7 +11,7 @@ RUN npm install -g pnpm@9.12.0 && \
 FROM base AS builder
 WORKDIR /app
 
-# Copy workspace configuration files (from repo root)
+# Copy workspace configuration files (from repo root, relative to apps/worker)
 COPY ../../pnpm-workspace.yaml ../../package.json ../../pnpm-lock.yaml ../../.npmrc ./
 COPY ../../tsconfig.base.json ./
 
@@ -27,6 +27,7 @@ COPY ../../apps/api/tsconfig.json ./apps/api/
 COPY ../../apps/api/tsup.config.ts ./apps/api/
 COPY ../../apps/api/src/db ./apps/api/src/db
 
+# Copy worker files (relative to apps/worker)
 COPY package.json ./apps/worker/
 COPY tsconfig.json ./apps/worker/
 COPY tsup.config.ts ./apps/worker/
@@ -89,4 +90,3 @@ USER nodejs
 WORKDIR /app
 
 CMD ["node", "dist/index.js"]
-
