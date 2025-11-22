@@ -556,6 +556,21 @@ function setupWorkerEventListeners(workerInstance: Worker) {
   workerInstance.on("ready", () => {
     logger.info("✅ Worker is ready to process jobs");
     console.log("[WORKER] ✅ Worker ready event fired - should be processing jobs now");
+    
+    // CRITICAL: Verify Worker is actually polling the queue
+    const queue = queues.analysis;
+    queue.getWaiting().then((waiting) => {
+      console.log(`[WORKER] Queue status after ready: ${waiting.length} waiting jobs`);
+      logger.info({ waiting: waiting.length }, "[WORKER] Queue status after ready");
+    }).catch((err) => {
+      console.error(`[WORKER] Failed to check queue status: ${err.message}`);
+    });
+  });
+  
+  // Log when Worker receives a job (this confirms it's polling)
+  workerInstance.on("active", (job) => {
+    logger.info({ jobId: job.id }, "🟢 Job active - Worker is processing");
+    console.log(`[WORKER] 🟢 Job active: ${job.id} - Worker is processing!`);
   });
 
   workerInstance.on("stalled", (jobId) => {
