@@ -638,11 +638,38 @@ async function startWorker() {
       
       // Don't throw - worker will continue trying to connect
       // But log that it might not be processing jobs
-      logger.warn("[Startup] ⚠️ Worker may not be processing jobs - check Redis connection");
-      console.log("[Startup] ⚠️ Worker may not be processing jobs - check Redis connection");
+      logger.warn("[Startup] ⚠️ Worker initialization timeout - but worker may still be processing jobs");
+      console.log("[Startup] ⚠️ Worker initialization timeout - but worker may still be processing jobs");
+      
+      // Check if worker is actually running and can process jobs
+      // Even if waitUntilReady() times out, the worker might still work
+      const isRunning = (worker as any).isRunning?.() ?? false;
+      if (isRunning) {
+        logger.info("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
+        console.log("[Startup] ✅ Worker is running - it should process jobs even if initialization timed out");
+        
+        // Try to check queue status
+        try {
+          const queue = queues.analysis;
+          const waiting = await queue.getWaiting();
+          const active = await queue.getActive();
+          logger.info({ waiting: waiting.length, active: active.length }, "[Startup] Queue status");
+          console.log(`[Startup] Queue status: ${waiting.length} waiting, ${active.length} active jobs`);
+        } catch (queueError) {
+          logger.warn({ error: queueError }, "[Startup] Could not check queue status");
+        }
+      }
     }
     
     logger.info("[Startup] 🚀 Worker startup complete");
+    console.log("[Startup] 🚀 Worker startup complete");
+    
+    // Add periodic logging to verify worker is alive and processing
+    setInterval(() => {
+      const isRunning = (worker as any).isRunning?.() ?? false;
+      logger.info({ isRunning }, "[Health] Worker status check");
+      console.log(`[Health] Worker status: isRunning=${isRunning}`);
+    }, 30000); // Every 30 seconds
   } catch (error) {
     logger.error({ error }, "[Startup] Failed to start worker");
     // Don't exit - let it retry, but log clearly
