@@ -45,7 +45,9 @@ RUN pnpm --filter @vett/shared build
 RUN pnpm --filter vett-api build
 
 # Always build worker (needed for API's db schema and to ensure dist exists)
-RUN cd /app/apps/worker && pnpm build
+RUN cd /app/apps/worker && \
+    pnpm build && \
+    test -d dist || (echo "ERROR: worker dist directory not created" && ls -la && exit 1)
 
 FROM base AS runner
 WORKDIR /app
@@ -75,13 +77,14 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
+# Copy API src/db for worker (needed for database schema)
+COPY --from=builder /app/apps/api/src/db ./apps/api/src/db
+
 # Select the correct dist based on SERVICE
 RUN mkdir -p /app/dist && \
     if [ "$SERVICE" = "worker" ]; then \
       cp -r /app/apps/worker/dist/* /app/dist/ && \
-      cp -r /app/apps/api/src/db /app/dist/db && \
-      mkdir -p /app/apps/api/src && \
-      cp -r /app/apps/api/src/db /app/apps/api/src/db; \
+      cp -r /app/apps/api/src/db /app/dist/db; \
     else \
       cp -r /app/apps/api/dist/* /app/dist/ && \
       cp /app/apps/api/package.json /app/package.json && \
