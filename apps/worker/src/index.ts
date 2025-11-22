@@ -394,9 +394,11 @@ function createWorker(): Worker {
       console.error(`[Worker] ❌ Connection factory test failed: ${error}`);
     }
     
+    // CRITICAL: Pass Redis connection directly to Worker instead of connection factory
+    // This ensures Worker uses the same ready connection as the Queue
     worker = new Worker(
-  "analysis",
-  async (job) => {
+      "analysis",
+      async (job) => {
     const payload = analysisJobPayloadSchema.parse(job.data);
     logger.info({ jobId: job.id, name: job.name, payload }, "Processing analysis job");
     console.log(`[WORKER] 🔵 Job received: ${job.id}, analysisId: ${payload.analysisId}`);
@@ -525,7 +527,7 @@ function createWorker(): Worker {
       throw error;
     }
     },
-    { connection: connectionFactory }
+    { connection: getSharedConnection() } // Pass connection directly instead of factory
     );
     
     logger.info("[Worker] ✅ BullMQ Worker instance created");
