@@ -812,10 +812,22 @@ async function startWorker() {
             console.warn("[Startup] ⚠️ Queue has no Redis client!");
           }
           
-          const waiting = await queue.getWaiting();
-          const active = await queue.getActive();
-          const delayed = await queue.getDelayed();
-          const completed = await queue.getCompleted();
+          // Add timeout to queue status check - it might hang if Queue isn't connected
+          const queueStatusPromise = Promise.all([
+            queue.getWaiting().catch(() => []),
+            queue.getActive().catch(() => []),
+            queue.getDelayed().catch(() => []),
+            queue.getCompleted().catch(() => [])
+          ]);
+          
+          const queueStatus = await Promise.race([
+            queueStatusPromise,
+            new Promise<[[], [], [], []]>((resolve) => 
+              setTimeout(() => resolve([[], [], [], []]), 5000) // 5 second timeout
+            )
+          ]);
+          
+          const [waiting, active, delayed, completed] = queueStatus;
           logger.info({ 
             waiting: waiting.length, 
             active: active.length,
