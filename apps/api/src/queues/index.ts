@@ -78,36 +78,12 @@ if (sharedConn.status !== "ready") {
   redisReadyPromise = waitForRedisReady();
 }
 
-/**
- * Connection factory for BullMQ
- * Always returns the shared connection with proper configuration
- * The shared connection is created with maxRetriesPerRequest: null via createRedisClient
- */
-const connectionFactory: ConnectionOptions = {
-  createClient: (type: string) => {
-    const conn = getSharedConnection();
-    
-    // Log when BullMQ requests a connection (for debugging)
-    console.log(`[BullMQ-API] Connection factory called: type=${type}, redisStatus=${conn.status}`);
-    
-    // CRITICAL: If Redis isn't ready, log a warning
-    if (conn.status !== "ready") {
-      console.warn(`[BullMQ-API] ⚠️ Creating connection but Redis status is ${conn.status}`);
-    } else {
-      console.log(`[BullMQ-API] ✅ Connection created with ready Redis (type=${type})`);
-    }
-    
-    // Return the shared connection - BullMQ will reuse it
-    return conn;
-  }
-};
-
-// Create Queue with connection factory
-// Note: We can't await redisReadyPromise here because this is top-level module code
-// But the connection should be ready by the time Queue.add() is called
+// CRITICAL: Pass Redis connection directly to BullMQ Queue instead of using connection factory
+// This ensures BullMQ uses our pre-configured connection that's already ready
+// BullMQ will create its own connection if we use a factory, which might not be ready
 export const queues = {
   analysis: new Queue("analysis", {
-    connection: connectionFactory,
+    connection: sharedConn, // Pass connection directly instead of factory
     defaultJobOptions: {
       removeOnComplete: 1000,
       removeOnFail: false,
