@@ -154,6 +154,7 @@ class AnalysisService {
     const rawAttachments =
       (_input as SubmitAnalysisInput & { attachments?: Array<Record<string, unknown>> }).attachments ?? [];
 
+    console.log("[AnalysisService] Parsing input...");
     const normalizedInput = analysisJobInputSchema.parse({
       ..._input,
       attachments: rawAttachments.map((attachment: Record<string, unknown>) => {
@@ -166,9 +167,11 @@ class AnalysisService {
         };
       })
     });
+    console.log("[AnalysisService] ✅ Input parsed successfully");
 
     let id: string;
     try {
+      console.log("[AnalysisService] Inserting into database...");
       const result = await db
         .insert(analyses)
         .values({
@@ -189,8 +192,9 @@ class AnalysisService {
       }
       
       id = result[0].id;
+      console.log(`[AnalysisService] ✅ Database insert successful, analysisId: ${id}`);
     } catch (error) {
-      console.error("[enqueueAnalysis] Database insert error:", error);
+      console.error("[AnalysisService] ❌ Database insert error:", error);
       if (error instanceof Error) {
         const errorMsg = error.message.toLowerCase();
         if (
@@ -221,6 +225,7 @@ class AnalysisService {
     }
 
     try {
+      console.log(`[AnalysisService] Adding job to queue for analysisId: ${id}...`);
       // Add job to queue with retry logic for Redis connection issues
       // BullMQ will handle Redis reconnection automatically
       const job = await queues.analysis.add("analysis", {
