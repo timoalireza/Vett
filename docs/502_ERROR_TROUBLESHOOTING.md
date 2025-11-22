@@ -219,3 +219,4 @@ If you've checked everything above and still getting 502:
 
 **Most Common Cause:** Missing or incorrect `DATABASE_URL` environment variable. Check Railway logs first!
 
+

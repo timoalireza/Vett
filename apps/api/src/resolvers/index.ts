@@ -124,32 +124,54 @@ export const resolvers: IResolvers<GraphQLContext> = {
   },
   Mutation: {
     submitAnalysis: async (_parent, args, context) => {
-      const ctx = context as GraphQLContext;
-      // Get or create user in database
-      let userId: string | undefined;
-      if (ctx.userId) {
-        userId = await userService.getOrCreateUser(ctx.userId);
-        
-        // Check subscription limits
-        const canPerform = await subscriptionService.canPerformAnalysis(userId);
-        if (!canPerform.allowed) {
-          throw new Error(canPerform.reason || "Analysis limit reached");
+      try {
+        const ctx = context as GraphQLContext;
+        // Get or create user in database
+        let userId: string | undefined;
+        if (ctx.userId) {
+          userId = await userService.getOrCreateUser(ctx.userId);
+          
+          // Check subscription limits
+          const canPerform = await subscriptionService.canPerformAnalysis(userId);
+          if (!canPerform.allowed) {
+            throw new Error(canPerform.reason || "Analysis limit reached");
+          }
         }
-      }
 
-      const analysisId = await analysisService.enqueueAnalysis(args.input, userId);
-      
-      // Increment usage if user is authenticated
-      if (userId) {
-        await subscriptionService.incrementUsage(userId);
-        // Invalidate user's cache since usage changed
-        await cacheService.invalidateUserCache(userId);
+        const analysisId = await analysisService.enqueueAnalysis(args.input, userId);
+        
+        // Increment usage if user is authenticated
+        if (userId) {
+          await subscriptionService.incrementUsage(userId);
+          // Invalidate user's cache since usage changed
+          await cacheService.invalidateUserCache(userId);
+        }
+        
+        return {
+          analysisId,
+          status: "QUEUED"
+        };
+      } catch (error) {
+        // Log the actual error for debugging
+        console.error("[submitAnalysis] Error:", error);
+        
+        // Check if it's a database connection error
+        if (error instanceof Error) {
+          const errorMessage = error.message.toLowerCase();
+          if (
+            errorMessage.includes("connection") ||
+            errorMessage.includes("database") ||
+            errorMessage.includes("postgres") ||
+            errorMessage.includes("timeout") ||
+            errorMessage.includes("econnrefused")
+          ) {
+            throw new Error("Database connection error. Please try again in a moment.");
+          }
+        }
+        
+        // Re-throw the original error with better context
+        throw error;
       }
-      
-      return {
-        analysisId,
-        status: "QUEUED"
-      };
     }
   },
   IngestionQuality: {

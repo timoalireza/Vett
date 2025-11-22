@@ -12,7 +12,7 @@ const pool = new Pool({
   max: env.DB_POOL_MAX ?? (env.NODE_ENV === "production" ? 20 : 10), // Maximum connections in pool
   min: env.DB_POOL_MIN ?? (env.NODE_ENV === "production" ? 5 : 2), // Minimum connections
   idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 2000, // Timeout after 2s
+  connectionTimeoutMillis: 10000, // Timeout after 10s (increased for cloud databases)
   // SSL configuration (required for most cloud providers)
   ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });

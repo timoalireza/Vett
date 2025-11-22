@@ -160,20 +160,43 @@ class AnalysisService {
       })
     });
 
-    const [{ id }] = await db
-      .insert(analyses)
-      .values({
-        userId: userId ?? null,
-        topic: normalizedInput.topicHint ?? "unknown",
-        inputType: normalizedInput.mediaType,
-        status: "QUEUED",
-        rawInput: JSON.stringify({
-          text: normalizedInput.text ?? null,
-          contentUri: normalizedInput.contentUri ?? null,
-          attachments: normalizedInput.attachments
+    let id: string;
+    try {
+      const result = await db
+        .insert(analyses)
+        .values({
+          userId: userId ?? null,
+          topic: normalizedInput.topicHint ?? "unknown",
+          inputType: normalizedInput.mediaType,
+          status: "QUEUED",
+          rawInput: JSON.stringify({
+            text: normalizedInput.text ?? null,
+            contentUri: normalizedInput.contentUri ?? null,
+            attachments: normalizedInput.attachments
+          })
         })
-      })
-      .returning({ id: analyses.id });
+        .returning({ id: analyses.id });
+      
+      if (!result || result.length === 0) {
+        throw new Error("Failed to create analysis record");
+      }
+      
+      id = result[0].id;
+    } catch (error) {
+      console.error("[enqueueAnalysis] Database insert error:", error);
+      if (error instanceof Error) {
+        const errorMsg = error.message.toLowerCase();
+        if (
+          errorMsg.includes("connection") ||
+          errorMsg.includes("timeout") ||
+          errorMsg.includes("econnrefused") ||
+          errorMsg.includes("getaddrinfo")
+        ) {
+          throw new Error("Database connection error. Please check your database configuration.");
+        }
+      }
+      throw error;
+    }
 
     if (normalizedInput.attachments.length > 0) {
       await db.insert(analysisAttachments).values(

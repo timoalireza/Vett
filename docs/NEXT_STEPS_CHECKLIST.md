@@ -332,3 +332,4 @@ curl https://vett-api-production.up.railway.app/cors-test
 
 **Next Action:** Wait for Railway deployment to complete, then verify environment variables are set correctly.
 
+
