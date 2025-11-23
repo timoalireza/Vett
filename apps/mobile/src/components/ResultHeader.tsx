@@ -19,7 +19,7 @@ interface ResultHeaderProps {
 
 export function ResultHeader({ platform, verdict, confidence, score, imageUrl, onShare }: ResultHeaderProps) {
   const theme = useTheme();
-  const gradient = getScoreGradient(score);
+  const gradient = getScoreGradient(score, verdict);
 
   return (
     <MotiView
@@ -97,7 +97,7 @@ export function ResultHeader({ platform, verdict, confidence, score, imageUrl, o
 
         {/* Middle: Vett Score */}
         <View style={styles.scoreContainer}>
-          <ScoreRing score={score} size={140} />
+          <ScoreRing score={score} size={140} verdict={verdict} />
         </View>
 
         {/* Bottom: Verdict and Confidence */}

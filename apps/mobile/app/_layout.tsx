@@ -1,9 +1,12 @@
 import { useEffect } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts, SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold } from "@expo-google-fonts/space-grotesk";
 import { StatusBar } from "expo-status-bar";
+import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 
@@ -11,11 +14,37 @@ import { AppStateProvider, useAppState } from "../src/state/app-state";
 import { CrashBoundary } from "../src/components/CrashBoundary";
 import { theme } from "../src/theme";
 import { queryClient } from "../src/state/query-client";
+import { initializeRevenueCat } from "../src/services/revenuecat";
+import { RevenueCatAuthSync } from "./_layout-revenuecat";
+
+// Token cache for Clerk
+const tokenCache = {
+  async getToken(key: string) {
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (err) {
+      return null;
+    }
+  },
+  async saveToken(key: string, value: string) {
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch (err) {
+      // Handle error
+    }
+  }
+};
+
+// Get Clerk publishable key from environment or config
+const clerkPublishableKey =
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  (Constants.expoConfig?.extra?.clerkPublishableKey as string | undefined) ||
+  "";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function NavigationGate() {
-  const { isReady, hasOnboarded, authMode } = useAppState();
+  const { isReady, authMode, subscriptionPromptShown, markSubscriptionPromptShown } = useAppState();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -24,37 +53,60 @@ function NavigationGate() {
       return;
     }
 
-    // Always route to onboarding first if not already onboarded
-    if (!hasOnboarded) {
-      if (!pathname.startsWith("/onboarding")) {
-        router.replace("/onboarding");
+    let subscriptionTimer: NodeJS.Timeout | null = null;
+
+    // Use setTimeout to defer navigation and avoid blocking main thread
+    const navigationTimer = setTimeout(() => {
+      console.log("[NavigationGate] State:", { isReady, authMode, pathname });
+      
+      // Force authentication - no guest mode, no onboarding
+      const needsAuth = authMode !== "signedIn";
+      if (needsAuth && !pathname.startsWith("/signin")) {
+        router.replace("/signin");
+        return;
       }
-      return;
-    }
 
-    // After onboarding, check auth
-    const needsAuth = authMode === "signedOut";
-    if (needsAuth && !pathname.startsWith("/signin") && !pathname.startsWith("/onboarding")) {
-      router.replace("/signin");
-      return;
-    }
+      // If authenticated, allow navigation to main app
+      if (authMode === "signedIn" && pathname === "/") {
+        router.replace("/(tabs)/analyze");
+        return;
+      }
 
-    // If onboarded and authenticated (or guest), allow navigation to main app
-    if (hasOnboarded && authMode !== "signedOut" && pathname === "/") {
-      router.replace("/(tabs)/analyze");
-    }
-  }, [isReady, hasOnboarded, authMode, pathname, router]);
+      // Show subscription prompt on first app open (after auth)
+      if (
+        authMode === "signedIn" &&
+        !subscriptionPromptShown &&
+        !pathname.startsWith("/modals/subscription") &&
+        !pathname.startsWith("/signin")
+      ) {
+        // Small delay to ensure UI is ready
+        subscriptionTimer = setTimeout(() => {
+          router.push("/modals/subscription");
+          markSubscriptionPromptShown();
+        }, 500);
+      }
+    }, 100); // Small delay to avoid blocking main thread
+
+    return () => {
+      clearTimeout(navigationTimer);
+      // Also clear nested subscription timer if it exists
+      if (subscriptionTimer) {
+        clearTimeout(subscriptionTimer);
+      }
+    };
+  }, [isReady, authMode, subscriptionPromptShown, pathname, router, markSubscriptionPromptShown]);
 
   if (!isReady) {
     return (
       <View
         style={{
           flex: 1,
-          backgroundColor: theme.colors.background,
+          backgroundColor: "#000000",
           alignItems: "center",
           justifyContent: "center"
         }}
       >
+        <Text style={{ color: "#FFFFFF", fontSize: 16, marginBottom: 20 }}>Initializing app...</Text>
         <ActivityIndicator color={theme.colors.primary} size="large" />
       </View>
     );
@@ -77,11 +129,14 @@ function NavigationGate() {
       <Stack.Screen name="result/political" />
       <Stack.Screen name="settings/index" />
       <Stack.Screen name="settings/about" />
-      <Stack.Screen name="settings/linked-accounts" />
+      <Stack.Screen name="settings/notifications" />
+      <Stack.Screen name="settings/privacy" />
+      <Stack.Screen name="settings/terms" />
       <Stack.Screen name="modals/claim" options={{ presentation: "transparentModal" }} />
       <Stack.Screen name="modals/source" options={{ presentation: "transparentModal" }} />
       <Stack.Screen name="modals/share" options={{ presentation: "transparentModal" }} />
       <Stack.Screen name="modals/permission" options={{ presentation: "transparentModal" }} />
+      <Stack.Screen name="modals/subscription" options={{ presentation: "transparentModal" }} />
       <Stack.Screen name="error-states" />
     </Stack>
   );
@@ -95,24 +150,56 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    console.log("[RootLayout] Fonts loaded:", fontsLoaded);
+    console.log("[RootLayout] Clerk key present:", !!clerkPublishableKey);
+    
+    // Initialize RevenueCat when app starts
+    initializeRevenueCat().catch((error) => {
+      console.error("[RootLayout] Failed to initialize RevenueCat:", error);
+    });
+    
     if (fontsLoaded) {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
-    return null;
+    return (
+      <View style={{ flex: 1, backgroundColor: "#000000", alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: "#FFFFFF", fontSize: 16, marginBottom: 20 }}>Loading fonts...</Text>
+        <ActivityIndicator color={theme.colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  if (!clerkPublishableKey) {
+    console.error("❌ Clerk publishable key not found! Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY");
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ color: theme.colors.text, fontSize: 18, textAlign: "center" }}>
+          ⚠️ Missing Clerk configuration{'\n'}
+          Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
+        </Text>
+      </View>
+    );
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppStateProvider>
-        <CrashBoundary>
-          <StatusBar style="light" translucent />
-          <NavigationGate />
-        </CrashBoundary>
-      </AppStateProvider>
-    </QueryClientProvider>
+    <ClerkProvider
+      publishableKey={clerkPublishableKey}
+      tokenCache={tokenCache}
+      fallbackRedirectUrl="/(tabs)/analyze"
+    >
+      <QueryClientProvider client={queryClient}>
+        <AppStateProvider>
+          <RevenueCatAuthSync />
+          <CrashBoundary>
+            <StatusBar style="light" translucent />
+            <NavigationGate />
+          </CrashBoundary>
+        </AppStateProvider>
+      </QueryClientProvider>
+    </ClerkProvider>
   );
 }
 

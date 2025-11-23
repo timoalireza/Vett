@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useUser } from "@clerk/clerk-expo";
 
 import { useTheme } from "../../src/hooks/use-theme";
 import { GradientBackground } from "../../src/components/GradientBackground";
@@ -12,22 +13,21 @@ const settingsSections = [
   {
     title: "Account",
     items: [
-      { label: "Profile", icon: "person-outline", route: "/settings/index" },
-      { label: "Linked Accounts", icon: "link-outline", route: "/settings/linked-accounts" }
+      { label: "Profile", icon: "person-outline", route: "/settings/index" }
     ]
   },
   {
     title: "Preferences",
     items: [
-      { label: "Notifications", icon: "notifications-outline", route: null }
+      { label: "Notifications", icon: "notifications-outline", route: "/settings/notifications" }
     ]
   },
   {
     title: "About",
     items: [
       { label: "About Vett", icon: "information-circle-outline", route: "/settings/about" },
-      { label: "Privacy Policy", icon: "shield-checkmark-outline", route: null },
-      { label: "Terms of Service", icon: "document-text-outline", route: null }
+      { label: "Privacy Policy", icon: "shield-checkmark-outline", route: "/settings/privacy" },
+      { label: "Terms of Service", icon: "document-text-outline", route: "/settings/terms" }
     ]
   }
 ];
@@ -35,6 +35,14 @@ const settingsSections = [
 export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { user } = useUser();
+  
+  // Get user display name
+  const displayName = user 
+    ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.fullName || user.primaryEmailAddress?.emailAddress?.split("@")[0] || "User"
+    : "Guest Investigator";
+  
+  const userEmail = user?.primaryEmailAddress?.emailAddress || "guest@vett.app";
 
   return (
     <GradientBackground>
@@ -51,7 +59,7 @@ export default function ProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Profile Header */}
-          <GlassCard radius="lg" intensity="medium" style={styles.profileCard}>
+          <GlassCard radius="lg" intensity="medium" style={[styles.profileCard, { marginBottom: theme.spacing(1) }]}>
             <View style={styles.profileContent}>
               <View
                 style={[
@@ -79,7 +87,7 @@ export default function ProfileScreen() {
                     }
                   ]}
                 >
-                  Guest Investigator
+                  {displayName}
                 </Text>
                 <Text
                   style={[
@@ -91,14 +99,14 @@ export default function ProfileScreen() {
                     }
                   ]}
                 >
-                  guest@vett.app
+                  {userEmail}
                 </Text>
               </View>
             </View>
           </GlassCard>
 
           {/* Stats Cards */}
-          <View style={styles.statsContainer}>
+          <View style={[styles.statsContainer, { marginBottom: theme.spacing(1) }]}>
             {[
               { label: "Analyses", value: "8", icon: "document-text-outline", gradient: ["#5A8FD4", "#6BA8B8"] },
               { label: "Accuracy", value: "92%", icon: "checkmark-circle-outline", gradient: ["#6BA88A", "#6BA8B8"] },
@@ -115,21 +123,22 @@ export default function ProfileScreen() {
                   end: { x: 1, y: 0 }
                 }}
               >
-                <View style={styles.statContent}>
+                <View style={[styles.statContent, { padding: theme.spacing(2.5) }]}>
                   <View
                     style={[
                       styles.statIcon,
                       {
                         backgroundColor: stat.gradient[0] + "20",
                         borderRadius: theme.radii.sm,
-                        width: 36,
-                        height: 36,
+                        width: 40,
+                        height: 40,
                         alignItems: "center",
-                        justifyContent: "center"
+                        justifyContent: "center",
+                        marginBottom: theme.spacing(1.5)
                       }
                     ]}
                   >
-                    <Ionicons name={stat.icon as keyof typeof Ionicons.glyphMap} size={18} color={stat.gradient[0]} />
+                    <Ionicons name={stat.icon as keyof typeof Ionicons.glyphMap} size={20} color={stat.gradient[0]} />
                   </View>
                   <Text
                     style={[
@@ -137,7 +146,7 @@ export default function ProfileScreen() {
                       {
                         color: theme.colors.text,
                         fontSize: theme.typography.subheading,
-                        marginTop: theme.spacing(1),
+                        marginTop: theme.spacing(0.5),
                         lineHeight: theme.typography.subheading * theme.typography.lineHeight.tight
                       }
                     ]}
@@ -189,7 +198,7 @@ export default function ProfileScreen() {
                           {
                             backgroundColor: theme.colors.borderLight,
                             height: 1,
-                            marginLeft: theme.spacing(2.5)
+                            marginLeft: theme.spacing(3)
                           }
                         ]}
                       />
@@ -198,8 +207,8 @@ export default function ProfileScreen() {
                         style={[
                           styles.settingItem,
                           {
-                            paddingVertical: theme.spacing(2),
-                            paddingHorizontal: theme.spacing(2.5),
+                            paddingVertical: theme.spacing(2.5),
+                            paddingHorizontal: theme.spacing(3),
                             flexDirection: "row",
                             alignItems: "center",
                             justifyContent: "space-between"
@@ -219,17 +228,17 @@ export default function ProfileScreen() {
                               {
                                 backgroundColor: theme.colors.card,
                                 borderRadius: theme.radii.sm,
-                                width: 32,
-                                height: 32,
+                                width: 36,
+                                height: 36,
                                 alignItems: "center",
                                 justifyContent: "center",
-                                marginRight: theme.spacing(2)
+                                marginRight: theme.spacing(2.5)
                               }
                             ]}
                           >
                             <Ionicons
                               name={item.icon as keyof typeof Ionicons.glyphMap}
-                              size={18}
+                              size={20}
                               color={theme.colors.textSecondary}
                             />
                           </View>

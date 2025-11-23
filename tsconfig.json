@@ -10,6 +10,7 @@
     {
       "path": "./apps/worker"
     }
-  ]
+  ],
+  "compilerOptions": {},
+  "extends": "expo/tsconfig.base"
 }
-

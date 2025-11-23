@@ -14,7 +14,14 @@ interface ScoreRingProps {
   size?: number;
 }
 
-export function ScoreRing({ score, label = "Vett Score", size = 140 }: ScoreRingProps) {
+interface ScoreRingProps {
+  score: number;
+  label?: string;
+  size?: number;
+  verdict?: string | null;
+}
+
+export function ScoreRing({ score, label = "Vett Score", size = 140, verdict }: ScoreRingProps) {
   const theme = useTheme();
   const radius = (size - 16) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -29,7 +36,7 @@ export function ScoreRing({ score, label = "Vett Score", size = 140 }: ScoreRing
     strokeDashoffset: circumference * (1 - progress.value)
   }));
 
-  const { start, end } = getScoreGradient(score);
+  const { start, end } = getScoreGradient(score, verdict);
 
   return (
     <View

@@ -1,4 +1,10 @@
-export function getScoreGradient(score: number): { start: string; end: string } {
+export function getScoreGradient(score: number, verdict?: string | null): { start: string; end: string } {
+  // Check verdict first - "Mostly Accurate" should be green
+  if (verdict && verdict.toLowerCase().includes("mostly accurate")) {
+    return { start: "#2EFAC0", end: "#53D8FF" }; // Green gradient
+  }
+  
+  // Fallback to score-based colors
   if (score >= 75) {
     return { start: "#2EFAC0", end: "#53D8FF" };
   }

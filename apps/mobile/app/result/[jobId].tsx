@@ -92,13 +92,21 @@ export default function ResultScreen() {
   };
 
   const getGradientColors = () => {
+    const verdict = data.verdict?.toLowerCase() || "";
     const score = data.score ?? 0;
-    if (score >= 75) {
-      return [theme.colors.success, theme.colors.highlight];
-    } else if (score >= 50) {
-      return [theme.colors.warning, theme.colors.highlight];
+    
+    // Check verdict first - "Mostly Accurate" should be green
+    if (verdict.includes("mostly accurate")) {
+      return ["#2EFAC0", "#53D8FF"]; // Green gradient
     }
-    return [theme.colors.primary, theme.colors.secondary];
+    
+    // Fallback to score-based colors
+    if (score >= 75) {
+      return ["#2EFAC0", "#53D8FF"]; // Green
+    } else if (score >= 50) {
+      return ["#FFC65B", "#FF8A5A"]; // Orange/Yellow
+    }
+    return ["#FF4D6D", "#F45B9A"]; // Red/Pink
   };
 
   return (
@@ -133,7 +141,7 @@ export default function ResultScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.contentInner}>
+          <View style={[styles.contentInner, { gap: theme.spacing(2.5) }]}>
             <ResultHeader
               platform={data.bias ? `Bias · ${data.bias}` : "Vett"}
               verdict={data.verdict ?? "Pending"}
@@ -142,6 +150,7 @@ export default function ResultScreen() {
               imageUrl={data.imageUrl ?? null}
               onShare={() => undefined}
             />
+            {/* ScoreRing is rendered inside ResultHeader */}
 
             {/* Summary Card - Separate card underneath Vett Score */}
             {data.summary && (
@@ -422,7 +431,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20
   },
   contentInner: {
-    gap: 16
+    gap: 20
   },
   sectionLabel: {
     fontWeight: "600"

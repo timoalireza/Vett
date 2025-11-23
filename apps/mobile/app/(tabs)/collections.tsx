@@ -1,24 +1,19 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ScrollView, Text, TouchableOpacity, View, StyleSheet, Platform, FlatList } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/clerk-expo";
+import { tokenProvider } from "../../src/api/token-provider";
 
 import { useTheme } from "../../src/hooks/use-theme";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { GlassChip } from "../../src/components/GlassChip";
 import { AnalysisCard } from "../../src/components/AnalysisCard";
-import { fetchAnalysis } from "../../src/api/analysis";
-
-// Empty array - analyses will be fetched from API when available
-const mockAnalyses: Array<{
-  id: string;
-  title: string;
-  score: number;
-  imageUrl?: string | null;
-}> = [];
+import { fetchAnalyses } from "../../src/api/analysis";
+import { useMemo } from "react";
 
 const getTopicGradient = (topic: string): string[] => {
   const gradients: Record<string, string[]> = {
@@ -34,6 +29,79 @@ export default function CollectionsScreen() {
   const theme = useTheme();
   const [mode, setMode] = useState<"reports" | "folders">("reports");
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { isSignedIn, getToken } = useAuth();
+
+  // Update token provider when auth state changes
+  useEffect(() => {
+    const updateToken = async () => {
+      if (isSignedIn && getToken) {
+        try {
+          const token = await getToken();
+          tokenProvider.setToken(token);
+          console.log("[Collections] Token set in provider:", !!token);
+        } catch (error) {
+          console.error("[Collections] Error getting token:", error);
+          tokenProvider.setToken(null);
+        }
+      } else {
+        tokenProvider.setToken(null);
+      }
+    };
+    updateToken();
+  }, [isSignedIn, getToken]);
+
+  // Fetch user's analyses for history
+  const { data: analysesData, refetch: refetchAnalyses, error: analysesError, isLoading: analysesLoading } = useQuery({
+    queryKey: ["analyses", "history"],
+    queryFn: async () => {
+      try {
+        const result = await fetchAnalyses(50);
+        console.log("[Collections] Fetched analyses:", result?.edges?.length || 0, "analyses");
+        console.log("[Collections] Analyses data:", JSON.stringify(result, null, 2));
+        return result;
+      } catch (error) {
+        console.error("[Collections] Error fetching analyses:", error);
+        throw error;
+      }
+    },
+    enabled: isSignedIn ?? false,
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true // Refetch when screen comes into focus
+  });
+
+  // Log authentication and query state
+  useEffect(() => {
+    console.log("[Collections] Auth state:", { isSignedIn, analysesLoading, error: analysesError?.message });
+    if (analysesData) {
+      console.log("[Collections] Analyses count:", analysesData?.edges?.length || 0);
+    }
+  }, [isSignedIn, analysesData, analysesLoading, analysesError]);
+
+  // Refetch analyses when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isSignedIn) {
+        // Small delay to ensure backend has processed any new analyses
+        setTimeout(() => {
+          refetchAnalyses();
+          queryClient.invalidateQueries({ queryKey: ["analyses"] });
+        }, 500);
+      }
+    }, [isSignedIn, refetchAnalyses, queryClient])
+  );
+
+  const userAnalyses = useMemo(() => {
+    if (!analysesData?.edges) return [];
+    return analysesData.edges
+      .filter((edge) => edge.node.status === "COMPLETED")
+      .map((edge) => ({
+        id: edge.node.id,
+        title: edge.node.summary?.substring(0, 100) || "Analysis",
+        score: edge.node.score ?? 0,
+        imageUrl: edge.node.imageUrl || null
+      }));
+  }, [analysesData]);
 
   return (
     <GradientBackground>
@@ -49,7 +117,7 @@ export default function CollectionsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { marginBottom: theme.spacing(1) }]}>
           <Text
             style={[
               styles.headerTitle,
@@ -102,9 +170,9 @@ export default function CollectionsScreen() {
 
         {/* Analysis Feed */}
         {mode === "reports" ? (
-          mockAnalyses.length > 0 ? (
+          userAnalyses.length > 0 ? (
             <View style={styles.feed}>
-              {mockAnalyses.map((analysis, index) => {
+              {userAnalyses.map((analysis) => {
                 return (
                   <AnalysisCard
                     key={analysis.id}
@@ -160,7 +228,10 @@ export default function CollectionsScreen() {
                   Your fact-checking history will appear here
                 </Text>
                 <TouchableOpacity
-                  onPress={() => router.push("/(tabs)/analyze")}
+                  onPress={() => {
+                    // Navigate to analyze tab and open the sheet
+                    router.push("/(tabs)/analyze?openSheet=true");
+                  }}
                   style={[
                     styles.emptyButton,
                     {

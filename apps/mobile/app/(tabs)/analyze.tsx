@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   FlatList,
   Modal,
@@ -9,72 +9,133 @@ import {
   View,
   StyleSheet,
   Platform,
-  Linking
+  Linking,
+  Image,
+  Alert
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useMutation } from "@tanstack/react-query";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
+import { useAuth } from "@clerk/clerk-expo";
+import * as ImagePicker from "expo-image-picker";
+import { tokenProvider } from "../../src/api/token-provider";
 
 import { useTheme } from "../../src/hooks/use-theme";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
-import { AnalysisCardHorizontal } from "../../src/components/AnalysisCardHorizontal";
-import { submitAnalysis } from "../../src/api/analysis";
+import { AnalysisCardVertical } from "../../src/components/AnalysisCardVertical";
+import { submitAnalysis, fetchAnalyses } from "../../src/api/analysis";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAnalysis } from "../../src/api/analysis";
 
 export default function AnalyzeScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { isSignedIn, getToken } = useAuth();
+  const params = useLocalSearchParams<{ openSheet?: string }>();
   const [sheetVisible, setSheetVisible] = useState(false);
   const [input, setInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
-  // Mock analyses - will be replaced with real API call
-  // TODO: Connect to real API endpoint for listing analyses
-  const mockAnalyses = [
-    {
-      id: "1",
-      title: "WHO Treaty Deep-Dive",
-      topic: "Health",
-      score: 85,
-      imageUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?w=800&q=80",
-      imageAttribution: {
-        photographer: "National Cancer Institute",
-        photographerProfileUrl: "https://unsplash.com/@nci?utm_source=vett&utm_medium=referral",
-        unsplashPhotoUrl: "https://unsplash.com/photos/photo-1576091160399-112ba8d25d1f?utm_source=vett&utm_medium=referral",
-        isGenerated: false
-      }
-    },
-    {
-      id: "2",
-      title: "Viral Clip Reality Check",
-      topic: "Media",
-      score: 78,
-      imageUrl: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80",
-      imageAttribution: {
-        photographer: "Solen Feyissa",
-        photographerProfileUrl: "https://unsplash.com/@solenfeyissa?utm_source=vett&utm_medium=referral",
-        unsplashPhotoUrl: "https://unsplash.com/photos/photo-1611162617474-5b21e879e113?utm_source=vett&utm_medium=referral",
-        isGenerated: false
-      }
-    },
-    {
-      id: "3",
-      title: "Elections Integrity Watch",
-      topic: "Political",
-      score: 92,
-      imageUrl: "https://images.unsplash.com/photo-1529107386315-e1a2ed48a78e?w=800&q=80",
-      imageAttribution: {
-        photographer: "Element5 Digital",
-        photographerProfileUrl: "https://unsplash.com/@element5digital?utm_source=vett&utm_medium=referral",
-        unsplashPhotoUrl: "https://unsplash.com/photos/photo-1529107386315-e1a2ed48a78e?utm_source=vett&utm_medium=referral",
-        isGenerated: false
-      }
+
+  // Open sheet when navigating from history page
+  useEffect(() => {
+    if (params.openSheet === "true") {
+      setSheetVisible(true);
+      // Clear the param to avoid reopening on re-render
+      router.setParams({ openSheet: undefined });
     }
-  ];
+  }, [params.openSheet, router]);
+
+  // Update token provider when auth state changes
+  useEffect(() => {
+    const updateToken = async () => {
+      if (isSignedIn && getToken) {
+        try {
+          const token = await getToken();
+          tokenProvider.setToken(token);
+          console.log("[Analyze] Token set in provider:", !!token);
+        } catch (error) {
+          console.error("[Analyze] Error getting token:", error);
+          tokenProvider.setToken(null);
+        }
+      } else {
+        tokenProvider.setToken(null);
+      }
+    };
+    updateToken();
+  }, [isSignedIn, getToken]);
+  
+  // Fetch user's recent analyses
+  const { data: analysesData, refetch: refetchAnalyses, error: analysesError, isLoading: analysesLoading } = useQuery({
+    queryKey: ["analyses", "recent"],
+    queryFn: async () => {
+      try {
+        const result = await fetchAnalyses(10);
+        console.log("[Analyze] Fetched analyses:", result?.edges?.length || 0, "analyses");
+        console.log("[Analyze] Analyses data:", JSON.stringify(result, null, 2));
+        return result;
+      } catch (error) {
+        console.error("[Analyze] Error fetching analyses:", error);
+        throw error;
+      }
+    },
+    enabled: isSignedIn ?? false, // Only fetch when user is authenticated
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true // Refetch when screen comes into focus
+  });
+
+  // Log authentication and query state
+  useEffect(() => {
+    console.log("[Analyze] Auth state:", { isSignedIn, analysesLoading, error: analysesError?.message });
+    if (analysesData) {
+      console.log("[Analyze] Analyses count:", analysesData?.edges?.length || 0);
+    }
+  }, [isSignedIn, analysesData, analysesLoading, analysesError]);
+
+  // Refetch analyses when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isSignedIn) {
+        // Small delay to ensure backend has processed any new analyses
+        setTimeout(() => {
+          refetchAnalyses();
+          queryClient.invalidateQueries({ queryKey: ["analyses"] });
+        }, 500);
+      }
+    }, [isSignedIn, refetchAnalyses, queryClient])
+  );
+
+  const recentAnalyses = useMemo(() => {
+    if (!analysesData?.edges) return [];
+    return analysesData.edges
+      .filter((edge) => edge.node.status === "COMPLETED")
+      .slice(0, 5)
+      .map((edge) => {
+        const node = edge.node;
+        // Map bias to topic (bias values: LEFT, CENTER, RIGHT -> map to political)
+        // Or use a default topic based on analysis content
+        let topic = "general";
+        if (node.bias) {
+          topic = "political"; // Bias indicates political analysis
+        }
+        return {
+          id: node.id,
+          title: node.summary?.substring(0, 50) || "Analysis",
+          topic: topic,
+          score: node.score ?? 0,
+          imageUrl: node.imageUrl || null,
+          imageAttribution: {
+            photographer: "",
+            photographerProfileUrl: "",
+            unsplashPhotoUrl: "",
+            isGenerated: false
+          }
+        };
+      });
+  }, [analysesData]);
 
   const placeholderTopic = useMemo(() => {
     if (input.includes("election") || input.includes("treaty")) return "political";
@@ -87,13 +148,21 @@ export default function AnalyzeScreen() {
     mutationFn: () =>
       submitAnalysis({
         text: input.trim().length ? input.trim() : null,
-        contentUri: null,
-        mediaType: "TEXT",
+        contentUri: selectedImage,
+        mediaType: selectedImage ? "IMAGE" : "TEXT",
         topicHint: placeholderTopic.toUpperCase()
       }),
     onSuccess: ({ analysisId }) => {
+      // Clear input and close sheet first
       setSheetVisible(false);
       setErrorMessage(null);
+      setInput("");
+      setSelectedImage(null);
+      
+      // Invalidate queries immediately
+      queryClient.invalidateQueries({ queryKey: ["analyses"] });
+      
+      // Navigate to result page
       router.push({
         pathname: `/result/${analysisId}`
       });
@@ -125,7 +194,7 @@ export default function AnalyzeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { marginBottom: theme.spacing(1) }]}>
           <Text
             style={[
               styles.headerTitle,
@@ -341,8 +410,106 @@ export default function AnalyzeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Recent analyses horizontal scroll */}
-        {mockAnalyses.length > 0 && (
+        {/* Pro Tier Card */}
+        <TouchableOpacity
+          onPress={() => router.push("/modals/subscription")}
+          activeOpacity={0.9}
+          style={styles.proTierCard}
+        >
+          <LinearGradient
+            colors={["#5A8FD4", "#8A7FA8", "#FFB88C"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[
+              styles.proTierGradient,
+              {
+                borderRadius: theme.radii.lg,
+                overflow: "hidden",
+                padding: theme.spacing(3)
+              }
+            ]}
+          >
+            <View style={styles.proTierContent}>
+              <View style={styles.proTierLeft}>
+                <Text
+                  style={[
+                    styles.proTierTitle,
+                    {
+                      color: "#FFFFFF",
+                      fontSize: theme.typography.heading,
+                      fontWeight: "700",
+                      letterSpacing: -0.5,
+                      marginBottom: theme.spacing(1)
+                    }
+                  ]}
+                >
+                  Unlimited Analyses
+                </Text>
+                <Text
+                  style={[
+                    styles.proTierDescription,
+                    {
+                      color: "rgba(255, 255, 255, 0.9)",
+                      fontSize: theme.typography.body,
+                      lineHeight: theme.typography.body * theme.typography.lineHeight.relaxed,
+                      marginBottom: theme.spacing(2)
+                    }
+                  ]}
+                >
+                  Get unlimited fact-checks, advanced bias analysis, and priority processing
+                </Text>
+                <Text
+                  style={[
+                    styles.proTierPrice,
+                    {
+                      color: "#FFFFFF",
+                      fontSize: theme.typography.body,
+                      fontWeight: "600"
+                    }
+                  ]}
+                >
+                  Try Pro for $6.99/month
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.proTierBadge,
+                  {
+                    backgroundColor: "rgba(0, 0, 0, 0.3)",
+                    borderRadius: theme.radii.md,
+                    paddingHorizontal: theme.spacing(2),
+                    paddingVertical: theme.spacing(1),
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.3)"
+                  }
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.proTierBadgeText,
+                    {
+                      color: "#FFFFFF",
+                      fontSize: theme.typography.caption,
+                      fontWeight: "600",
+                      letterSpacing: 0.5
+                    }
+                  ]}
+                >
+                  Vett Pro
+                </Text>
+              </View>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color="rgba(255, 255, 255, 0.8)"
+              style={styles.proTierChevron}
+            />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Recent analyses vertical list */}
+        {recentAnalyses.length > 0 && (
           <View style={styles.section}>
             <Text
               style={[
@@ -358,13 +525,9 @@ export default function AnalyzeScreen() {
             >
               Recent Analyses
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.analysesScrollContent}
-            >
-              {mockAnalyses.map((analysis) => (
-                <AnalysisCardHorizontal
+            <View style={styles.analysesList}>
+              {recentAnalyses.map((analysis) => (
+                <AnalysisCardVertical
                   key={analysis.id}
                   id={analysis.id}
                   title={analysis.title}
@@ -374,7 +537,7 @@ export default function AnalyzeScreen() {
                   imageAttribution={analysis.imageAttribution}
                 />
               ))}
-            </ScrollView>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -382,13 +545,20 @@ export default function AnalyzeScreen() {
       {/* Analysis input sheet */}
       <AnalyzeSheet
         visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
+        onClose={() => {
+          setSheetVisible(false);
+          setSelectedImage(null);
+          setInput("");
+        }}
         input={input}
         onChange={setInput}
         onAnalyze={handleAnalyze}
         topic={placeholderTopic}
         loading={submitMutation.isPending}
         errorMessage={errorMessage}
+        selectedImage={selectedImage}
+        onImageSelect={setSelectedImage}
+        onImageRemove={() => setSelectedImage(null)}
       />
     </GradientBackground>
   );
@@ -403,10 +573,96 @@ interface SheetProps {
   topic: string;
   loading?: boolean;
   errorMessage?: string | null;
+  selectedImage: string | null;
+  onImageSelect: (uri: string | null) => void;
+  onImageRemove: () => void;
 }
 
-function AnalyzeSheet({ visible, onClose, input, onChange, onAnalyze, topic, loading, errorMessage }: SheetProps) {
+function AnalyzeSheet({ 
+  visible, 
+  onClose, 
+  input, 
+  onChange, 
+  onAnalyze, 
+  topic, 
+  loading, 
+  errorMessage,
+  selectedImage,
+  onImageSelect,
+  onImageRemove
+}: SheetProps) {
   const theme = useTheme();
+
+  const requestImagePermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission Required",
+        "We need access to your photos to analyze images."
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const pickImage = async () => {
+    const hasPermission = await requestImagePermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        onImageSelect(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image. Please try again.");
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission Required",
+        "We need access to your camera to take photos."
+      );
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        onImageSelect(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Error taking photo:", error);
+      Alert.alert("Error", "Failed to take photo. Please try again.");
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      "Select Image",
+      "Choose an option",
+      [
+        { text: "Camera", onPress: takePhoto },
+        { text: "Photo Library", onPress: pickImage },
+        { text: "Cancel", style: "cancel" }
+      ]
+    );
+  };
   
   return (
     <Modal
@@ -425,14 +681,11 @@ function AnalyzeSheet({ visible, onClose, input, onChange, onAnalyze, topic, loa
           <GlassCard
             intensity="heavy"
             radius="lg"
-            style={[
-              styles.sheetCard,
-              {
-                borderBottomLeftRadius: 0,
-                borderBottomRightRadius: 0,
-                padding: theme.spacing(3)
-              }
-            ]}
+            style={{
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
+              padding: theme.spacing(3)
+            }}
           >
             {/* Handle */}
             <View
@@ -461,16 +714,79 @@ function AnalyzeSheet({ visible, onClose, input, onChange, onAnalyze, topic, loa
               Add Context
             </Text>
             
+            {/* Image Input Section */}
+            <View style={{ marginBottom: theme.spacing(2) }}>
+              {selectedImage ? (
+                <View style={{ position: "relative", marginBottom: theme.spacing(2) }}>
+                  <Image
+                    source={{ uri: selectedImage }}
+                    style={{
+                      width: "100%",
+                      height: 200,
+                      borderRadius: theme.radii.md,
+                      resizeMode: "cover"
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={onImageRemove}
+                    style={{
+                      position: "absolute",
+                      top: theme.spacing(1),
+                      right: theme.spacing(1),
+                      backgroundColor: theme.colors.danger,
+                      borderRadius: theme.radii.pill,
+                      width: 32,
+                      height: 32,
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
+                    <Ionicons name="close" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={showImageOptions}
+                  style={[
+                    {
+                      borderRadius: theme.radii.md,
+                      borderWidth: 2,
+                      borderColor: theme.colors.border,
+                      borderStyle: "dashed",
+                      padding: theme.spacing(3),
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: theme.colors.card,
+                      marginBottom: theme.spacing(2)
+                    }
+                  ]}
+                >
+                  <Ionicons name="image-outline" size={32} color={theme.colors.textSecondary} />
+                  <Text
+                    style={[
+                      {
+                        color: theme.colors.textSecondary,
+                        fontSize: theme.typography.body,
+                        marginTop: theme.spacing(1)
+                      }
+                    ]}
+                  >
+                    Add Image (Optional)
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <TextInput
               multiline
               value={input}
               onChangeText={onChange}
-              placeholder="Paste any link, transcription, or description…"
+              placeholder={selectedImage ? "Add description or context (optional)…" : "Paste any link, transcription, or description…"}
               placeholderTextColor={theme.colors.textTertiary}
               style={[
                 styles.textInput,
                 {
-                  minHeight: 120,
+                  minHeight: selectedImage ? 80 : 120,
                   borderRadius: theme.radii.md,
                   borderWidth: 1,
                   borderColor: theme.colors.border,
@@ -504,7 +820,7 @@ function AnalyzeSheet({ visible, onClose, input, onChange, onAnalyze, topic, loa
             
             <TouchableOpacity
               onPress={onAnalyze}
-              disabled={loading || !input.trim().length}
+              disabled={loading || (!input.trim().length && !selectedImage)}
               activeOpacity={0.8}
               style={[
                 styles.analyzeButton,
@@ -513,10 +829,10 @@ function AnalyzeSheet({ visible, onClose, input, onChange, onAnalyze, topic, loa
                   paddingVertical: theme.spacing(2),
                   marginTop: theme.spacing(3),
                   backgroundColor:
-                    loading || !input.trim().length
+                    loading || (!input.trim().length && !selectedImage)
                       ? theme.colors.card
                       : theme.colors.primary,
-                  opacity: loading || !input.trim().length ? 0.5 : 1
+                  opacity: loading || (!input.trim().length && !selectedImage) ? 0.5 : 1
                 }
               ]}
             >
@@ -524,7 +840,7 @@ function AnalyzeSheet({ visible, onClose, input, onChange, onAnalyze, topic, loa
                 style={[
                   styles.analyzeButtonText,
                   {
-                    color: loading || !input.trim().length ? theme.colors.textTertiary : theme.colors.text,
+                    color: loading || (!input.trim().length && !selectedImage) ? theme.colors.textTertiary : theme.colors.text,
                     fontSize: theme.typography.body,
                     fontWeight: "600"
                   }
@@ -618,15 +934,47 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: "600"
   },
-  analysesScrollContent: {
-    paddingRight: 20
+  analysesList: {
+    gap: 16
+  },
+  proTierCard: {
+    marginBottom: 16
+  },
+  proTierGradient: {
+    position: "relative"
+  },
+  proTierContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start"
+  },
+  proTierLeft: {
+    flex: 1,
+    marginRight: 16
+  },
+  proTierTitle: {
+    letterSpacing: -0.3
+  },
+  proTierDescription: {
+    letterSpacing: 0.1
+  },
+  proTierPrice: {
+    letterSpacing: 0.2
+  },
+  proTierBadge: {
+    alignSelf: "flex-start"
+  },
+  proTierBadgeText: {
+    textTransform: "uppercase"
+  },
+  proTierChevron: {
+    position: "absolute",
+    bottom: 24,
+    right: 24
   },
   sheetContainer: {
     flex: 1,
     justifyContent: "flex-end"
-  },
-  sheetCard: {
-    // Styled inline
   },
   sheetHandle: {
     alignSelf: "center"

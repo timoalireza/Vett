@@ -6,33 +6,32 @@
     "orientation": "portrait",
     "scheme": "vett",
     "userInterfaceStyle": "automatic",
-    "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#05070D"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.timoalireza.vett"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#05070D"
-      }
+      "package": "com.timoalireza.vett"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you select images for analysis.",
+          "cameraPermission": "The app accesses your camera to let you take photos for analysis."
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "https://vett-api-production.up.railway.app",
       "eas": {
         "projectId": "vett-mobile-dev"
-      }
+      },
+      "clerkPublishableKey": "pk_test_Z2VuZXJvdXMtc3R1cmdlb24tOS5jbGVyay5hY2NvdW50cy5kZXYk"
     }
   }
 }
-

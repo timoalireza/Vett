@@ -98,4 +98,65 @@ export async function fetchAnalysis(id: string): Promise<AnalysisResponse | null
   return result.analysis;
 }
 
+export interface AnalysisSummary {
+  id: string;
+  score: number | null;
+  verdict: string | null;
+  confidence: number | null;
+  bias?: string | null;
+  status: string;
+  createdAt: string;
+  summary?: string | null;
+  recommendation?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface AnalysesConnection {
+  edges: Array<{
+    node: AnalysisSummary;
+    cursor: string;
+  }>;
+  pageInfo: {
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    startCursor: string | null;
+    endCursor: string | null;
+  };
+  totalCount?: number | null;
+}
+
+const ANALYSES_QUERY = `
+  query Analyses($first: Int, $after: String) {
+    analyses(first: $first, after: $after) {
+      edges {
+        node {
+          id
+          score
+          verdict
+          confidence
+          bias
+          status
+          createdAt
+          summary
+          recommendation
+          imageUrl
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+export async function fetchAnalyses(first: number = 10, after?: string): Promise<AnalysesConnection> {
+  const result = await graphqlRequest<{ analyses: AnalysesConnection }>(ANALYSES_QUERY, { first, after });
+  return result.analyses;
+}
+
 

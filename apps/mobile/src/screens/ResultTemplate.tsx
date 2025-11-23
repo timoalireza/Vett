@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useState } from "react";
-import { AccessibilityInfo, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { AccessibilityInfo, ScrollView, Text, TouchableOpacity, View, StyleSheet, Platform } from "react-native";
 import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 import { ResultHeader } from "../components/ResultHeader";
 import { ClaimItem } from "../components/ClaimItem";
@@ -69,43 +71,70 @@ export function ResultTemplate({
 
   return (
     <GradientBackground>
-      <ScrollView
-        style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: theme.spacing(6) }}
-      stickyHeaderIndices={[1]}
-    >
-      <View style={{ padding: theme.spacing(3) }}>
-        <ResultHeader
-          title={title}
-          platform={platform}
-          verdict={verdict}
-          confidence={confidence}
-          score={score}
-          onShare={() =>
-            router.push({
-              pathname: "/modals/share",
-              params: { score: score.toString(), verdict }
-            })
-          }
-          onSave={() => router.push("/collections")}
-        />
-        <Text
-          style={{
-            color: theme.colors.subtitle,
-            marginTop: theme.spacing(2),
-            lineHeight: 20
-          }}
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        {/* Back Button */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[
+              styles.backButton,
+              {
+                backgroundColor: theme.colors.surface + "E0",
+                borderRadius: theme.radii.pill,
+                padding: theme.spacing(1.5)
+              }
+            ]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: theme.spacing(6) }}
+          stickyHeaderIndices={[2]}
+          showsVerticalScrollIndicator={false}
         >
-          {summary}
-        </Text>
-      </View>
+          <View style={[styles.content, { paddingTop: theme.spacing(2), paddingBottom: theme.spacing(2) }]}>
+            <ResultHeader
+              title={title}
+              platform={platform}
+              verdict={verdict}
+              confidence={confidence}
+              score={score}
+              onShare={() =>
+                router.push({
+                  pathname: "/modals/share",
+                  params: { score: score.toString(), verdict }
+                })
+              }
+              onSave={() => router.push("/collections")}
+            />
+            <Text
+              style={[
+                styles.summary,
+                {
+                  color: theme.colors.text,
+                  marginTop: theme.spacing(2.5),
+                  fontSize: theme.typography.body,
+                  lineHeight: theme.typography.body * theme.typography.lineHeight.relaxed
+                }
+              ]}
+            >
+              {summary}
+            </Text>
+          </View>
       <View
-        style={{
-          flexDirection: "row",
-          backgroundColor: theme.colors.background,
-          paddingHorizontal: theme.spacing(2),
-          gap: theme.spacing(1)
-        }}
+        style={[
+          styles.tabBar,
+          {
+            backgroundColor: theme.colors.background,
+            paddingHorizontal: theme.spacing(2),
+            paddingVertical: theme.spacing(1),
+            gap: theme.spacing(1)
+          }
+        ]}
       >
         {tabs.map((tab) => (
           <TouchableOpacity
@@ -136,7 +165,7 @@ export function ResultTemplate({
           {tab.content}
         </View>
       ))}
-      <View style={{ padding: theme.spacing(3), gap: theme.spacing(1.5) }}>
+      <View style={[styles.tabContent, { padding: theme.spacing(3), gap: theme.spacing(2) }]}>
         {activeTab === "claims" &&
           dummyClaims.map((claim) => (
             <ClaimItem key={claim.text} text={claim.text} verdict={claim.verdict} confidence={claim.confidence} onPress={() => handleClaimPress(claim.text)} />
@@ -196,8 +225,43 @@ export function ResultTemplate({
           </ScrollView>
         )}
       </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 8 : 16,
+    paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  scrollView: {
+    flex: 1
+  },
+  content: {
+    paddingHorizontal: 20
+  },
+  summary: {
+    letterSpacing: 0.1
+  },
+  tabBar: {
+    flexDirection: "row"
+  },
+  tabContent: {
+    // Styled inline
+  }
+});
 
