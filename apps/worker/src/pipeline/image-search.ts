@@ -2,6 +2,17 @@
  * Image search and aesthetic scoring service
  * Uses Unsplash API for high-quality images and OpenAI for query generation and scoring
  * Falls back to DALL-E 3 image generation if no suitable image is found
+ * 
+ * IMAGE GENERATION REQUIREMENTS:
+ * - Photorealistic documentary style (shot on 35mm lens, f/2.8, natural lighting)
+ * - Natural, muted colors aligned with real-world lighting
+ * - Clean, uncluttered backgrounds with simple composition
+ * - Neutral tone: no political symbols, flags, logos, or sensationalism
+ * - Avoid: surreal/abstract elements, exaggerated lighting, neon effects, AI slop artifacts
+ * - Consistent shadows, coherent textures, physically plausible reflections
+ * - Natural daylight or soft indoor lighting (no HDR extremes or bloom effects)
+ * - For people: generic, non-identifiable individuals with natural proportions
+ * - Never depict graphic violence, explicit content, or disturbing imagery
  */
 
 import { openai } from "../clients/openai.js";
@@ -45,6 +56,7 @@ export interface ImageSearchResult {
 
 /**
  * Generates a search query based on analysis content
+ * Prefers photorealistic documentary-style images
  */
 async function generateImageSearchQuery(
   summary: string,
@@ -52,17 +64,19 @@ async function generateImageSearchQuery(
   claims: string[]
 ): Promise<string> {
   const claimsText = claims.slice(0, 3).join(". ");
-  const prompt = `Based on this fact-check analysis, generate a concise, specific image search query (2-5 words) that would find a visually appealing, relevant photograph.
+  const prompt = `Based on this fact-check analysis, generate a concise, specific image search query (2-5 words) that would find a photorealistic documentary-style photograph.
 
 Analysis summary: "${summary}"
 Topic: ${topic}
 Key claims: ${claimsText}
 
-Generate a search query that would find a high-quality, aesthetically pleasing image relevant to this content. Examples:
-- "olive trees palestine farmer" for content about Palestinian agriculture
-- "modern gym fitness equipment" for content about exercise and muscle gain
-- "medical research laboratory" for health/science content
-- "political debate podium" for political content
+Generate a search query that would find a high-quality, photorealistic documentary photograph relevant to this content. Prefer natural, real-world scenes over abstract or stylized imagery. Examples:
+- "olive trees palestine farmer documentary" for content about Palestinian agriculture
+- "modern gym fitness equipment natural lighting" for content about exercise and muscle gain
+- "medical research laboratory professional" for health/science content
+- "political debate podium neutral" for political content
+
+Focus on real-world, documentary-style photography with natural lighting. Avoid abstract, surreal, or highly stylized keywords.
 
 Return ONLY the search query, nothing else.`;
 
@@ -94,6 +108,7 @@ Return ONLY the search query, nothing else.`;
 
 /**
  * Scores images for aesthetic quality using OpenAI vision
+ * Checks for photorealistic documentary style and absence of AI slop
  */
 async function scoreImageAesthetics(imageUrl: string): Promise<number> {
   try {
@@ -103,14 +118,14 @@ async function scoreImageAesthetics(imageUrl: string): Promise<number> {
         {
           role: "system",
           content:
-            "You are an expert at evaluating image aesthetic quality. Score images from 0-1 based on: composition, lighting, color harmony, professional quality, visual appeal. Return only a number between 0 and 1."
+            "You are an expert at evaluating image quality for photorealistic documentary photography. Score images from 0-1 based on: photorealistic quality, documentary style, natural lighting, composition, absence of AI artifacts, color realism, professional quality. Deduct points for: surreal/abstract elements, exaggerated lighting, neon/glow effects, AI slop (extra fingers, warped features, inconsistent shadows), hyper-stylization, or uncanny details. Return only a number between 0 and 1."
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Score this image's aesthetic quality from 0-1. Consider: composition, lighting, color harmony, professional quality, visual appeal. Return only a number."
+              text: "Score this image's quality from 0-1 for photorealistic documentary style. Consider: photorealistic quality, natural lighting, documentary composition, absence of AI artifacts (no extra fingers, warped features, inconsistent shadows), natural colors, professional quality. Deduct points for surreal/abstract elements, exaggerated lighting, neon effects, hyper-stylization, or uncanny details. Return only a number."
             },
             {
               type: "image_url",
@@ -133,6 +148,7 @@ async function scoreImageAesthetics(imageUrl: string): Promise<number> {
 
 /**
  * Generates an image using DALL-E 3 as a fallback
+ * Ensures photorealistic documentary style with no AI slop
  */
 async function generateImageWithDalle(
   summary: string,
@@ -142,18 +158,27 @@ async function generateImageWithDalle(
   try {
     // Generate a detailed prompt for DALL-E
     const claimsText = claims.slice(0, 2).join(". ");
-    const prompt = `Create a professional, high-quality photograph-style image that visually represents this fact-check analysis. The image should be aesthetically pleasing, well-composed, and relevant to the content.
+    const prompt = `Create a photorealistic documentary-style photograph that visually represents this fact-check analysis. The image must look like a real photograph taken with a professional camera.
 
 Analysis summary: "${summary}"
 Topic: ${topic}
 Key claims: ${claimsText}
 
-Generate a detailed DALL-E prompt (2-3 sentences) describing a professional photograph that would represent this content. The image should be:
-- Photorealistic and high-quality
-- Well-composed with good lighting
-- Relevant to the topic and claims
-- Professional and trustworthy in appearance
-- Suitable for a fact-checking application
+Generate a detailed DALL-E prompt (2-3 sentences) describing a professional documentary photograph. CRITICAL REQUIREMENTS:
+- Photorealistic documentary style, shot on 35mm lens, f/2.8, natural lighting, high-resolution
+- Natural, muted colors aligned with real-world lighting (no neon, glow effects, cyberpunk, sci-fi, or cartoon qualities)
+- Clean, uncluttered background with simple composition (medium shot, minimal distortion, no fisheye)
+- Neutral tone: no political symbols, flags, logos, identifiable trademarks, or sensationalism
+- If people are included: generic, non-identifiable individuals with natural skin textures and normal proportions (slight imperfections for realism)
+- Avoid: surreal elements, abstract art, painterly styles, exaggerated lighting, excessive bokeh, hyper-stylization
+- Avoid: extra fingers, warped hands, smeared faces, inconsistent shadows, impossible reflections, floating objects, text glitches
+- Natural daylight or soft indoor lighting (no HDR extremes, bloom effects, or high-contrast cinematic grading)
+- Consistent shadow direction that is physically plausible
+- Clothing with coherent folds and textures
+- Visually support the claim context without overdramatization
+- Never depict graphic violence, explicit content, or disturbing imagery
+
+The image should be suitable for a fact-checking application with a neutral, news-analysis tone.
 
 Return ONLY the DALL-E prompt, nothing else.`;
 
@@ -163,15 +188,15 @@ Return ONLY the DALL-E prompt, nothing else.`;
         {
           role: "system",
           content:
-            "You are an expert at creating detailed image generation prompts. Return only the prompt text."
+            "You are an expert at creating detailed image generation prompts for photorealistic documentary photography. Return only the prompt text. Ensure the prompt explicitly requests photorealistic, documentary style with natural lighting and avoids all AI artifacts."
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      temperature: 0.7,
-      max_tokens: 150
+      temperature: 0.5, // Lower temperature for more consistent, realistic outputs
+      max_tokens: 200
     });
 
     const dallePrompt = response.choices[0]?.message?.content?.trim();
@@ -180,14 +205,18 @@ Return ONLY the DALL-E prompt, nothing else.`;
       return null;
     }
 
-    console.info(`[image-search] Generating image with DALL-E: "${dallePrompt.slice(0, 100)}..."`);
+    // Enhance the prompt with explicit style requirements
+    const enhancedPrompt = `${dallePrompt} Photorealistic documentary photograph, shot on 35mm lens f/2.8, natural lighting, high-resolution. Clean composition, neutral colors, no stylization, no AI artifacts, no surreal elements.`;
+
+    console.info(`[image-search] Generating image with DALL-E: "${enhancedPrompt.slice(0, 100)}..."`);
 
     // Generate image with DALL-E 3
     const imageResponse = await openai.images.generate({
       model: "dall-e-3",
-      prompt: dallePrompt,
+      prompt: enhancedPrompt,
       size: "1024x1024",
-      quality: "standard",
+      quality: "hd", // Use HD quality for better photorealism
+      style: "natural", // Use natural style instead of vivid
       n: 1
     });
 
@@ -231,8 +260,10 @@ export async function findBestImage(
       console.info(`[image-search] Searching Unsplash for: "${searchQuery}"`);
       console.info(`[image-search] Unsplash API key present: ${env.UNSPLASH_ACCESS_KEY ? "Yes" : "No"}`);
 
-      // Search Unsplash
-      const searchUrl = `${UNSPLASH_API_BASE}/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=10&orientation=landscape`;
+      // Search Unsplash - prefer documentary and professional photography
+      // Add keywords to favor photorealistic documentary style
+      const enhancedQuery = `${searchQuery} documentary professional photorealistic`;
+      const searchUrl = `${UNSPLASH_API_BASE}/search/photos?query=${encodeURIComponent(enhancedQuery)}&per_page=10&orientation=landscape`;
       console.info(`[image-search] Unsplash search URL: ${searchUrl}`);
       
       const searchResponse = await fetch(searchUrl, {

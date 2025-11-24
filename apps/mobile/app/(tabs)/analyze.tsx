@@ -130,9 +130,10 @@ export default function AnalyzeScreen() {
         }
         return {
           id: node.id,
-          title: node.summary?.substring(0, 50) || "Analysis",
+          title: node.summary || "Analysis",
           topic: topic,
           score: node.score ?? 0,
+          createdAt: node.createdAt,
           imageUrl: node.imageUrl || null,
           imageAttribution: {
             photographer: "",
@@ -541,6 +542,7 @@ export default function AnalyzeScreen() {
                   title={analysis.title}
                   score={analysis.score}
                   topic={analysis.topic}
+                  createdAt={analysis.createdAt}
                   imageUrl={analysis.imageUrl}
                   imageAttribution={analysis.imageAttribution}
                 />
