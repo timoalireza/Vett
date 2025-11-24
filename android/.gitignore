@@ -12,5 +12,11 @@ local.properties
 *.hprof
 .cxx/
 
+# Keystore files (never commit cryptographic material)
+*.keystore
+*.jks
+debug.keystore
+release.keystore
+
 # Bundle artifacts
 *.jsbundle

@@ -173,8 +173,9 @@ export default function AnalyzeScreen() {
   });
 
   const handleAnalyze = () => {
-    if (!input.trim().length) {
-      setErrorMessage("Please paste a link or description before analyzing.");
+    // Validation should match button enablement logic: require either text OR image
+    if (!input.trim().length && !selectedImage) {
+      setErrorMessage("Please paste a link, description, or select an image before analyzing.");
       return;
     }
     submitMutation.mutate();
