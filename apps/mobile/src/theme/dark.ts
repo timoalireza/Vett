@@ -4,53 +4,53 @@
  */
 export const darkPalette = {
   // Base backgrounds - deep, calm neutrals
-  background: "#0A0E1A",
-  backgroundSecondary: "#121620",
-  backgroundTertiary: "#1A1E28",
+  background: "#000000",
+  backgroundSecondary: "#050505",
+  backgroundTertiary: "#0A0A0A",
   
   // Glass surfaces - layered transparency
-  glassLight: "rgba(255, 255, 255, 0.08)",
-  glassMedium: "rgba(255, 255, 255, 0.12)",
-  glassHeavy: "rgba(255, 255, 255, 0.16)",
+  glassLight: "rgba(20, 20, 20, 0.6)",
+  glassMedium: "rgba(28, 28, 30, 0.7)",
+  glassHeavy: "rgba(30, 30, 32, 0.85)",
   
   // Text hierarchy
-  textPrimary: "rgba(255, 255, 255, 0.95)",
-  textSecondary: "rgba(255, 255, 255, 0.75)",
-  textTertiary: "rgba(255, 255, 255, 0.55)",
-  textQuaternary: "rgba(255, 255, 255, 0.35)",
+  textPrimary: "#FFFFFF",
+  textSecondary: "rgba(255, 255, 255, 0.7)",
+  textTertiary: "rgba(255, 255, 255, 0.5)",
+  textQuaternary: "rgba(255, 255, 255, 0.3)",
   
   // Desaturated gradients
   blue: {
-    light: "#6B8FD4",
-    medium: "#5A7BC4",
-    dark: "#4A6BB4"
+    light: "#53D8FF",
+    medium: "#2E9AFE",
+    dark: "#007AFF"
   },
   purple: {
-    light: "#9B8FB8",
-    medium: "#8A7FA8",
-    dark: "#7A6F98"
+    light: "#D4C4FB",
+    medium: "#9F85FF",
+    dark: "#7A5AF8"
   },
   gray: {
-    light: "#8A8D92",
-    medium: "#6A6D72",
-    dark: "#4A4D52"
+    light: "#8E8E93",
+    medium: "#636366",
+    dark: "#48484A"
   },
   
   // Accent colors - subtle, atmospheric
   accent: {
-    blue: "#5A8FD4",
-    purple: "#8A7FB8",
-    teal: "#6BA8B8"
+    blue: "#2EFAC0", // Cyan accent
+    purple: "#53D8FF", // Blue accent
+    teal: "#64D2FF"
   },
   
   // Status colors - desaturated
-  success: "#6BA88A",
-  warning: "#B8A86B",
-  error: "#B88A8A",
+  success: "#30D158",
+  warning: "#FFD60A",
+  error: "#FF453A",
   
   // Glass borders
   border: "rgba(255, 255, 255, 0.1)",
-  borderLight: "rgba(255, 255, 255, 0.06)",
+  borderLight: "rgba(255, 255, 255, 0.05)",
   borderHeavy: "rgba(255, 255, 255, 0.15)"
 };
 

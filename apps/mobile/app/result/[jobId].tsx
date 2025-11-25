@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
+import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
 
 import { useTheme } from "../../src/hooks/use-theme";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,7 +15,7 @@ import { GlassCard } from "../../src/components/GlassCard";
 import { ScoreRing } from "../../src/components/ScoreRing";
 import { ClaimItem } from "../../src/components/ClaimItem";
 import { SourceItem } from "../../src/components/SourceItem";
-import { getScoreGradient } from "../../src/utils/scoreColors";
+import { getScoreGradient, adjustConfidence } from "../../src/utils/scoreColors";
 
 const stages = ["Extracting", "Classifying", "Verifying", "Scoring"];
 
@@ -130,6 +131,10 @@ export default function ResultScreen() {
   };
 
   const scoreGradient = getScoreGradient(data.score ?? 0, data.verdict ?? null);
+  const adjustedConfidence = useMemo(() => {
+    const rawConfidence = data.confidence ?? 0;
+    return adjustConfidence(rawConfidence);
+  }, [data.confidence]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000000" }}>
@@ -216,21 +221,40 @@ export default function ResultScreen() {
 
             {/* Score Circle - Large and Centered with Glow */}
             <View style={styles.scoreSection}>
+              {/* Atmospheric glow using SVG radial gradient - smooth feathered falloff */}
+              <View style={styles.scoreGlowContainer}>
+                <Svg width={580} height={580} style={styles.scoreGlowSvg}>
+                  <Defs>
+                    <RadialGradient
+                      id="scoreGlow"
+                      cx="50%"
+                      cy="50%"
+                      rx="50%"
+                      ry="50%"
+                      fx="50%"
+                      fy="50%"
+                    >
+                      {/* Ultra-smooth falloff - larger spread, lower intensity for atmospheric effect */}
+                      <Stop offset="0%" stopColor={scoreGradient.end} stopOpacity={0.15} />
+                      <Stop offset="12%" stopColor={scoreGradient.end} stopOpacity={0.13} />
+                      <Stop offset="25%" stopColor={scoreGradient.end} stopOpacity={0.11} />
+                      <Stop offset="37%" stopColor={scoreGradient.end} stopOpacity={0.09} />
+                      <Stop offset="50%" stopColor={scoreGradient.end} stopOpacity={0.07} />
+                      <Stop offset="62%" stopColor={scoreGradient.end} stopOpacity={0.05} />
+                      <Stop offset="75%" stopColor={scoreGradient.end} stopOpacity={0.03} />
+                      <Stop offset="87%" stopColor={scoreGradient.end} stopOpacity={0.01} />
+                      <Stop offset="100%" stopColor={scoreGradient.end} stopOpacity={0} />
+                    </RadialGradient>
+                  </Defs>
+                  <Rect x="0" y="0" width="580" height="580" fill="url(#scoreGlow)" />
+                </Svg>
+              </View>
               <View style={styles.scoreRingContainer}>
                 <ScoreRing 
                   score={data.score ?? 0}
                   label="VETT SCORE" 
                   size={180}
                   verdict={data.verdict ?? null}
-                />
-                {/* Subtle glow effect behind score number */}
-                <View
-                  style={[
-                    styles.scoreNumberGlow,
-                    {
-                      shadowColor: scoreGradient.end,
-                    }
-                  ]}
                 />
               </View>
             </View>
@@ -256,14 +280,14 @@ export default function ResultScreen() {
                       style={[
                         styles.confidenceBarFill,
                         {
-                          width: `${Math.min(100, Math.max(0, (data.confidence ?? 0) * 100))}%`,
+                          width: `${Math.min(100, Math.max(0, adjustedConfidence * 100))}%`,
                           backgroundColor: scoreGradient.end,
                         }
                       ]}
                     />
                   </View>
                   <Text style={styles.confidenceValue}>
-                    {((data.confidence ?? 0) * 100).toFixed(0)}%
+                    {(adjustedConfidence * 100).toFixed(0)}%
                   </Text>
                 </View>
               </View>
@@ -291,7 +315,7 @@ export default function ResultScreen() {
               </View>
             )}
 
-            {/* Correct Information Card */}
+            {/* Contextual Information Card */}
             {data.recommendation ? (
               <View style={styles.card}>
                 <BlurView intensity={30} tint="dark" style={styles.cardBlur}>
@@ -303,7 +327,7 @@ export default function ResultScreen() {
                   />
                   <View style={styles.cardContent}>
                     <Text style={styles.cardLabel}>
-                      CORRECT INFORMATION
+                      CONTEXTUAL INFORMATION
                     </Text>
                     <Text style={styles.cardText}>
                       {data.recommendation}
@@ -544,29 +568,26 @@ const styles = StyleSheet.create({
   scoreSection: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 32
+    paddingVertical: 32,
+    position: "relative"
+  },
+  scoreGlowContainer: {
+    position: "absolute",
+    width: 580,
+    height: 580,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  scoreGlowSvg: {
+    position: "absolute"
   },
   scoreRingContainer: {
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
     width: 180,
-    height: 180
-  },
-  scoreNumberGlow: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    marginTop: -50,
-    marginLeft: -50,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "transparent",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 50,
-    elevation: 0
+    height: 180,
+    zIndex: 1
   },
   verdictConfidenceRow: {
     flexDirection: "row",

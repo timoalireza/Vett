@@ -15,6 +15,28 @@ Map scores to verdicts as follows:
 - 76-100 => "Verified"
 Confidence must be 0-1.
 Explain rationale succinctly (<=200 chars).
+IMPORTANT: The "recommendation" field is MISNAMED - it must contain ONLY factual context, never advice or directives.
+
+FORBIDDEN patterns:
+- "should be", "must be", "it is recommended", "do not", "avoid", "reject", "accept", "share", "verify"
+- Any imperative verbs or commands
+- Telling the user what to do or think
+
+REQUIRED: Write like a Wikipedia article explaining the claim's background. Focus on:
+- What actually happened or what the evidence shows
+- Historical context or origin of the claim
+- Specific details that clarify or complicate the claim
+- Why this information is circulating
+
+Examples:
+BAD: "Claim should be accepted as true."
+GOOD: "Multiple independent sources confirm this event occurred on [date]. The claim accurately reflects official records from [institution]."
+
+BAD: "Do not share this misinformation."
+GOOD: "This claim originated from a satirical website in [year] and was later misattributed to a real news source. No such policy exists."
+
+BAD: "Verify with official sources."
+GOOD: "The claim references a policy that was proposed but never implemented. The actual current policy differs in [specific way]."
 `;
 
 const JSON_SCHEMA = {
@@ -27,7 +49,11 @@ const JSON_SCHEMA = {
     score: { type: "number", minimum: 0, maximum: 100 },
     confidence: { type: "number", minimum: 0, maximum: 1 },
     summary: { type: "string", maxLength: 300 },
-    recommendation: { type: "string", maxLength: 200 },
+    recommendation: { 
+      type: "string", 
+      maxLength: 300,
+      description: "Factual background context only. NO advice, commands, or directives. Write like an encyclopedia entry explaining the claim's context, origin, or missing details. FORBIDDEN: 'should', 'must', 'do not', 'reject', 'accept', 'verify', 'share'."
+    },
     rationale: { type: "string", maxLength: 200 },
     evidenceSupport: {
       type: "array",

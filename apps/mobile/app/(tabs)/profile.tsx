@@ -134,71 +134,6 @@ export default function ProfileScreen() {
             </View>
           </GlassCard>
 
-          {/* Stats Cards */}
-          <View style={[styles.statsContainer, { marginBottom: theme.spacing(1) }]}>
-            {[
-              { label: "Analyses", value: "8", icon: "document-text-outline", gradient: ["#5A8FD4", "#6BA8B8"] },
-              { label: "Accuracy", value: "92%", icon: "checkmark-circle-outline", gradient: ["#6BA88A", "#6BA8B8"] },
-              { label: "Sources", value: "34", icon: "library-outline", gradient: ["#8A7FA8", "#5A8FD4"] }
-            ].map((stat, index) => (
-              <GlassCard
-                key={stat.label}
-                radius="md"
-                intensity="light"
-                style={styles.statCard}
-                gradientAccent={{
-                  colors: stat.gradient,
-                  start: { x: 0, y: 0 },
-                  end: { x: 1, y: 0 }
-                }}
-              >
-                <View style={[styles.statContent, { padding: theme.spacing(2.5) }]}>
-                  <View
-                    style={[
-                      styles.statIcon,
-                      {
-                        backgroundColor: stat.gradient[0] + "20",
-                        borderRadius: theme.radii.sm,
-                        width: 40,
-                        height: 40,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: theme.spacing(1.5)
-                      }
-                    ]}
-                  >
-                    <Ionicons name={stat.icon as keyof typeof Ionicons.glyphMap} size={20} color={stat.gradient[0]} />
-                  </View>
-                  <Text
-                    style={[
-                      styles.statValue,
-                      {
-                        color: theme.colors.text,
-                        fontSize: theme.typography.subheading,
-                        marginTop: theme.spacing(0.5),
-                        lineHeight: theme.typography.subheading * theme.typography.lineHeight.tight
-                      }
-                    ]}
-                  >
-                    {stat.value}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.statLabel,
-                      {
-                        color: theme.colors.textSecondary,
-                        fontSize: theme.typography.caption,
-                        marginTop: theme.spacing(0.5)
-                      }
-                    ]}
-                  >
-                    {stat.label}
-                  </Text>
-                </View>
-              </GlassCard>
-            ))}
-          </View>
-
           {/* Settings Sections */}
           {settingsSections.map((section, sectionIndex) => (
             <View key={section.title} style={styles.section}>
@@ -346,30 +281,6 @@ const styles = StyleSheet.create({
   },
   profileEmail: {
     letterSpacing: 0.1
-  },
-  statsContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 4
-  },
-  statCard: {
-    flex: 1,
-    overflow: "hidden"
-  },
-  statContent: {
-    alignItems: "center",
-    padding: 16
-  },
-  statIcon: {
-    // Styled inline
-  },
-  statValue: {
-    fontWeight: "600",
-    letterSpacing: -0.3
-  },
-  statLabel: {
-    letterSpacing: 0.2,
-    textAlign: "center"
   },
   section: {
     // Container for section

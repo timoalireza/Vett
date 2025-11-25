@@ -143,9 +143,10 @@ export default function AnalyzeScreen() {
         }
         return {
           id: node.id,
-          title: node.summary || "Analysis",
+          title: node.claims?.[0]?.text || node.summary || "Analysis",
           topic: topic,
           score: node.score ?? 0,
+          verdict: node.verdict ?? null,
           createdAt: node.createdAt
         };
       });
@@ -569,6 +570,7 @@ export default function AnalyzeScreen() {
                   id={analysis.id}
                   title={analysis.title}
                   score={analysis.score}
+                  verdict={analysis.verdict}
                   topic={analysis.topic}
                   createdAt={analysis.createdAt}
                   onResubmit={handleResubmit}

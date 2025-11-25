@@ -108,6 +108,7 @@ export interface AnalysisSummary {
   createdAt: string;
   summary?: string | null;
   recommendation?: string | null;
+  claims?: Array<{ text: string }>;
 }
 
 export interface AnalysesConnection {
@@ -139,6 +140,9 @@ const ANALYSES_QUERY = `
           createdAt
           summary
           recommendation
+          claims {
+            text
+          }
         }
         cursor
       }

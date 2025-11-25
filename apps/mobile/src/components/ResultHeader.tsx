@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { ScoreRing } from "./ScoreRing";
 import { useTheme } from "../hooks/use-theme";
-import { getScoreGradient } from "../utils/scoreColors";
+import { getScoreGradient, adjustConfidence } from "../utils/scoreColors";
 
 interface ResultHeaderProps {
   platform: string;
@@ -20,6 +20,7 @@ interface ResultHeaderProps {
 export function ResultHeader({ platform, verdict, confidence, score, imageUrl, onShare }: ResultHeaderProps) {
   const theme = useTheme();
   const gradient = getScoreGradient(score, verdict);
+  const adjustedConfidence = adjustConfidence(confidence);
 
   return (
     <MotiView
@@ -163,7 +164,7 @@ export function ResultHeader({ platform, verdict, confidence, score, imageUrl, o
               >
                 <View
                   style={{
-                    width: `${Math.min(100, Math.max(0, confidence * 100))}%`,
+                    width: `${Math.min(100, Math.max(0, adjustedConfidence * 100))}%`,
                     height: "100%",
                     borderRadius: theme.radii.pill,
                     backgroundColor: gradient.end
@@ -182,7 +183,7 @@ export function ResultHeader({ platform, verdict, confidence, score, imageUrl, o
                   }
                 ]}
               >
-                {(confidence * 100).toFixed(0)}%
+                {(adjustedConfidence * 100).toFixed(0)}%
               </Text>
             </View>
           </View>

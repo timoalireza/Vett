@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Text, View, StyleSheet, TouchableOpacity, Modal, Alert, Share, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop, RadialGradient, Rect } from "react-native-svg";
 
 import { useTheme } from "../hooks/use-theme";
 import { getScoreGradient } from "../utils/scoreColors";
@@ -11,6 +12,7 @@ interface AnalysisCardVerticalProps {
   id: string;
   title: string;
   score: number;
+  verdict?: string | null;
   topic?: string;
   createdAt?: string;
   onPress?: () => void;
@@ -21,13 +23,13 @@ interface AnalysisCardVerticalProps {
 
 /**
  * Vertical rectangular card for analysis display
- * Background image visible at top, blur effect on bottom portion
- * Bottom section: Title/Topic/Date on left, Score circle on right
+ * Redesigned to match reference: Dark background, horizontal layout, large score ring
  */
 export function AnalysisCardVertical({
   id,
   title,
   score,
+  verdict,
   topic,
   createdAt,
   onPress,
@@ -37,7 +39,7 @@ export function AnalysisCardVertical({
 }: AnalysisCardVerticalProps) {
   const theme = useTheme();
   const router = useRouter();
-  const scoreGradient = getScoreGradient(score);
+  const scoreGradient = getScoreGradient(score, verdict ?? null);
   const [menuVisible, setMenuVisible] = useState(false);
 
   const handlePress = () => {
@@ -48,18 +50,15 @@ export function AnalysisCardVertical({
     }
   };
 
-
   // Format date for display
   const formatDate = (dateString?: string) => {
     if (!dateString) return "";
     try {
       const date = new Date(dateString);
-      // Check if date is valid - Invalid Date objects return NaN for getTime()
       if (isNaN(date.getTime())) return "";
       
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
-      // Additional check: if diffMs is NaN, return empty string
       if (isNaN(diffMs)) return "";
       
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -68,7 +67,6 @@ export function AnalysisCardVertical({
       if (diffDays === 1) return "Yesterday";
       if (diffDays < 7) return `${diffDays} days ago`;
       
-      // Fix Bug 1: Use singular/plural forms correctly
       const weeks = Math.floor(diffDays / 7);
       if (diffDays < 30) return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`;
       
@@ -83,10 +81,8 @@ export function AnalysisCardVertical({
   };
 
   // Truncate title if too long
-  const MAX_TITLE_LENGTH = 60;
-  const displayTitle = title.length > MAX_TITLE_LENGTH 
-    ? title.substring(0, MAX_TITLE_LENGTH).trim() + "..." 
-    : title;
+  const MAX_TITLE_LENGTH = 80; // Increased length since we're using numberOfLines
+  const displayTitle = title; // Let Text component handle truncation visually via numberOfLines
 
   const handleMenuPress = (e: any) => {
     e.stopPropagation();
@@ -98,7 +94,6 @@ export function AnalysisCardVertical({
     if (onResubmit) {
       onResubmit(id, title);
     } else {
-      // Default: navigate to analyze screen
       router.push("/(tabs)/analyze?openSheet=true");
     }
   };
@@ -128,7 +123,6 @@ export function AnalysisCardVertical({
     if (onShare) {
       onShare(id, title, score);
     } else {
-      // Default: use React Native Share API
       try {
         const shareUrl = `https://vett.app/result/${id}`;
         const message = `Vett Score: ${score}\n${title}\n\nView full analysis: ${shareUrl}`;
@@ -154,113 +148,141 @@ export function AnalysisCardVertical({
         style={[
           styles.card,
           {
-            borderRadius: theme.radii.lg,
-            overflow: "hidden",
-            backgroundColor: theme.colors.card
+            backgroundColor: "#1C1C1E", // Dark charcoal from reference
+            borderRadius: 20,
+            borderColor: "rgba(255, 255, 255, 0.05)",
+            borderWidth: 1
           }
         ]}
       >
-        {/* Menu Icon - Top Right */}
-        <TouchableOpacity
-          onPress={handleMenuPress}
-          style={styles.menuButton}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.menuButtonBackground,
-              {
-                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                borderRadius: theme.radii.pill
-              }
-            ]}
-          >
-            <Ionicons name="ellipsis-horizontal" size={20} color="#FFFFFF" />
-        </View>
-        </TouchableOpacity>
-
-        {/* Content section */}
-        <View style={styles.bottomSection}>
-          {/* Left side: Title, Topic, Date */}
+        <View style={styles.contentRow}>
+          {/* Left Content */}
           <View style={styles.leftContent}>
             <Text
               style={[
                 styles.title,
                 {
-                  color: theme.colors.text,
-                  fontSize: 18,
-                  fontWeight: "600",
-                  letterSpacing: -0.3,
-                  lineHeight: 24,
+                  color: "#FFFFFF",
+                  fontSize: 17,
+                  fontFamily: "Inter_600SemiBold",
+                  lineHeight: 22,
                   marginBottom: 8
                 }
               ]}
-              numberOfLines={2}
+              numberOfLines={3}
             >
               {displayTitle}
             </Text>
-            {topic && (
-              <Text
-                style={[
-                  styles.topicText,
-                  {
-                    color: theme.colors.textSecondary,
-                    fontSize: 12,
-                    letterSpacing: 0.5,
-                    marginBottom: 4,
-                    textTransform: "uppercase",
-                    fontWeight: "500"
-                  }
-                ]}
-                numberOfLines={1}
-              >
-                {topic}
-              </Text>
-            )}
-            {createdAt && (
-              <Text
-                style={[
-                  styles.dateText,
-                  {
-                    color: theme.colors.textTertiary,
-                    fontSize: 11,
-                    letterSpacing: 0.3
-                  }
-                ]}
-              >
-                {formatDate(createdAt)}
-              </Text>
-            )}
+            
+            <View style={styles.metadataContainer}>
+              {topic && (
+                <Text
+                  style={[
+                    styles.topicText,
+                    {
+                      color: "rgba(255, 255, 255, 0.5)",
+                      fontSize: 11,
+                      fontFamily: "Inter_600SemiBold",
+                      letterSpacing: 0.5,
+                      textTransform: "uppercase"
+                    }
+                  ]}
+                >
+                  {topic}
+                </Text>
+              )}
+              {createdAt && (
+                <Text
+                  style={[
+                    styles.dateText,
+                    {
+                      color: "rgba(255, 255, 255, 0.5)",
+                      fontSize: 11,
+                      fontFamily: "Inter_400Regular"
+                    }
+                  ]}
+                >
+                  {formatDate(createdAt)}
+                </Text>
+              )}
+            </View>
           </View>
 
-          {/* Right side: Score circle (open at top) */}
-          <View style={styles.scoreContainer}>
-            <View
-              style={[
-                styles.scoreCircle,
-                {
-                  width: 80,
-                  height: 80,
-                  borderWidth: 4,
-                  borderColor: scoreGradient.end,
-                  borderTopWidth: 0, // Open at top
-                  borderRadius: 40,
-                  backgroundColor: "rgba(0, 0, 0, 0.4)",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }
-              ]}
+          {/* Right Content - Score Ring */}
+          <View style={styles.rightContent}>
+            {/* Menu Button - Positioned top right of the card, not overlapping ring */}
+            <TouchableOpacity
+              onPress={handleMenuPress}
+              style={styles.menuButton}
+              activeOpacity={0.6}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
+              <Ionicons name="ellipsis-horizontal" size={20} color="rgba(255, 255, 255, 0.6)" />
+            </TouchableOpacity>
+
+            <View style={{ position: "relative", width: 72, height: 72, alignItems: "center", justifyContent: "center", marginTop: 24 }}>
+              {/* Atmospheric Glow - scaled down version of result page effect */}
+              <View style={{ position: "absolute", width: 200, height: 200, top: "50%", left: "50%", marginTop: -100, marginLeft: -100 }}>
+                <Svg width={200} height={200} style={{ position: "absolute" }}>
+                  <Defs>
+                    <RadialGradient
+                      id={`glow-${id}`}
+                      cx="50%"
+                      cy="50%"
+                      rx="50%"
+                      ry="50%"
+                      fx="50%"
+                      fy="50%"
+                    >
+                      <Stop offset="0%" stopColor={scoreGradient.end} stopOpacity={0.12} />
+                      <Stop offset="25%" stopColor={scoreGradient.end} stopOpacity={0.08} />
+                      <Stop offset="50%" stopColor={scoreGradient.end} stopOpacity={0.04} />
+                      <Stop offset="75%" stopColor={scoreGradient.end} stopOpacity={0.01} />
+                      <Stop offset="100%" stopColor={scoreGradient.end} stopOpacity={0} />
+                    </RadialGradient>
+                  </Defs>
+                  <Rect x="0" y="0" width="200" height="200" fill={`url(#glow-${id})`} />
+                </Svg>
+              </View>
+              
+              <Svg width={72} height={72}>
+                <Defs>
+                  <SvgLinearGradient id={`grad-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                    <Stop offset="0%" stopColor={scoreGradient.start} />
+                    <Stop offset="100%" stopColor={scoreGradient.end} />
+                  </SvgLinearGradient>
+                </Defs>
+                {/* Background Circle - Matches Result Page style */}
+                <Circle
+                  cx={36}
+                  cy={36}
+                  r={32}
+                  stroke="rgba(255, 255, 255, 0.08)"
+                  strokeWidth={8}
+                  fill="transparent"
+                />
+                {/* Progress Circle */}
+                <Circle
+                  cx={36}
+                  cy={36}
+                  r={32}
+                  stroke={`url(#grad-${id})`}
+                  strokeWidth={8}
+                  fill="transparent"
+                  strokeDasharray={`${2 * Math.PI * 32}`}
+                  strokeDashoffset={2 * Math.PI * 32 * (1 - score / 100)}
+                  strokeLinecap="round"
+                  transform={`rotate(-90 36 36)`}
+                />
+              </Svg>
               <Text
-                style={[
-                  styles.scoreValue,
-                  {
-                    color: scoreGradient.end,
-                    fontSize: 32,
-                    fontWeight: "700",
-                    letterSpacing: -1
-                  }
-                ]}
+                style={{
+                  position: "absolute",
+                  color: "#FFFFFF",
+                  fontSize: 20,
+                  fontFamily: "Inter_700Bold",
+                  letterSpacing: -0.5
+                }}
               >
                 {score}
               </Text>
@@ -293,29 +315,12 @@ export function AnalysisCardVertical({
                 activeOpacity={0.7}
               >
                 <Ionicons name="refresh-outline" size={20} color={theme.colors.text} />
-                <Text
-                  style={[
-                    styles.menuItemText,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.body
-                    }
-                  ]}
-                >
+                <Text style={[styles.menuItemText, { color: theme.colors.text }]}>
                   Resubmit
                 </Text>
               </TouchableOpacity>
 
-              <View
-                style={[
-                  styles.menuDivider,
-                  {
-                    backgroundColor: theme.colors.border,
-                    height: 1,
-                    marginVertical: theme.spacing(1)
-                  }
-                ]}
-              />
+              <View style={[styles.menuDivider, { backgroundColor: theme.colors.border }]} />
 
               <TouchableOpacity
                 onPress={handleShare}
@@ -323,29 +328,12 @@ export function AnalysisCardVertical({
                 activeOpacity={0.7}
               >
                 <Ionicons name="share-outline" size={20} color={theme.colors.text} />
-                <Text
-                  style={[
-                    styles.menuItemText,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.body
-                    }
-                  ]}
-                >
+                <Text style={[styles.menuItemText, { color: theme.colors.text }]}>
                   Share
                 </Text>
               </TouchableOpacity>
 
-              <View
-                style={[
-                  styles.menuDivider,
-                  {
-                    backgroundColor: theme.colors.border,
-                    height: 1,
-                    marginVertical: theme.spacing(1)
-                  }
-                ]}
-              />
+              <View style={[styles.menuDivider, { backgroundColor: theme.colors.border }]} />
 
               <TouchableOpacity
                 onPress={handleDelete}
@@ -353,15 +341,7 @@ export function AnalysisCardVertical({
                 activeOpacity={0.7}
               >
                 <Ionicons name="trash-outline" size={20} color={theme.colors.danger} />
-                <Text
-                  style={[
-                    styles.menuItemText,
-                    {
-                      color: theme.colors.danger,
-                      fontSize: theme.typography.body
-                    }
-                  ]}
-                >
+                <Text style={[styles.menuItemText, { color: theme.colors.danger }]}>
                   Delete
                 </Text>
               </TouchableOpacity>
@@ -376,28 +356,38 @@ export function AnalysisCardVertical({
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    marginBottom: 16
+    marginBottom: 12
   },
   card: {
     width: "100%",
-    height: 260, // Rectangular aspect ratio - taller than wide
-    position: "relative"
-  },
-  bottomSection: {
-    flexDirection: "row",
+    minHeight: 120,
     padding: 20,
-    paddingTop: 24,
+    position: "relative",
+    overflow: "visible"
+  },
+  contentRow: {
+    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    minHeight: 120
+    alignItems: "flex-start"
   },
   leftContent: {
     flex: 1,
     marginRight: 16,
-    justifyContent: "flex-start"
+    justifyContent: "center",
+    paddingVertical: 4
+  },
+  rightContent: {
+    alignItems: "flex-end", // Align to right
+    justifyContent: "flex-start",
+    position: "relative",
+    minWidth: 80
   },
   title: {
-    lineHeight: 22
+    // Styled inline
+  },
+  metadataContainer: {
+    flexDirection: "column",
+    gap: 4
   },
   topicText: {
     // Styled inline
@@ -405,39 +395,25 @@ const styles = StyleSheet.create({
   dateText: {
     // Styled inline
   },
-  scoreContainer: {
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  scoreCircle: {
-    // Styled inline
-  },
-  scoreValue: {
-    lineHeight: 38
-  },
   menuButton: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    zIndex: 10
-  },
-  menuButtonBackground: {
+    top: -12, // Adjusted to be at the very top right of the card container context
+    right: -12,
     padding: 8,
-    alignItems: "center",
-    justifyContent: "center"
+    zIndex: 10
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center"
   },
   menuContainer: {
-    width: "80%",
-    maxWidth: 300
+    width: 250
   },
   menuCard: {
-    padding: 8
+    padding: 8,
+    backgroundColor: "#2C2C2E"
   },
   menuItem: {
     flexDirection: "row",
@@ -447,11 +423,13 @@ const styles = StyleSheet.create({
     borderRadius: 8
   },
   menuItemText: {
-    fontWeight: "500",
-    letterSpacing: 0.1
+    fontSize: 16,
+    fontWeight: "500"
   },
   menuDivider: {
-    // Styled inline
+    height: 1,
+    marginHorizontal: 16,
+    opacity: 0.1
   }
 });
 
