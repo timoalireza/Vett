@@ -5,6 +5,9 @@ PODS:
     - ExpoModulesCore
   - EXConstants (16.0.2):
     - ExpoModulesCore
+  - EXImageLoader (4.7.0):
+    - ExpoModulesCore
+    - React-Core
   - Expo (51.0.39):
     - ExpoModulesCore
   - ExpoAsset (10.0.10):
@@ -20,6 +23,8 @@ PODS:
   - ExpoHaptics (13.0.1):
     - ExpoModulesCore
   - ExpoHead (3.5.24):
+    - ExpoModulesCore
+  - ExpoImagePicker (15.1.0):
     - ExpoModulesCore
   - ExpoKeepAwake (13.0.2):
     - ExpoModulesCore
@@ -1402,6 +1407,7 @@ DEPENDENCIES:
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
   - "EXApplication (from `../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_la45dcnx66ri5zt3al6i6dt2k4/node_modules/expo-application/ios`)"
   - "EXConstants (from `../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._2jychxn4k2ccyjqq6n7kbbl3su/node_modules/expo-constants/ios`)"
+  - "EXImageLoader (from `../../../node_modules/.pnpm/expo-image-loader@4.7.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_emra54r7qifkn64cohup4vewti/node_modules/expo-image-loader/ios`)"
   - "Expo (from `../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__react-native@0.7_4sqmg62d3cixomcpejaycasmxy/node_modules/expo`)"
   - "ExpoAsset (from `../../../node_modules/.pnpm/expo-asset@10.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._neshkv55xdscizaxot3o4ifhzi/node_modules/expo-asset/ios`)"
   - "ExpoBlur (from `../../../node_modules/.pnpm/expo-blur@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__gvsav7gyzug4y5qz4gyrxofbke/node_modules/expo-blur/ios`)"
@@ -1410,6 +1416,7 @@ DEPENDENCIES:
   - "ExpoFont (from `../../../node_modules/.pnpm/expo-font@12.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5_d6hcoyja6a5pu4gkidx5kvmdze/node_modules/expo-font/ios`)"
   - "ExpoHaptics (from `../../../node_modules/.pnpm/expo-haptics@13.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28_2myntcvgiauzij6wo2awbqwqra/node_modules/expo-haptics/ios`)"
   - "ExpoHead (from `../../../node_modules/.pnpm/expo-router@3.5.24_j4346sxdzyb7ymjdaxrwkfvp74/node_modules/expo-router/ios`)"
+  - "ExpoImagePicker (from `../../../node_modules/.pnpm/expo-image-picker@15.1.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_hmpu5sedjzccjerkv4fyglhvua/node_modules/expo-image-picker/ios`)"
   - "ExpoKeepAwake (from `../../../node_modules/.pnpm/expo-keep-awake@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_jifd5ahkbafiikg2v6a6xhucsa/node_modules/expo-keep-awake/ios`)"
   - "ExpoLinearGradient (from `../../../node_modules/.pnpm/expo-linear-gradient@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+c_bpbz4aor353mxplwfwbl5sd6le/node_modules/expo-linear-gradient/ios`)"
   - "ExpoLocalAuthentication (from `../../../node_modules/.pnpm/expo-local-authentication@13.8.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@ba_s5syomy2avlmfuo2boahcxewz4/node_modules/expo-local-authentication/ios`)"
@@ -1504,6 +1511,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_la45dcnx66ri5zt3al6i6dt2k4/node_modules/expo-application/ios"
   EXConstants:
     :path: "../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._2jychxn4k2ccyjqq6n7kbbl3su/node_modules/expo-constants/ios"
+  EXImageLoader:
+    :path: "../../../node_modules/.pnpm/expo-image-loader@4.7.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_emra54r7qifkn64cohup4vewti/node_modules/expo-image-loader/ios"
   Expo:
     :path: "../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__react-native@0.7_4sqmg62d3cixomcpejaycasmxy/node_modules/expo"
   ExpoAsset:
@@ -1520,6 +1529,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/expo-haptics@13.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28_2myntcvgiauzij6wo2awbqwqra/node_modules/expo-haptics/ios"
   ExpoHead:
     :path: "../../../node_modules/.pnpm/expo-router@3.5.24_j4346sxdzyb7ymjdaxrwkfvp74/node_modules/expo-router/ios"
+  ExpoImagePicker:
+    :path: "../../../node_modules/.pnpm/expo-image-picker@15.1.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_hmpu5sedjzccjerkv4fyglhvua/node_modules/expo-image-picker/ios"
   ExpoKeepAwake:
     :path: "../../../node_modules/.pnpm/expo-keep-awake@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_jifd5ahkbafiikg2v6a6xhucsa/node_modules/expo-keep-awake/ios"
   ExpoLinearGradient:
@@ -1673,6 +1684,7 @@ SPEC CHECKSUMS:
   DoubleConversion: 76ab83afb40bddeeee456813d9c04f67f78771b5
   EXApplication: d62cd534090692cbf538ea15f69f829b517a40b1
   EXConstants: 89d35611505a8ce02550e64e43cd05565da35f9a
+  EXImageLoader: 1fe96c70cdc78bedc985ec4b1fab5dd8e67dc38b
   Expo: ed0a748eb6be0efd2c3df7f6de3f3158a14464c9
   ExpoAsset: 286fee7ba711ce66bf20b315e68106b13b8629fc
   ExpoBlur: 99901a4531f5d3ac4a19b362907b8f75da4ed9c8
@@ -1681,6 +1693,7 @@ SPEC CHECKSUMS:
   ExpoFont: 38dddf823e32740c2a9f37c926a33aeca736b5c4
   ExpoHaptics: 9f47be324f691b6291c17c216189ab832d1a4d69
   ExpoHead: 1a1b30c6c1d125e9b8a199ca305c16a1dc041624
+  ExpoImagePicker: 7038c1740853c170002c491de63f9f9780c8139b
   ExpoKeepAwake: dd02e65d49f1cfd9194640028ae2857e536eb1c9
   ExpoLinearGradient: 4c44b3803b441724874b232e6520b51ca6a50db1
   ExpoLocalAuthentication: 5967317248e27c53f77c61ff5608d74329b4c41d
