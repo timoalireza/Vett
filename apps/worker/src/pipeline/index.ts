@@ -280,14 +280,17 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     // If image claims have no supporting evidence or very few sources, this suggests misidentification
     const unsupportedImageClaims = imageClaimSupport.filter((es) => es.supportingSources.length === 0);
     if (unsupportedImageClaims.length > 0) {
+      // Store original score before modification for accurate logging
+      const originalScore = reasoned.score;
+      
       // Reduce score and confidence for unsupported image identifications
       reasoned.score = Math.max(0, reasoned.score - 30);
       reasoned.confidence = Math.max(0.3, reasoned.confidence - 0.2);
-      reasoned.verdict = reasoned.score < 50 ? "False" : reasoned.score < 75 ? "Partially True" : "Mostly Accurate";
+      reasoned.verdict = verdictFromScore(reasoned.score);
       
       // eslint-disable-next-line no-console
       console.warn(
-        `[pipeline] Image-derived claims lack supporting evidence. Reduced score from ${reasoned.score + 30} to ${reasoned.score}.`,
+        `[pipeline] Image-derived claims lack supporting evidence. Reduced score from ${originalScore} to ${reasoned.score}.`,
         { analysisId: payload.analysisId, unsupportedClaims: unsupportedImageClaims.length }
       );
     }
