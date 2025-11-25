@@ -37,7 +37,7 @@ export async function describeImageAttachment(attachment: AnalysisAttachmentInpu
         {
           role: "system",
           content:
-            "You are a fact-checking assistant. Provide a concise English description of the image, call out notable people, text, symbols or documents, and list two factual observations that could assist verification. Limit the response to 3 sentences."
+            "You are a precise image analysis assistant for fact-checking. Describe ONLY what you can actually see in the image. Do NOT infer, assume, or guess details that are not clearly visible. Be specific and accurate. If you cannot identify something with certainty, say so explicitly. Never make up names, locations, or facts."
         },
         {
           role: "user",
@@ -45,7 +45,7 @@ export async function describeImageAttachment(attachment: AnalysisAttachmentInpu
             {
               type: "input_text",
               text:
-                "Describe the key visual details that would help a fact-checker assess the claim context. Mention any visible text verbatim if possible."
+                "Describe ONLY what is visible in this image. Include: (1) What objects, people, or scenes are clearly visible (2) Any text that appears verbatim (3) Visual characteristics like colors, shapes, settings. DO NOT identify specific locations, landmarks, or people unless they are clearly labeled or unmistakably recognizable. If uncertain about an identification, state 'appears to be' or 'possibly' rather than stating it as fact. Limit to 3 sentences."
             },
             {
               type: "input_image",

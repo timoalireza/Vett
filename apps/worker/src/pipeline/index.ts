@@ -254,7 +254,45 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   const claims = attachSourcesToClaims(processedClaims, rankedSources, claimEvidenceMap);
 
+  // Validate image-derived claims against evidence
+  const imageDerivedClaims = claims.filter((claim) => {
+    const claimText = claim.text.toLowerCase();
+    // Check if claim contains image-related keywords or was likely derived from image description
+    return (
+      (ingestion.metadata?.processedImages ?? 0) > 0 &&
+      (claimText.includes("shown") ||
+        claimText.includes("image") ||
+        claimText.includes("photo") ||
+        claimText.includes("picture") ||
+        claimText.includes("depicts") ||
+        claimText.includes("appears to be"))
+    );
+  });
+
+  // If we have image-derived claims, add extra validation context to reasoning
   const reasoned = await reasonVerdict(claims, rankedSources);
+  
+  // Post-process: If image-derived claims have low evidence match, reduce confidence
+  if (reasoned && imageDerivedClaims.length > 0) {
+    const imageClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
+    const imageClaimSupport = reasoned.evidenceSupport.filter((es) => imageClaimIds.has(es.claimId));
+    
+    // If image claims have no supporting evidence or very few sources, this suggests misidentification
+    const unsupportedImageClaims = imageClaimSupport.filter((es) => es.supportingSources.length === 0);
+    if (unsupportedImageClaims.length > 0) {
+      // Reduce score and confidence for unsupported image identifications
+      reasoned.score = Math.max(0, reasoned.score - 30);
+      reasoned.confidence = Math.max(0.3, reasoned.confidence - 0.2);
+      reasoned.verdict = reasoned.score < 50 ? "False" : reasoned.score < 75 ? "Partially True" : "Mostly Accurate";
+      
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[pipeline] Image-derived claims lack supporting evidence. Reduced score from ${reasoned.score + 30} to ${reasoned.score}.`,
+        { analysisId: payload.analysisId, unsupportedClaims: unsupportedImageClaims.length }
+      );
+    }
+  }
+  
   const explanationSteps = reasoned
     ? buildExplanationStepsFromReasoner(claims, reasoned)
     : buildExplanationSteps(claims);
