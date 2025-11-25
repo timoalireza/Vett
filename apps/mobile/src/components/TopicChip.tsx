@@ -26,7 +26,7 @@ export function TopicChip({ label, active = false, onPress }: TopicChipProps) {
       <Text
         style={{
           color: active ? theme.colors.background : theme.colors.subtitle,
-          fontFamily: "SpaceGrotesk_500Medium"
+          fontFamily: "Inter_500Medium"
         }}
       >
         {label}

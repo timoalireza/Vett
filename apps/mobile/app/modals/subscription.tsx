@@ -131,7 +131,7 @@ export default function SubscriptionModal() {
                   {
                     color: theme.colors.text,
                     fontSize: theme.typography.heading + 4,
-                    fontFamily: "SpaceGrotesk_600SemiBold",
+                    fontFamily: "Inter_600SemiBold",
                     textAlign: "center",
                     marginBottom: theme.spacing(1)
                   }
@@ -153,7 +153,7 @@ export default function SubscriptionModal() {
                   <Text
                     style={{
                       fontSize: theme.typography.heading + 4,
-                      fontFamily: "SpaceGrotesk_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       color: "#FFFFFF",
                       textAlign: "center"
                     }}
@@ -191,7 +191,7 @@ export default function SubscriptionModal() {
                   style={{
                     color: activeTab === "PLUS" ? "#FFFFFF" : theme.colors.text,
                     fontSize: theme.typography.body,
-                    fontFamily: activeTab === "PLUS" ? "SpaceGrotesk_600SemiBold" : "SpaceGrotesk_400Regular"
+                    fontFamily: activeTab === "PLUS" ? "Inter_600SemiBold" : "Inter_400Regular"
                   }}
                 >
                   Vett Plus
@@ -212,7 +212,7 @@ export default function SubscriptionModal() {
                   style={{
                     color: activeTab === "PRO" ? "#FFFFFF" : theme.colors.text,
                     fontSize: theme.typography.body,
-                    fontFamily: activeTab === "PRO" ? "SpaceGrotesk_600SemiBold" : "SpaceGrotesk_400Regular"
+                    fontFamily: activeTab === "PRO" ? "Inter_600SemiBold" : "Inter_400Regular"
                   }}
                 >
                   Vett Pro
@@ -233,7 +233,7 @@ export default function SubscriptionModal() {
                       style={{
                         color: "#FFFFFF",
                         fontSize: 10,
-                        fontFamily: "SpaceGrotesk_600SemiBold"
+                        fontFamily: "Inter_600SemiBold"
                       }}
                     >
                       POPULAR
@@ -257,7 +257,7 @@ export default function SubscriptionModal() {
                     {
                       color: theme.colors.text,
                       fontSize: theme.typography.body,
-                      fontFamily: "SpaceGrotesk_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       flex: 2.5
                     }
                   ]}
@@ -270,7 +270,7 @@ export default function SubscriptionModal() {
                     {
                       color: theme.colors.text,
                       fontSize: theme.typography.caption,
-                      fontFamily: "SpaceGrotesk_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       textAlign: "center",
                       flex: 1
                     }
@@ -284,7 +284,7 @@ export default function SubscriptionModal() {
                     {
                       color: theme.colors.text,
                       fontSize: theme.typography.caption,
-                      fontFamily: "SpaceGrotesk_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       textAlign: "center",
                       flex: 1
                     }
@@ -423,7 +423,7 @@ export default function SubscriptionModal() {
                   style={{
                     color: billingCycle === "monthly" ? "#FFFFFF" : theme.colors.text,
                     fontSize: theme.typography.body,
-                    fontFamily: billingCycle === "monthly" ? "SpaceGrotesk_600SemiBold" : "SpaceGrotesk_400Regular"
+                    fontFamily: billingCycle === "monthly" ? "Inter_600SemiBold" : "Inter_400Regular"
                   }}
                 >
                   Monthly
@@ -444,7 +444,7 @@ export default function SubscriptionModal() {
                   style={{
                     color: billingCycle === "annual" ? "#FFFFFF" : theme.colors.text,
                     fontSize: theme.typography.body,
-                    fontFamily: billingCycle === "annual" ? "SpaceGrotesk_600SemiBold" : "SpaceGrotesk_400Regular"
+                    fontFamily: billingCycle === "annual" ? "Inter_600SemiBold" : "Inter_400Regular"
                   }}
                 >
                   Annual
@@ -465,7 +465,7 @@ export default function SubscriptionModal() {
                       style={{
                         color: "#FFFFFF",
                         fontSize: 10,
-                        fontFamily: "SpaceGrotesk_600SemiBold"
+                        fontFamily: "Inter_600SemiBold"
                       }}
                     >
                       Save
@@ -494,7 +494,7 @@ export default function SubscriptionModal() {
                     {
                       color: theme.colors.text,
                       fontSize: theme.typography.subheading + 4,
-                      fontFamily: "SpaceGrotesk_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       marginBottom: theme.spacing(1.5)
                     }
                   ]}
@@ -508,7 +508,7 @@ export default function SubscriptionModal() {
                       {
                         color: theme.colors.text,
                         fontSize: theme.typography.heading + 8,
-                        fontFamily: "SpaceGrotesk_600SemiBold"
+                        fontFamily: "Inter_600SemiBold"
                       }
                     ]}
                   >
@@ -534,7 +534,7 @@ export default function SubscriptionModal() {
                         color: theme.colors.success,
                         fontSize: theme.typography.body,
                         marginTop: theme.spacing(0.5),
-                        fontFamily: "SpaceGrotesk_600SemiBold"
+                        fontFamily: "Inter_600SemiBold"
                       }
                     ]}
                   >
@@ -619,7 +619,7 @@ export default function SubscriptionModal() {
                     style={{
                       color: "#FFFFFF",
                       fontSize: theme.typography.body,
-                      fontFamily: "SpaceGrotesk_600SemiBold",
+                      fontFamily: "Inter_600SemiBold",
                       letterSpacing: 0.3
                     }}
                   >

@@ -84,14 +84,27 @@ export default function AnalyzeScreen() {
         console.log("[Analyze] Fetched analyses:", result?.edges?.length || 0, "analyses");
         console.log("[Analyze] Analyses data:", JSON.stringify(result, null, 2));
         return result;
-      } catch (error) {
-        console.error("[Analyze] Error fetching analyses:", error);
+      } catch (error: any) {
+        // Log full error details for debugging
+        console.error("[Analyze] Error fetching analyses:", {
+          message: error?.message,
+          stack: error?.stack,
+          name: error?.name,
+          cause: error?.cause,
+          response: error?.response,
+          data: error?.data
+        });
+        // Re-throw with more context if available
+        if (error?.message) {
+          throw new Error(`Failed to fetch analyses: ${error.message}`);
+        }
         throw error;
       }
     },
     enabled: isSignedIn ?? false, // Only fetch when user is authenticated
     refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true // Refetch when screen comes into focus
+    refetchOnWindowFocus: true, // Refetch when screen comes into focus
+    retry: 1 // Retry once on failure
   });
 
   // Log authentication and query state
@@ -133,14 +146,7 @@ export default function AnalyzeScreen() {
           title: node.summary || "Analysis",
           topic: topic,
           score: node.score ?? 0,
-          createdAt: node.createdAt,
-          imageUrl: node.imageUrl || null,
-          imageAttribution: {
-            photographer: "",
-            photographerProfileUrl: "",
-            unsplashPhotoUrl: "",
-            isGenerated: false
-          }
+          createdAt: node.createdAt
         };
       });
   }, [analysesData]);
@@ -151,6 +157,28 @@ export default function AnalyzeScreen() {
     if (input.includes("image") || input.includes("video")) return "media";
     return "general";
   }, [input]);
+
+  const handleResubmit = useCallback((id: string, title: string) => {
+    setInput(title);
+    setSheetVisible(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    // Invalidate queries to refresh the list
+    queryClient.invalidateQueries({ queryKey: ["analyses"] });
+    // TODO: Add delete mutation when available
+  }, [queryClient]);
+
+  const handleShare = useCallback((id: string, title: string, score: number) => {
+    router.push({
+      pathname: "/modals/share",
+      params: {
+        score: score.toString(),
+        verdict: "Analysis",
+        analysisId: id
+      }
+    });
+  }, [router]);
 
   const submitMutation = useMutation({
     mutationFn: () =>
@@ -543,8 +571,9 @@ export default function AnalyzeScreen() {
                   score={analysis.score}
                   topic={analysis.topic}
                   createdAt={analysis.createdAt}
-                  imageUrl={analysis.imageUrl}
-                  imageAttribution={analysis.imageAttribution}
+                  onResubmit={handleResubmit}
+                  onDelete={handleDelete}
+                  onShare={handleShare}
                 />
               ))}
             </View>
@@ -770,7 +799,7 @@ function AnalyzeSheet({
                     <Ionicons name="close" size={20} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
-              ) : ImagePicker ? (
+              ) : (
                 <TouchableOpacity
                   onPress={showImageOptions}
                   style={[
@@ -800,7 +829,7 @@ function AnalyzeSheet({
                     Add Image (Optional)
                   </Text>
                 </TouchableOpacity>
-              ) : null}
+              )}
             </View>
 
             <TextInput

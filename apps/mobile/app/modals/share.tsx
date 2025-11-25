@@ -18,7 +18,7 @@ export default function ShareModal() {
           gap: theme.spacing(2)
         }}
       >
-        <Text style={{ color: theme.colors.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>Share report</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 20, fontFamily: "Inter_600SemiBold" }}>Share report</Text>
         <View
           style={{
             borderRadius: theme.radii.md,

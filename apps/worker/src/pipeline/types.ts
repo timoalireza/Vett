@@ -98,13 +98,6 @@ export type PipelineResult = {
   metadata: PipelineMetadata;
   ingestionRecords?: IngestionRecord[];
   resultJson: Record<string, unknown>;
-  imageUrl?: string; // Featured image URL for card display
-  imageAttribution?: {
-    photographer?: string;
-    photographerProfileUrl?: string;
-    unsplashPhotoUrl?: string;
-    isGenerated?: boolean;
-  }; // Attribution info for Unsplash images
 };
 
 export type PipelineContext = {

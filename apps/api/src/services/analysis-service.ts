@@ -26,17 +26,12 @@ export interface AnalysisSummary {
   verdict: string | null;
   confidence: number | null;
   bias?: string | null;
+  topic?: string | null;
   createdAt: string;
   status: string;
   summary?: string | null;
   recommendation?: string | null;
-  imageUrl?: string | null;
-  imageAttribution?: {
-    photographer?: string;
-    photographerProfileUrl?: string;
-    unsplashPhotoUrl?: string;
-    isGenerated?: boolean;
-  } | null;
+  rawInput?: string | null;
   hasWatermark: boolean;
   claims: ClaimSummary[];
   sources: AnalysisSourceSummary[];
@@ -552,6 +547,24 @@ class AnalysisService {
       }
     }
 
+    // Parse rawInput to extract text if available
+    let rawInputText: string | null = null;
+    try {
+      if (record.rawInput && typeof record.rawInput === "string") {
+        try {
+          const parsed = JSON.parse(record.rawInput) as { text?: string | null; contentUri?: string | null };
+          rawInputText = parsed.text ?? null;
+        } catch {
+          // If parsing fails, use rawInput as-is (might be plain text)
+          rawInputText = record.rawInput;
+        }
+      }
+    } catch (error) {
+      // Log warning but don't fail the request
+      console.warn(`[AnalysisService] Error processing rawInput for analysis ${id}:`, error);
+      rawInputText = null;
+    }
+
     return {
       id: record.id,
       userId: record.userId ?? null,
@@ -559,14 +572,12 @@ class AnalysisService {
       verdict: record.verdict ?? null,
       confidence: record.confidence !== null ? Number(record.confidence) : null,
       bias: record.bias,
+      topic: record.topic ?? null,
       createdAt: record.createdAt ? record.createdAt.toISOString() : new Date(0).toISOString(),
       status: record.status,
       summary: record.summary ?? null,
       recommendation: record.recommendation ?? null,
-      imageUrl: record.imageUrl ?? null,
-      imageAttribution: record.imageAttribution
-        ? (JSON.parse(record.imageAttribution) as AnalysisSummary["imageAttribution"])
-        : null,
+      rawInput: rawInputText,
       hasWatermark,
       claims: claimsSummary,
       sources: sourcesSummary,
@@ -611,11 +622,23 @@ class AnalysisService {
     const limitPlusOne = limit + 1;
 
     // Query analyses ordered by createdAt descending (newest first)
-    const results = await db.query.analyses.findMany({
+    let results;
+    try {
+      results = await db.query.analyses.findMany({
       where: and(...conditions),
       orderBy: (analyses, { desc }) => [desc(analyses.createdAt)],
       limit: limitPlusOne
     });
+    } catch (dbError: any) {
+      console.error("[AnalysisService] Database error fetching analyses:", {
+        userId,
+        error: dbError.message,
+        stack: dbError.stack,
+        code: dbError.code,
+        detail: dbError.detail
+      });
+      throw new Error(`Database error: ${dbError.message || "Failed to fetch analyses"}`);
+    }
 
     // Check if there are more results
     const hasMore = results.length > limit;

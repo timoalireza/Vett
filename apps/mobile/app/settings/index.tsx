@@ -11,7 +11,6 @@ import { GlassCard } from "../../src/components/GlassCard";
 export default function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const [privacy, setPrivacy] = useState(true);
   const [credibilityMode, setCredibilityMode] = useState<"standard" | "strict" | "max">("strict");
   const [notifications, setNotifications] = useState({
     analyses: true,
@@ -58,9 +57,6 @@ export default function SettingsScreen() {
         >
         <Section title="Theme selector">
           <Text style={{ color: theme.colors.subtitle }}>Following system appearance for now.</Text>
-        </Section>
-        <Section title="Default analysis privacy">
-          <Row label="Private by default" value={<Switch value={privacy} onValueChange={setPrivacy} />} />
         </Section>
         <Section title="Credibility mode">
           <View style={{ flexDirection: "row", gap: theme.spacing(1) }}>
@@ -138,7 +134,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <Text 
         style={{ 
           color: theme.colors.text, 
-          fontFamily: "SpaceGrotesk_600SemiBold",
+          fontFamily: "Inter_600SemiBold",
           fontSize: theme.typography.body,
           marginBottom: theme.spacing(0.5)
         }}

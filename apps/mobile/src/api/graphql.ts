@@ -40,26 +40,69 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(GRAPHQL_ENDPOINT, {
+  let response: Response;
+  try {
+    response = await fetch(GRAPHQL_ENDPOINT, {
     method: "POST",
     headers,
     body: JSON.stringify({ query, variables })
   });
+  } catch (networkError: any) {
+    console.error("[GraphQL] Network error:", {
+      message: networkError?.message,
+      name: networkError?.name,
+      cause: networkError?.cause,
+      endpoint: GRAPHQL_ENDPOINT
+    });
+    throw new Error(`Network error: ${networkError?.message || "Failed to connect to API"}. Check if API server is running at ${GRAPHQL_ENDPOINT}`);
+  }
 
   if (!response.ok) {
     const text = await response.text();
-    console.error("[GraphQL] Request failed:", response.status, text);
-    throw new Error(`GraphQL request failed (${response.status}): ${text}`);
+    console.error("[GraphQL] Request failed:", {
+      status: response.status,
+      statusText: response.statusText,
+      url: GRAPHQL_ENDPOINT,
+      body: text
+    });
+    throw new Error(`GraphQL request failed (${response.status}): ${text.substring(0, 200)}`);
   }
 
-  const json = (await response.json()) as GraphQLResponse<TData>;
+  let json: GraphQLResponse<TData>;
+  try {
+    json = (await response.json()) as GraphQLResponse<TData>;
+  } catch (parseError: any) {
+    console.error("[GraphQL] Failed to parse response:", parseError);
+    const text = await response.text();
+    throw new Error(`Invalid JSON response: ${text.substring(0, 200)}`);
+  }
   
   // Log full response for debugging
   console.log("[GraphQL] Response:", JSON.stringify(json, null, 2));
   
   if (json.errors?.length) {
-    console.error("[GraphQL] Errors:", json.errors);
-    const errorMessages = json.errors.map((error) => error.message).join(", ");
+    console.error("[GraphQL] Errors:", JSON.stringify(json.errors, null, 2));
+    const errorMessages = json.errors.map((error: any) => {
+      // Log full error details
+      console.error("[GraphQL] Error details:", {
+        message: error.message,
+        extensions: error.extensions,
+        path: error.path,
+        locations: error.locations
+      });
+      
+      // Provide more context for validation errors
+      if (error.message.includes("validation") || error.message.includes("Cannot query field")) {
+        return `${error.message}${error.extensions?.code ? ` (${error.extensions.code})` : ""}`;
+      }
+      
+      // Include extension details if available
+      if (error.extensions?.code) {
+        return `${error.message} (${error.extensions.code}${error.extensions.originalCode ? `, original: ${error.extensions.originalCode}` : ""})`;
+      }
+      
+      return error.message;
+    }).join(", ");
     throw new Error(errorMessages);
   }
   if (!json.data) {

@@ -10,12 +10,12 @@ export const schema = `
     verdict: String
     confidence: Float
     bias: String
+    topic: String
     status: String!
     createdAt: String!
     summary: String
     recommendation: String
-    imageUrl: String
-    imageAttribution: ImageAttribution
+    rawInput: String
     hasWatermark: Boolean!
     claims: [Claim!]!
     sources: [AnalysisSource!]!
@@ -135,13 +135,6 @@ export const schema = `
     SCREENSHOT
     API_KEY
     NONE
-  }
-
-  type ImageAttribution {
-    photographer: String
-    photographerProfileUrl: String
-    unsplashPhotoUrl: String
-    isGenerated: Boolean
   }
 
   enum AnalysisAttachmentKind {

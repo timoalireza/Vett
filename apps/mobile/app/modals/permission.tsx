@@ -21,7 +21,7 @@ export default function PermissionModal() {
         }}
       >
         <Ionicons name="lock-closed-outline" size={48} color={theme.colors.primary} />
-        <Text style={{ color: theme.colors.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+        <Text style={{ color: theme.colors.text, fontSize: 20, fontFamily: "Inter_600SemiBold" }}>
           Give {type === "media" ? "media" : "notification"} access
         </Text>
         <Text style={{ color: theme.colors.subtitle, textAlign: "center", lineHeight: 20 }}>

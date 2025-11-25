@@ -1,4 +1,4 @@
-import { Text, TouchableOpacity, View, StyleSheet, Platform, ScrollView } from "react-native";
+import { Text, TouchableOpacity, View, StyleSheet, Platform, ScrollView, Linking, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -13,7 +13,8 @@ const settingsSections = [
   {
     title: "Account",
     items: [
-      { label: "Profile", icon: "person-outline", route: "/settings/index" }
+      { label: "Profile", icon: "person-outline", route: "/settings/profile" },
+      { label: "Request Features", icon: "bulb-outline", action: "requestFeatures" }
     ]
   },
   {
@@ -43,6 +44,34 @@ export default function ProfileScreen() {
     : "Guest Investigator";
   
   const userEmail = user?.primaryEmailAddress?.emailAddress || "guest@vett.app";
+
+  const handleRequestFeatures = () => {
+    const email = "support@vett.app";
+    const subject = "Feature Request";
+    const body = `Hi Vett Team,\n\nI'd like to request the following feature:\n\n[Describe your feature request here]\n\nThanks!`;
+    const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
+    Linking.canOpenURL(mailtoUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(mailtoUrl);
+        } else {
+          Alert.alert(
+            "Email Not Available",
+            `Please send your feature request to ${email}`,
+            [{ text: "OK" }]
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("Error opening email:", err);
+        Alert.alert(
+          "Error",
+          `Please send your feature request to ${email}`,
+          [{ text: "OK" }]
+        );
+      });
+  };
 
   return (
     <GradientBackground>
@@ -218,6 +247,8 @@ export default function ProfileScreen() {
                         onPress={() => {
                           if (item.route) {
                             router.push(item.route as any);
+                          } else if (item.action === "requestFeatures") {
+                            handleRequestFeatures();
                           }
                         }}
                       >

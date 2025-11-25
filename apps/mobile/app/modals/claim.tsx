@@ -33,7 +33,7 @@ export default function ClaimModal() {
           <View style={{ width: 48, height: 4, borderRadius: 2, backgroundColor: theme.colors.border }} />
         </View>
         <Text style={{ color: theme.colors.subtitle, fontSize: 12 }}>Claim</Text>
-        <Text style={{ color: theme.colors.text, fontSize: 18, fontFamily: "SpaceGrotesk_500Medium" }}>{text}</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 18, fontFamily: "Inter_500Medium" }}>{text}</Text>
         <View
           style={{
             flexDirection: "row",

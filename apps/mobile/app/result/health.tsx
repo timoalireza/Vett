@@ -8,7 +8,7 @@ function HealthOverview() {
   const theme = useTheme();
   return (
     <View style={{ padding: theme.spacing(3), gap: theme.spacing(1.5) }}>
-      <Text style={{ color: theme.colors.text, fontFamily: "SpaceGrotesk_600SemiBold" }}>Clinical snapshot</Text>
+      <Text style={{ color: theme.colors.text, fontFamily: "Inter_600SemiBold" }}>Clinical snapshot</Text>
       <Text style={{ color: theme.colors.subtitle }}>
         CDC, WHO, and peer-reviewed cohort studies confirm flu shots remain recommended for pregnant people in 2025. Our ingestion flagged policy memos supporting continuity of care.
       </Text>
@@ -33,7 +33,7 @@ function EvidenceQuality() {
               marginRight: theme.spacing(2)
             }}
           >
-            <Text style={{ color: theme.colors.text, fontFamily: "SpaceGrotesk_500Medium" }}>{label}</Text>
+            <Text style={{ color: theme.colors.text, fontFamily: "Inter_500Medium" }}>{label}</Text>
             <Text style={{ color: theme.colors.subtitle, marginTop: 6 }}>Quality: {["High", "Medium", "High"][idx]}</Text>
             <Text style={{ color: theme.colors.subtitle }}>n = {120 + idx * 30}</Text>
           </View>

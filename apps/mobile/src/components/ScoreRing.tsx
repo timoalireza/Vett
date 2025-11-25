@@ -23,7 +23,7 @@ interface ScoreRingProps {
 
 export function ScoreRing({ score, label = "Vett Score", size = 140, verdict }: ScoreRingProps) {
   const theme = useTheme();
-  const radius = (size - 16) / 2;
+  const radius = (size - 20) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = useSharedValue(0);
   const gradientId = `ringGradient-${Math.round(score)}-${size}`;
@@ -54,47 +54,55 @@ export function ScoreRing({ score, label = "Vett Score", size = 140, verdict }: 
             <Stop offset="100%" stopColor={end} />
           </SvgLinearGradient>
         </Defs>
+        {/* Inactive track - dark charcoal */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={theme.colors.border}
-          strokeWidth={12}
+          stroke="rgba(255, 255, 255, 0.08)"
+          strokeWidth={14}
           fill="transparent"
         />
+        {/* Active track with outer glow */}
         <AnimatedCircle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           stroke={`url(#${gradientId})`}
-          strokeWidth={12}
+          strokeWidth={14}
           strokeLinecap="round"
           fill="transparent"
           strokeDasharray={`${circumference}, ${circumference}`}
           animatedProps={animatedProps}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          opacity={1}
         />
       </Svg>
       <View
         style={{
           position: "absolute",
-          alignItems: "center"
+          alignItems: "center",
+          justifyContent: "center"
         }}
       >
         <Text
           style={{
-            color: theme.colors.subtitle,
-            fontSize: 13,
-            fontFamily: "SpaceGrotesk_400Regular"
+            color: "rgba(255, 255, 255, 0.5)",
+            fontSize: 11,
+            fontFamily: "Inter_600SemiBold",
+            letterSpacing: 0.8,
+            textTransform: "uppercase",
+            marginBottom: 4
           }}
         >
           {label}
         </Text>
         <Text
           style={{
-            color: end,
-            fontSize: 32,
-            fontFamily: "SpaceGrotesk_600SemiBold"
+            color: "#FFFFFF",
+            fontSize: 48,
+            fontFamily: "Inter_700Bold",
+            letterSpacing: -1
           }}
         >
           {score}

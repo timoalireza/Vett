@@ -1,5 +1,4 @@
 import { Text, TouchableOpacity, View, StyleSheet, Linking } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 
 import { useTheme } from "../hooks/use-theme";
@@ -82,21 +81,6 @@ export function ClaimItem({ text, verdict, confidence, onPress }: ClaimItemProps
                 {verdict}
               </Text>
             </View>
-            <View style={styles.confidenceContainer}>
-              <Ionicons name="shield-checkmark" size={14} color={statusColor} />
-              <Text
-                style={[
-                  styles.confidenceText,
-                  {
-                    color: theme.colors.textSecondary,
-                    fontSize: theme.typography.caption,
-                    marginLeft: 4
-                  }
-                ]}
-              >
-                {(confidence * 100).toFixed(0)}%
-              </Text>
-            </View>
           </View>
         </View>
       </BlurView>
@@ -120,7 +104,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center"
   },
   verdictContainer: {
@@ -133,13 +116,6 @@ const styles = StyleSheet.create({
   },
   verdictText: {
     letterSpacing: 0.2
-  },
-  confidenceContainer: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-  confidenceText: {
-    letterSpacing: 0.1
   }
 });
 

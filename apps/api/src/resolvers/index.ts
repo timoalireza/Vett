@@ -53,31 +53,45 @@ export const resolvers: IResolvers<GraphQLContext> = {
         throw new Error("Authentication required");
       }
 
-      // Use DataLoader for user lookup
-      const user = await ctx.loaders.userByExternalId.load(ctx.userId);
-      if (!user) {
-        throw new Error("User not found");
+      try {
+        // Ensure user exists in database (create if needed)
+        // This must be done before using DataLoader, as DataLoader caches null results
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+        
+        // Now use DataLoader for user lookup (will find the user we just created)
+        const user = await ctx.loaders.userByExternalId.load(ctx.userId);
+        if (!user) {
+          console.error("[GraphQL] User not found after creation:", ctx.userId);
+          throw new Error("User not found");
+        }
+
+        // Get paginated analyses
+        const paginationArgs: PaginationArgs = {
+          first: args.first ?? null,
+          after: args.after ?? null,
+          last: args.last ?? null,
+          before: args.before ?? null
+        };
+
+        const result = await analysisService.getAnalyses(
+          user.id,
+          paginationArgs,
+          ctx.userId
+        );
+
+        return {
+          edges: result.edges,
+          pageInfo: result.pageInfo,
+          totalCount: result.totalCount ?? null
+        };
+      } catch (error: any) {
+        console.error("[GraphQL] Error fetching analyses:", {
+          userId: ctx.userId,
+          error: error.message,
+          stack: error.stack
+        });
+        throw error;
       }
-
-      // Get paginated analyses
-      const paginationArgs: PaginationArgs = {
-        first: args.first ?? null,
-        after: args.after ?? null,
-        last: args.last ?? null,
-        before: args.before ?? null
-      };
-
-      const result = await analysisService.getAnalyses(
-        user.id,
-        paginationArgs,
-        ctx.userId
-      );
-
-      return {
-        edges: result.edges,
-        pageInfo: result.pageInfo,
-        totalCount: result.totalCount ?? null
-      };
     },
     subscription: async (_parent, _args, context) => {
       const ctx = context as GraphQLContext;

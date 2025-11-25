@@ -50,7 +50,7 @@ function Row({ label, value }: { label: string; value: string }) {
       <Text
         style={{
           color: theme.colors.subtitle,
-          fontFamily: "SpaceGrotesk_400Regular"
+          fontFamily: "Inter_400Regular"
         }}
       >
         {label}
@@ -58,7 +58,7 @@ function Row({ label, value }: { label: string; value: string }) {
       <Text
         style={{
           color: theme.colors.text,
-          fontFamily: "SpaceGrotesk_600SemiBold"
+          fontFamily: "Inter_600SemiBold"
         }}
       >
         {value}

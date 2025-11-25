@@ -2,7 +2,7 @@
   "name": "mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "dev": "expo start --clear",
     "ios": "expo run:ios",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@babel/runtime": "^7.26.0",
     "@clerk/clerk-expo": "^2.19.4",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo/metro-runtime": "^3.2.3",
     "@expo/vector-icons": "^14.0.2",

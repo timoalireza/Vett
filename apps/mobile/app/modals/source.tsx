@@ -19,7 +19,7 @@ export default function SourceModal() {
           gap: theme.spacing(2)
         }}
       >
-        <Text style={{ color: theme.colors.text, fontSize: 18, fontFamily: "SpaceGrotesk_600SemiBold" }}>{outlet}</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 18, fontFamily: "Inter_600SemiBold" }}>{outlet}</Text>
         <Text style={{ color: theme.colors.subtitle }}>Reliability: {(Number(score) * 100).toFixed(0)}%</Text>
         <Text style={{ color: theme.colors.subtitle }}>Bias badge: Center</Text>
         <TouchableOpacity

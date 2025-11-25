@@ -26,7 +26,7 @@ export interface AnalysisResponse {
   bias?: string | null;
   summary?: string | null;
   recommendation?: string | null;
-  imageUrl?: string | null;
+  rawInput?: string | null;
   claims: Array<{
     id: string;
     text: string;
@@ -65,7 +65,6 @@ const ANALYSIS_QUERY = `
       bias
       summary
       recommendation
-      imageUrl
       claims {
         id
         text
@@ -104,11 +103,11 @@ export interface AnalysisSummary {
   verdict: string | null;
   confidence: number | null;
   bias?: string | null;
+  topic?: string | null;
   status: string;
   createdAt: string;
   summary?: string | null;
   recommendation?: string | null;
-  imageUrl?: string | null;
 }
 
 export interface AnalysesConnection {
@@ -135,11 +134,11 @@ const ANALYSES_QUERY = `
           verdict
           confidence
           bias
+          topic
           status
           createdAt
           summary
           recommendation
-          imageUrl
         }
         cursor
       }

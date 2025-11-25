@@ -98,10 +98,37 @@ export async function registerGraphql(app: FastifyInstance) {
             };
           }
           
+          // Log the actual error for debugging (even in production)
+          console.error("[GraphQL] Production error details:", {
+            message: error.message,
+            stack: error.stack,
+            path: error.path,
+            name: error.name
+          });
+          
+          // For database/auth errors, provide more context
+          if (errorMessage.includes("row level security") || errorMessage.includes("rls") || errorMessage.includes("permission denied")) {
+            return {
+              message: "Database access error. Please contact support.",
+              extensions: {
+                code: "DATABASE_ERROR"
+              }
+            };
+          }
+          
+          // Temporarily expose more error details for debugging
+          // TODO: Remove detailed error messages after fixing the issue
+          const errorDetails = error.message || "Unknown error";
+          const errorCode = error.extensions?.code || "INTERNAL_ERROR";
+          
           return {
-            message: "An error occurred while processing your request",
+            message: `Error: ${errorDetails}${errorCode !== "INTERNAL_ERROR" ? ` (${errorCode})` : ""}`,
             extensions: {
-              code: "INTERNAL_ERROR"
+              code: errorCode,
+              // Include original error code if available
+              originalCode: error.extensions?.code,
+              // Include path for debugging
+              path: error.path
             }
           };
         }

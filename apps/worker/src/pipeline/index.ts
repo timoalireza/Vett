@@ -16,7 +16,6 @@ import { evaluateEvidenceForClaim } from "./evidence/evaluator.js";
 import { reasonVerdict, VERDICT_MODEL } from "./reasoners/verdict.js";
 import { adjustReliability } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
-import { findBestImage } from "./image-search.js";
 
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
 
@@ -310,25 +309,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
           }
         : verdictData;
 
-  // Find best image for the analysis card
-  const claimTexts = claims.map((c) => c.text);
-  const imageResult = await findBestImage(
-    adjustedVerdictData.summary,
-    classification.topic,
-    claimTexts
-  );
-
-  // Extract attribution info (only for Unsplash images, not DALL-E)
-  const imageAttribution = imageResult && !imageResult.isGenerated
-    ? {
-        photographer: imageResult.photographer,
-        photographerProfileUrl: imageResult.photographerProfileUrl,
-        unsplashPhotoUrl: imageResult.unsplashPhotoUrl,
-        isGenerated: false
-      }
-    : imageResult?.isGenerated
-      ? { isGenerated: true }
-      : undefined;
+  // Image generation removed - no longer using DALL-E 3 or Unsplash
 
   const reasonerMeta: ReasonerMetadata = reasoned
     ? {
@@ -377,8 +358,6 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     explanationSteps,
     metadata,
     ingestionRecords: ingestion.records,
-    imageUrl: imageResult?.url,
-    imageAttribution,
     resultJson: {
       analysisId: payload.analysisId,
       topic: classification.topic,

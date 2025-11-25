@@ -26,7 +26,7 @@ export function BiasSpectrum({ position }: BiasSpectrumProps) {
         style={{
           color: theme.colors.subtitle,
           marginBottom: theme.spacing(1),
-          fontFamily: "SpaceGrotesk_500Medium"
+          fontFamily: "Inter_500Medium"
         }}
       >
         Bias Spectrum
@@ -70,7 +70,7 @@ export function BiasSpectrum({ position }: BiasSpectrumProps) {
             style={{
               color: theme.colors.subtitle,
               fontSize: 12,
-              fontFamily: "SpaceGrotesk_400Regular"
+              fontFamily: "Inter_400Regular"
             }}
           >
             {label}

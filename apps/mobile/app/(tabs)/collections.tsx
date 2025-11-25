@@ -11,7 +11,7 @@ import { useTheme } from "../../src/hooks/use-theme";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { GlassChip } from "../../src/components/GlassChip";
-import { AnalysisCard } from "../../src/components/AnalysisCard";
+import { AnalysisCardVertical } from "../../src/components/AnalysisCardVertical";
 import { fetchAnalyses } from "../../src/api/analysis";
 import { useMemo } from "react";
 
@@ -95,13 +95,44 @@ export default function CollectionsScreen() {
     if (!analysesData?.edges) return [];
     return analysesData.edges
       .filter((edge) => edge.node.status === "COMPLETED")
-      .map((edge) => ({
-        id: edge.node.id,
-        title: edge.node.summary?.substring(0, 100) || "Analysis",
-        score: edge.node.score ?? 0,
-        imageUrl: edge.node.imageUrl || null
-      }));
+      .map((edge) => {
+        const node = edge.node;
+        // Use topic from node if available, otherwise infer from bias
+        let topic = node.topic?.toLowerCase() || "general";
+        if (!node.topic && node.bias) {
+          topic = "political"; // Bias indicates political analysis
+        }
+        return {
+          id: node.id,
+          title: node.summary || "Analysis",
+          topic: topic,
+          score: node.score ?? 0,
+          createdAt: node.createdAt
+        };
+      });
   }, [analysesData]);
+
+  const handleResubmit = useCallback((id: string, title: string) => {
+    router.push(`/(tabs)/analyze?openSheet=true`);
+    // Note: The analyze screen will need to handle pre-filling the input
+  }, [router]);
+
+  const handleDelete = useCallback((id: string) => {
+    // Invalidate queries to refresh the list
+    queryClient.invalidateQueries({ queryKey: ["analyses"] });
+    // TODO: Add delete mutation when available
+  }, [queryClient]);
+
+  const handleShare = useCallback((id: string, title: string, score: number) => {
+    router.push({
+      pathname: "/modals/share",
+      params: {
+        score: score.toString(),
+        verdict: "Analysis",
+        analysisId: id
+      }
+    });
+  }, [router]);
 
   return (
     <GradientBackground>
@@ -171,15 +202,19 @@ export default function CollectionsScreen() {
         {/* Analysis Feed */}
         {mode === "reports" ? (
           userAnalyses.length > 0 ? (
-            <View style={styles.feed}>
+            <View style={styles.analysesList}>
               {userAnalyses.map((analysis) => {
                 return (
-                  <AnalysisCard
+                  <AnalysisCardVertical
                     key={analysis.id}
                     id={analysis.id}
                     title={analysis.title}
                     score={analysis.score}
-                    imageUrl={analysis.imageUrl}
+                    topic={analysis.topic}
+                    createdAt={analysis.createdAt}
+                    onResubmit={handleResubmit}
+                    onDelete={handleDelete}
+                    onShare={handleShare}
                   />
                 );
               })}
@@ -375,11 +410,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textTransform: "uppercase"
   },
-  feed: {
-    gap: 16,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between"
+  analysesList: {
+    gap: 16
   },
   analysisTile: {
     overflow: "hidden"

@@ -427,10 +427,6 @@ function createWorker(): Worker {
           summary: pipelineResult.summary,
           recommendation: pipelineResult.recommendation,
           resultJson: JSON.stringify(pipelineResult.resultJson),
-          imageUrl: pipelineResult.imageUrl ?? null,
-          imageAttribution: pipelineResult.imageAttribution
-            ? JSON.stringify(pipelineResult.imageAttribution)
-            : null,
           updatedAt: new Date()
         };
 

@@ -26,6 +26,7 @@ export default function SignInScreen() {
   const [verificationCode, setVerificationCode] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [showVerificationCode, setShowVerificationCode] = useState(false);
+  const [showSecondFactor, setShowSecondFactor] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -53,13 +54,34 @@ export default function SignInScreen() {
         await setActive({ session: result.createdSessionId });
         await setAuthMode("signedIn");
         router.replace("/(tabs)/analyze");
-      } else {
-        // Handle multi-step sign-in (e.g., 2FA, password reset)
-        if (result.status === "needs_first_factor") {
+      } else if (result.status === "needs_second_factor") {
+        // Prepare second factor authentication
+        // Check available second factor strategies
+        const availableStrategies = signIn.supportedSecondFactors || [];
+        const strategy = availableStrategies.find((s: any) => s.strategy === "totp") 
+          ? "totp" 
+          : availableStrategies[0]?.strategy || "totp";
+        
+        try {
+          // Prepare second factor if method exists
+          if (signIn.prepareSecondFactor) {
+            await signIn.prepareSecondFactor({ strategy });
+          }
+          setShowSecondFactor(true);
+          Alert.alert(
+            "Two-Factor Authentication",
+            "Please enter your 2FA code from your authenticator app."
+          );
+        } catch (err: any) {
+          // If prepareSecondFactor fails, still show the 2FA input
+          // Some strategies don't require explicit preparation
+          setShowSecondFactor(true);
+          console.warn("Could not prepare second factor, proceeding anyway:", err);
+        }
+      } else if (result.status === "needs_first_factor") {
           Alert.alert("Additional Verification", "Please complete additional verification steps.");
         } else {
           Alert.alert("Error", `Sign in incomplete. Status: ${result.status}`);
-        }
       }
     } catch (err: any) {
       const errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign in. Please check your credentials.";
@@ -146,6 +168,48 @@ export default function SignInScreen() {
     }
   };
 
+  const handleSecondFactor = async () => {
+    if (!signInLoaded || !signIn) {
+      Alert.alert("Error", "Clerk is not ready. Please wait a moment and try again.");
+      return;
+    }
+
+    if (!verificationCode || verificationCode.length < 6) {
+      Alert.alert("Error", "Please enter a valid 6-digit 2FA code");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Determine the strategy to use
+      const availableStrategies = signIn.supportedSecondFactors || [];
+      const strategy = availableStrategies.find((s: any) => s.strategy === "totp") 
+        ? "totp" 
+        : availableStrategies[0]?.strategy || "totp";
+
+      const completeResult = await signIn.attemptSecondFactor({
+        strategy,
+        code: verificationCode
+      });
+
+      if (completeResult.status === "complete") {
+        await setActive({ session: completeResult.createdSessionId });
+        await setAuthMode("signedIn");
+        setShowSecondFactor(false);
+        setVerificationCode("");
+        router.replace("/(tabs)/analyze");
+      } else {
+        Alert.alert("Error", "2FA verification incomplete. Please try again.");
+      }
+    } catch (err: any) {
+      const errorMessage = err.errors?.[0]?.message || err.message || "Invalid 2FA code. Please try again.";
+      Alert.alert("Error", errorMessage);
+      console.error("2FA error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOAuth = async (strategy: "oauth_google" | "oauth_apple") => {
     try {
       setLoading(true);
@@ -191,7 +255,7 @@ export default function SignInScreen() {
             style={{
               color: theme.colors.text,
               fontSize: 34,
-              fontFamily: "SpaceGrotesk_600SemiBold"
+              fontFamily: "Inter_600SemiBold"
             }}
           >
             Vett
@@ -200,7 +264,7 @@ export default function SignInScreen() {
             style={{
               color: theme.colors.subtitle,
               fontSize: 18,
-              fontFamily: "SpaceGrotesk_400Regular"
+              fontFamily: "Inter_400Regular"
             }}
           >
             Verify anything in seconds. Choose how you want to continue.
@@ -213,7 +277,7 @@ export default function SignInScreen() {
                 style={{
                   color: theme.colors.text,
                   fontSize: theme.typography.subheading,
-                  fontFamily: "SpaceGrotesk_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   marginBottom: theme.spacing(1)
                 }}
               >
@@ -223,7 +287,7 @@ export default function SignInScreen() {
                 style={{
                   color: theme.colors.textSecondary,
                   fontSize: theme.typography.body,
-                  fontFamily: "SpaceGrotesk_400Regular",
+                  fontFamily: "Inter_400Regular",
                   marginBottom: theme.spacing(2)
                 }}
               >
@@ -242,7 +306,7 @@ export default function SignInScreen() {
                   padding: theme.spacing(2),
                   color: theme.colors.text,
                   fontSize: theme.typography.heading,
-                  fontFamily: "SpaceGrotesk_600SemiBold",
+                  fontFamily: "Inter_600SemiBold",
                   letterSpacing: 8,
                   textAlign: "center",
                   borderWidth: 1,
@@ -269,7 +333,7 @@ export default function SignInScreen() {
                     style={{
                       color: "#FFFFFF",
                       fontSize: theme.typography.body,
-                      fontFamily: "SpaceGrotesk_500Medium"
+                      fontFamily: "Inter_500Medium"
                     }}
                   >
                     Verify Code
@@ -287,10 +351,101 @@ export default function SignInScreen() {
                     color: theme.colors.textSecondary,
                     fontSize: theme.typography.caption,
                     textAlign: "center",
-                    fontFamily: "SpaceGrotesk_400Regular"
+                    fontFamily: "Inter_400Regular"
                   }}
                 >
                   Back to sign up
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : showSecondFactor ? (
+            <>
+              <Text
+                style={{
+                  color: theme.colors.text,
+                  fontSize: theme.typography.subheading,
+                  fontFamily: "Inter_600SemiBold",
+                  marginBottom: theme.spacing(1)
+                }}
+              >
+                Two-Factor Authentication
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: theme.typography.body,
+                  fontFamily: "Inter_400Regular",
+                  marginBottom: theme.spacing(2)
+                }}
+              >
+                Enter the 6-digit code from your authenticator app
+              </Text>
+              <TextInput
+                placeholder="000000"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+                keyboardType="number-pad"
+                maxLength={6}
+                style={{
+                  backgroundColor: theme.colors.card,
+                  borderRadius: theme.radii.md,
+                  padding: theme.spacing(2),
+                  color: theme.colors.text,
+                  fontSize: theme.typography.heading,
+                  fontFamily: "Inter_600SemiBold",
+                  letterSpacing: 8,
+                  textAlign: "center",
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  marginBottom: theme.spacing(2)
+                }}
+              />
+              <TouchableOpacity
+                onPress={handleSecondFactor}
+                disabled={loading || verificationCode.length < 6}
+                style={{
+                  backgroundColor: theme.colors.primary,
+                  borderRadius: theme.radii.pill,
+                  padding: theme.spacing(2),
+                  alignItems: "center",
+                  opacity: loading || verificationCode.length < 6 ? 0.5 : 1,
+                  marginBottom: theme.spacing(1)
+                }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: theme.typography.body,
+                      fontFamily: "Inter_500Medium"
+                    }}
+                  >
+                    Verify 2FA Code
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowSecondFactor(false);
+                  setVerificationCode("");
+                  // Reset sign-in state if method exists
+                  if (signIn && typeof signIn.reset === "function") {
+                    signIn.reset();
+                  }
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.colors.textSecondary,
+                    fontSize: theme.typography.caption,
+                    textAlign: "center",
+                    fontFamily: "Inter_400Regular"
+                  }}
+                >
+                  Back to sign in
                 </Text>
               </TouchableOpacity>
             </>
@@ -408,7 +563,7 @@ export default function SignInScreen() {
                         style={{
                           color: "#FFFFFF",
                           fontSize: theme.typography.body,
-                          fontFamily: "SpaceGrotesk_500Medium"
+                          fontFamily: "Inter_500Medium"
                         }}
                       >
                         Sign Up
@@ -421,7 +576,7 @@ export default function SignInScreen() {
                         color: theme.colors.textSecondary,
                         fontSize: theme.typography.caption,
                         textAlign: "center",
-                        fontFamily: "SpaceGrotesk_400Regular"
+                        fontFamily: "Inter_400Regular"
                       }}
                     >
                       Already have an account? Sign in
@@ -501,7 +656,7 @@ export default function SignInScreen() {
                         style={{
                           color: "#FFFFFF",
                           fontSize: theme.typography.body,
-                          fontFamily: "SpaceGrotesk_500Medium"
+                          fontFamily: "Inter_500Medium"
                         }}
                       >
                         Sign In
@@ -514,7 +669,7 @@ export default function SignInScreen() {
                         color: theme.colors.textSecondary,
                         fontSize: theme.typography.caption,
                         textAlign: "center",
-                        fontFamily: "SpaceGrotesk_400Regular"
+                        fontFamily: "Inter_400Regular"
                       }}
                     >
                       Don't have an account? Sign up
@@ -608,7 +763,7 @@ function Button({
         style={{
           color: theme.colors.text,
           fontSize: 16,
-          fontFamily: "SpaceGrotesk_500Medium"
+          fontFamily: "Inter_500Medium"
         }}
       >
         {label}

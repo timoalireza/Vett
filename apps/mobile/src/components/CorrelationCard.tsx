@@ -41,7 +41,7 @@ export function CorrelationCard({
       <Text
         style={{
           color: theme.colors.subtitle,
-          fontFamily: "SpaceGrotesk_400Regular",
+          fontFamily: "Inter_400Regular",
           marginBottom: theme.spacing(1)
         }}
       >
@@ -51,7 +51,7 @@ export function CorrelationCard({
         style={{
           color: color,
           fontSize: 28,
-          fontFamily: "SpaceGrotesk_600SemiBold"
+          fontFamily: "Inter_600SemiBold"
         }}
       >
         r = {correlation.toFixed(2)}
@@ -61,7 +61,7 @@ export function CorrelationCard({
           color: theme.colors.subtitle,
           fontSize: 14,
           marginTop: theme.spacing(1),
-          fontFamily: "SpaceGrotesk_400Regular"
+          fontFamily: "Inter_400Regular"
         }}
       >
         CI {confidenceInterval}

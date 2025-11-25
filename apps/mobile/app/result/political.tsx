@@ -7,7 +7,7 @@ function PoliticalOverview() {
   const theme = useTheme();
   return (
     <View style={{ padding: theme.spacing(3), gap: theme.spacing(1.5) }}>
-      <Text style={{ color: theme.colors.text, fontFamily: "SpaceGrotesk_600SemiBold" }}>Consensus summary</Text>
+      <Text style={{ color: theme.colors.text, fontFamily: "Inter_600SemiBold" }}>Consensus summary</Text>
       <Text style={{ color: theme.colors.subtitle }}>
         Independent fact-checkers agree the WHO treaty does not override the constitutions of EU member states. Our retrieval pulled 11 vetted sources with high concordance.
       </Text>
@@ -19,7 +19,7 @@ function BiasStats() {
   const theme = useTheme();
   return (
     <View style={{ padding: theme.spacing(3), gap: theme.spacing(1) }}>
-      <Text style={{ color: theme.colors.text, fontFamily: "SpaceGrotesk_600SemiBold" }}>Community</Text>
+      <Text style={{ color: theme.colors.text, fontFamily: "Inter_600SemiBold" }}>Community</Text>
       <Text style={{ color: theme.colors.subtitle }}>Analysts favor center-left outlets for treaty coverage. Conservative commentators question sovereignty safeguards.</Text>
     </View>
   );
