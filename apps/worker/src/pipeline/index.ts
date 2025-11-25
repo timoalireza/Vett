@@ -275,22 +275,30 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   // Post-process: If image-derived claims have low evidence match, reduce confidence
   if (reasoned && imageDerivedClaims.length > 0) {
     const imageClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
-    const imageClaimSupport = reasoned.evidenceSupport.filter((es) => imageClaimIds.has(es.claimId));
+    const evidenceSupportMap = new Map(
+      reasoned.evidenceSupport.map((es) => [es.claimId, es.supportingSources])
+    );
     
-    // If image claims have no supporting evidence or very few sources, this suggests misidentification
-    const unsupportedImageClaims = imageClaimSupport.filter((es) => es.supportingSources.length === 0);
+    // Check all image-derived claims: missing from evidenceSupport OR have empty supportingSources
+    const unsupportedImageClaims = imageDerivedClaims.filter((claim) => {
+      const supportingSources = evidenceSupportMap.get(claim.id);
+      return !supportingSources || supportingSources.length === 0;
+    });
+    
     if (unsupportedImageClaims.length > 0) {
-      // Store original score before modification for accurate logging
+      // Store original values before modification for accurate logging
       const originalScore = reasoned.score;
+      const originalConfidence = reasoned.confidence;
       
       // Reduce score and confidence for unsupported image identifications
       reasoned.score = Math.max(0, reasoned.score - 30);
-      reasoned.confidence = Math.max(0.3, reasoned.confidence - 0.2);
+      // Ensure confidence is reduced, not increased (use 0 as minimum, not 0.3)
+      reasoned.confidence = Math.max(0, reasoned.confidence - 0.2);
       reasoned.verdict = verdictFromScore(reasoned.score);
       
       // eslint-disable-next-line no-console
       console.warn(
-        `[pipeline] Image-derived claims lack supporting evidence. Reduced score from ${originalScore} to ${reasoned.score}.`,
+        `[pipeline] Image-derived claims lack supporting evidence. Reduced score from ${originalScore} to ${reasoned.score}, confidence from ${originalConfidence.toFixed(2)} to ${reasoned.confidence.toFixed(2)}.`,
         { analysisId: payload.analysisId, unsupportedClaims: unsupportedImageClaims.length }
       );
     }
