@@ -255,11 +255,15 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const claims = attachSourcesToClaims(processedClaims, rankedSources, claimEvidenceMap);
 
   // Validate image-derived claims against evidence
+  // Only check for image-derived claims if image descriptions were actually added to the corpus
+  const hasImageDescriptions = ingestion.combinedText?.toLowerCase().includes("image summary:") ?? false;
+  
   const imageDerivedClaims = claims.filter((claim) => {
     const claimText = claim.text.toLowerCase();
     // Check if claim contains image-related keywords or was likely derived from image description
+    // Only flag as image-derived if image descriptions were successfully processed
     return (
-      (ingestion.metadata?.processedImages ?? 0) > 0 &&
+      hasImageDescriptions &&
       (claimText.includes("shown") ||
         claimText.includes("image") ||
         claimText.includes("photo") ||
