@@ -255,8 +255,10 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const claims = attachSourcesToClaims(processedClaims, rankedSources, claimEvidenceMap);
 
   // Validate image-derived claims against evidence
-  // Only check for image-derived claims if image descriptions were actually added to the corpus
-  const hasImageDescriptions = ingestion.combinedText?.toLowerCase().includes("image summary:") ?? false;
+  // Check if any image attachments were successfully processed (have text, not errors)
+  const hasImageDescriptions = ingestion.records.some(
+    (record) => record.attachment.kind === "image" && record.text && !record.error
+  );
   
   const imageDerivedClaims = claims.filter((claim) => {
     const claimText = claim.text.toLowerCase();
@@ -274,7 +276,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   });
 
   // If we have image-derived claims, add extra validation context to reasoning
-  const reasoned = await reasonVerdict(claims, rankedSources);
+  const imageDerivedClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
+  const reasoned = await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
   
   // Post-process: If image-derived claims have low evidence match, reduce confidence
   if (reasoned && imageDerivedClaims.length > 0) {

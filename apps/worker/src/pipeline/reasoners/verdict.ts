@@ -16,11 +16,12 @@ Map scores to verdicts as follows:
 Confidence must be 0-1.
 Explain rationale succinctly (<=200 chars).
 
-CRITICAL: For claims derived from images:
+CRITICAL: For claims derived from images (marked with \`is_image_derived: true\`):
 - If a claim identifies a specific location, landmark, or person from an image, you MUST verify this identification against evidence
 - If evidence does NOT support the identification (e.g., evidence talks about a different location/person), mark the claim as "False" or "Partially True" with LOW score
 - Do NOT confirm image-based identifications unless evidence explicitly supports them
 - If evidence is about a different subject than the claim, this is a contradiction - lower the score significantly
+- Pay special attention to claims with \`is_image_derived: true\` - they require explicit evidence support for any identifications
 
 IMPORTANT: The "recommendation" field is MISNAMED - it must contain ONLY factual context, never advice or directives.
 
@@ -94,7 +95,8 @@ export type ReasonerVerdictOutput = {
 
 export async function reasonVerdict(
   claims: PipelineClaim[],
-  sources: PipelineSource[]
+  sources: PipelineSource[],
+  imageDerivedClaimIds?: Set<string>
 ): Promise<ReasonerVerdictOutput | null> {
   if (claims.length === 0 || sources.length === 0) {
     return null;
@@ -105,7 +107,8 @@ export async function reasonVerdict(
       id: claim.id,
       text: claim.text,
       verdict_hint: claim.verdict,
-      confidence: claim.confidence
+      confidence: claim.confidence,
+      is_image_derived: imageDerivedClaimIds?.has(claim.id) ?? false
     })),
     evidence: sources.map((source) => ({
       key: source.key,
