@@ -47,6 +47,12 @@ export default function ResultScreen() {
     return undefined;
   }, [analysisId, data, refetch]);
 
+  // Move hooks before early returns to maintain consistent hook order
+  const adjustedConfidence = useMemo(() => {
+    const rawConfidence = data?.confidence ?? 0;
+    return adjustConfidence(rawConfidence);
+  }, [data?.confidence]);
+
   const isPolitical = data?.topic?.toLowerCase() === "political";
 
   if (!analysisId) {
@@ -131,10 +137,6 @@ export default function ResultScreen() {
   };
 
   const scoreGradient = getScoreGradient(data.score ?? 0, data.verdict ?? null);
-  const adjustedConfidence = useMemo(() => {
-    const rawConfidence = data.confidence ?? 0;
-    return adjustConfidence(rawConfidence);
-  }, [data.confidence]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000000" }}>
