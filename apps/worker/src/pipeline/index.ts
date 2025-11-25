@@ -294,7 +294,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       reasoned.score = Math.max(0, reasoned.score - 30);
       // Ensure confidence is reduced, not increased (use 0 as minimum, not 0.3)
       reasoned.confidence = Math.max(0, reasoned.confidence - 0.2);
-      reasoned.verdict = verdictFromScore(reasoned.score);
+      // Round score before calling verdictFromScore to match behavior at line 313
+      const roundedScore = Math.round(Math.min(100, Math.max(0, reasoned.score)));
+      reasoned.verdict = verdictFromScore(roundedScore);
       
       // eslint-disable-next-line no-console
       console.warn(
