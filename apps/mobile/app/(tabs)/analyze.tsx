@@ -21,13 +21,30 @@ import { BlurView } from "expo-blur";
 import { useAuth } from "@clerk/clerk-expo";
 import { tokenProvider } from "../../src/api/token-provider";
 
-// Conditional import for expo-image-picker to handle missing native module
-let ImagePicker: typeof import("expo-image-picker") | null = null;
-try {
-  ImagePicker = require("expo-image-picker");
-} catch (error) {
-  console.warn("expo-image-picker not available:", error);
-}
+import * as ImagePicker from "expo-image-picker";
+
+// Verify ImagePicker is available
+const isImagePickerAvailable = () => {
+  const available = (
+    ImagePicker &&
+    typeof ImagePicker.requestMediaLibraryPermissionsAsync === "function" &&
+    typeof ImagePicker.launchImageLibraryAsync === "function" &&
+    typeof ImagePicker.requestCameraPermissionsAsync === "function" &&
+    typeof ImagePicker.launchCameraAsync === "function"
+  );
+  
+  if (!available) {
+    console.error("[ImagePicker] Module not available:", {
+      ImagePicker: !!ImagePicker,
+      requestMediaLibraryPermissionsAsync: typeof ImagePicker?.requestMediaLibraryPermissionsAsync,
+      launchImageLibraryAsync: typeof ImagePicker?.launchImageLibraryAsync,
+      requestCameraPermissionsAsync: typeof ImagePicker?.requestCameraPermissionsAsync,
+      launchCameraAsync: typeof ImagePicker?.launchCameraAsync,
+    });
+  }
+  
+  return available;
+};
 
 import { useTheme } from "../../src/hooks/use-theme";
 import { GradientBackground } from "../../src/components/GradientBackground";
@@ -635,8 +652,11 @@ function AnalyzeSheet({
   const theme = useTheme();
 
   const requestImagePermissions = async () => {
-    if (!ImagePicker) {
-      Alert.alert("Not Available", "Image picker is not available. Please rebuild the app.");
+    if (!isImagePickerAvailable()) {
+      Alert.alert(
+        "Not Available", 
+        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
+      );
       return false;
     }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -651,8 +671,11 @@ function AnalyzeSheet({
   };
 
   const pickImage = async () => {
-    if (!ImagePicker) {
-      Alert.alert("Not Available", "Image picker is not available. Please rebuild the app.");
+    if (!isImagePickerAvailable()) {
+      Alert.alert(
+        "Not Available", 
+        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
+      );
       return;
     }
     const hasPermission = await requestImagePermissions();
@@ -676,8 +699,11 @@ function AnalyzeSheet({
   };
 
   const takePhoto = async () => {
-    if (!ImagePicker) {
-      Alert.alert("Not Available", "Image picker is not available. Please rebuild the app.");
+    if (!isImagePickerAvailable()) {
+      Alert.alert(
+        "Not Available", 
+        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
+      );
       return;
     }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -706,8 +732,11 @@ function AnalyzeSheet({
   };
 
   const showImageOptions = () => {
-    if (!ImagePicker) {
-      Alert.alert("Not Available", "Image picker is not available. Please rebuild the app.");
+    if (!isImagePickerAvailable()) {
+      Alert.alert(
+        "Not Available", 
+        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
+      );
       return;
     }
     Alert.alert(
