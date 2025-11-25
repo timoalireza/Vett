@@ -255,9 +255,13 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const claims = attachSourcesToClaims(processedClaims, rankedSources, claimEvidenceMap);
 
   // Validate image-derived claims against evidence
-  // Check if any image attachments were successfully processed (have text, not errors)
+  // Check if any image descriptions were successfully processed
+  // Images can be: (1) direct attachments (kind === "image") or (2) extracted from links (marked with "Image summary:")
   const hasImageDescriptions = ingestion.records.some(
-    (record) => record.attachment.kind === "image" && record.text && !record.error
+    (record) =>
+      record.text &&
+      !record.error &&
+      (record.attachment.kind === "image" || record.text.toLowerCase().includes("image summary:"))
   );
   
   const imageDerivedClaims = claims.filter((claim) => {
