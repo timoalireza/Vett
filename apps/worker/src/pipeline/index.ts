@@ -24,7 +24,20 @@ function normalizeInput(payload: AnalysisJobPayload): PipelineContext {
     payload.input.text?.trim() ??
     payload.input.contentUri ??
     "No textual content provided.";
-  const attachments = Array.isArray(payload.input.attachments) ? payload.input.attachments : [];
+  
+  let attachments = Array.isArray(payload.input.attachments) ? [...payload.input.attachments] : [];
+
+  // Check if the text is just a URL and we have no attachments
+  // If so, treat it as a link attachment to enable scraping
+  const urlMatch = text.match(/^https?:\/\/[^\s]+$/);
+  if (urlMatch && attachments.length === 0) {
+    console.log(`[Pipeline] Detected URL-only input: ${text}, auto-creating attachment.`);
+    attachments.push({
+      kind: "link",
+      url: text,
+      mediaType: "text/html" // Assumed, fetcher handles actual type
+    });
+  }
 
   return {
     analysisId: payload.analysisId,

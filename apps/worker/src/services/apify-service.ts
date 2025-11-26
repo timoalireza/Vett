@@ -101,29 +101,46 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
     return null;
   }
 
-  // Input for apify/instagram-post-scraper (instagram-scraper is deprecated/more complex for single posts)
-  // Using 'apify/instagram-scraper' might be needed for better results but 'apify/instagram-post-scraper' is cheaper/faster for single URLs
-  // Let's try 'apify/instagram-scraper' as it's often more reliable or 'apify/instagram-post-scraper'
-  // The user guide suggested 'apify/instagram-post-scraper' or 'apify/instagram-scraper'.
-  // 'apify/instagram-scraper' input format: { "directUrls": ["..."], "resultsType": "posts", "searchLimit": 1 }
+  // Input for apify/instagram-post-scraper (more specialized for single posts)
+  // This actor is often more reliable for single URLs than the general scraper
+  // Input format: { "username": [], "startUrls": ["..."], "resultsType": "posts" }
   
+  // We will try apify/instagram-post-scraper which is designed for this
   const input = {
-    directUrls: [url],
+    startUrls: [url],
     resultsType: "posts",
-    searchLimit: 1,
   };
 
   try {
     console.log(`[Apify] Scraping Instagram post: ${url}`);
-    // Using "apify/instagram-scraper" as it's the most popular and maintained one
-    const run = await apify.actor("apify/instagram-scraper").call(input);
+    // Using "apify/instagram-post-scraper" - this is a specific actor for posts
+    // Note: If you haven't added this actor to your account in Apify console, do so.
+    // Alternatively, stick to "apify/instagram-scraper" if you prefer, but ensure input matches.
+    // Let's stick to "apify/instagram-scraper" for now as it's the "official" one, but update input
+    // to be more robust or fallback.
+    
+    // Actually, let's use the input format that works for 'apify/instagram-scraper' but ensure we ask for posts
+    const inputScraper = {
+      directUrls: [url],
+      resultsType: "posts",
+      searchLimit: 1,
+    };
+
+    console.log(`[Apify] calling apify/instagram-scraper with input:`, JSON.stringify(inputScraper));
+    const run = await apify.actor("apify/instagram-scraper").call(inputScraper);
+
+    console.log(`[Apify] Run finished: ${run.status}, datasetId: ${run.defaultDatasetId}`);
 
     // Fetch results from the dataset
     const { items } = await apify.dataset(run.defaultDatasetId).listItems();
     
     if (items && items.length > 0) {
+      console.log(`[Apify] Found ${items.length} items`);
       return items[0] as ApifyInstagramResult;
     }
+    console.warn(`[Apify] No items found in dataset ${run.defaultDatasetId}`);
+    
+    // Fallback or retry logic could go here
     return null;
   } catch (error) {
     console.error("[Apify] Instagram scrape failed:", error);
