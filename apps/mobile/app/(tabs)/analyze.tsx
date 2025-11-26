@@ -556,7 +556,7 @@ export default function AnalyzeScreen() {
                     }
                   ]}
                 >
-                  Get unlimited fact-checks, advanced bias analysis, and priority processing
+                  Unlimited analyses, VettAI chat assistant, and advanced insights
                 </Text>
                 <Text
                   style={[

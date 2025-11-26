@@ -20,18 +20,14 @@ const PLAN_PRICES = {
   PRO: { monthly: 6.99, annual: 49.99 }
 };
 
-// Features comparison: Free vs PLUS vs PRO
+// Features comparison: Free vs PLUS vs PRO - Simplified and summarized
 const FEATURES = [
-  { name: "Basic analyses", free: true, plus: true, pro: true },
+  { name: "Basic fact-checking", free: true, plus: true, pro: true },
   { name: "Unlimited analyses", free: false, plus: true, pro: true },
   { name: "Priority processing", free: false, plus: true, pro: true },
-  { name: "No watermarks", free: false, plus: true, pro: true },
-  { name: "Up to 10 sources per analysis", free: false, plus: true, pro: true },
-  { name: "Advanced bias analysis", free: false, plus: false, pro: true },
-  { name: "Extended summaries", free: false, plus: false, pro: true },
-  { name: "Cross-platform sync", free: false, plus: false, pro: true },
-  { name: "Custom alerts", free: false, plus: false, pro: true },
-  { name: "Up to 20 sources per analysis", free: false, plus: false, pro: true }
+  { name: "Advanced analysis", free: false, plus: false, pro: true },
+  { name: "VettAI chat assistant", free: false, plus: false, pro: true },
+  { name: "Extended sources & summaries", free: false, plus: false, pro: true }
 ];
 
 export default function SubscriptionModal() {

@@ -18,7 +18,6 @@ import { ClaimItem } from "../../src/components/ClaimItem";
 import { SourceItem } from "../../src/components/SourceItem";
 import { getScoreGradient, adjustConfidence } from "../../src/utils/scoreColors";
 import { RatingPopup } from "../../src/components/RatingPopup";
-import { FeedbackForm } from "../../src/components/FeedbackForm";
 import { VettAIChat } from "../../src/components/VettAIChat";
 import { fetchSubscription } from "../../src/api/subscription";
 import { chatWithVettAI } from "../../src/api/vettai";
@@ -26,14 +25,14 @@ import { chatWithVettAI } from "../../src/api/vettai";
 const stages = ["Extracting", "Classifying", "Verifying", "Scoring"];
 
 const FEEDBACK_STORAGE_KEY = "vett.ratedAnalyses";
-const MAX_CONTEXTUAL_LINES = 6; // Show 6 lines before "Read more"
+const MAX_CONTEXTUAL_LINES = 12; // Show 12 lines before "Read more" to avoid mid-sentence cuts
 
 // Component for expandable contextual information card
 function ContextualInfoCard({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
-  // Approximate: 15 chars per line, 6 lines = ~90 chars, but account for longer words
-  // Using 200 chars as threshold for "Read more" button
-  const CHAR_THRESHOLD = 200;
+  // Increased threshold to show more content before truncating
+  // Using 500 chars as threshold for "Read more" button to ensure full sentences are visible
+  const CHAR_THRESHOLD = 500;
   const shouldShowReadMore = text.length > CHAR_THRESHOLD;
 
   return (
@@ -107,7 +106,6 @@ export default function ResultScreen() {
   const analysisId = useMemo(() => (typeof jobId === "string" ? jobId : ""), [jobId]);
 
   const [showRatingPopup, setShowRatingPopup] = useState(false);
-  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [showVettAI, setShowVettAI] = useState(false);
 
   // Check subscription status for Pro members
@@ -144,7 +142,6 @@ export default function ResultScreen() {
       await markAnalysisAsRated(analysisId);
       queryClient.invalidateQueries({ queryKey: ["feedback", analysisId] });
       setShowRatingPopup(false);
-      setShowFeedbackForm(false);
     }
   });
 
@@ -195,16 +192,21 @@ export default function ResultScreen() {
   }, [analysisId, data?.status, existingFeedback]);
 
   const handleThumbsUp = useCallback(() => {
+    // Prevent multiple simultaneous mutations
+    if (feedbackMutation.isPending) return;
     feedbackMutation.mutate({ isAgree: true });
   }, [feedbackMutation]);
 
   const handleThumbsDown = useCallback(() => {
-    setShowRatingPopup(false);
-    setShowFeedbackForm(true);
-  }, []);
+    // Feedback form is now handled within RatingPopup component
+    // Prevent action if mutation is in progress
+    if (feedbackMutation.isPending) return;
+  }, [feedbackMutation]);
 
   const handleFeedbackSubmit = useCallback(
     (comment: string) => {
+      // Prevent multiple simultaneous mutations
+      if (feedbackMutation.isPending) return;
       feedbackMutation.mutate({ isAgree: false, comment });
     },
     [feedbackMutation]
@@ -544,22 +546,14 @@ export default function ResultScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Rating Popup */}
+      {/* Rating Popup with integrated feedback form */}
       <RatingPopup
         visible={showRatingPopup}
         onThumbsUp={handleThumbsUp}
         onThumbsDown={handleThumbsDown}
         onDismiss={handleDismissRating}
-      />
-
-      {/* Feedback Form */}
-      <FeedbackForm
-        visible={showFeedbackForm}
-        onSubmit={handleFeedbackSubmit}
-        onCancel={() => {
-          setShowFeedbackForm(false);
-          markAnalysisAsRated(analysisId).catch(() => {});
-        }}
+        onSubmitFeedback={handleFeedbackSubmit}
+        isSubmitting={feedbackMutation.isPending}
       />
 
       {/* VettAI Chat - Pro members only */}
