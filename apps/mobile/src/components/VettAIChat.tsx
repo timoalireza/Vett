@@ -190,7 +190,7 @@ export function VettAIChat({
                   value={input}
                   onChangeText={setInput}
                   multiline
-                  maxLength={500}
+                  maxLength={1000}
                   onSubmitEditing={handleSend}
                   returnKeyType="send"
                   editable={!loading}
