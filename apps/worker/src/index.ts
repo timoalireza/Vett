@@ -417,22 +417,26 @@ function createWorker(): Worker {
       const pipelineResult = await runAnalysisPipeline(payload);
 
       await db.transaction(async (tx) => {
-        const analysisUpdate = {
-          status: "COMPLETED" as const,
-          topic: pipelineResult.topic,
-          bias: pipelineResult.bias,
-          score: pipelineResult.score,
-          verdict: pipelineResult.verdict,
-          confidence: pipelineResult.confidence.toFixed(2),
-          summary: pipelineResult.summary,
-          recommendation: pipelineResult.recommendation,
-          resultJson: JSON.stringify(pipelineResult.resultJson),
-          updatedAt: new Date()
-        };
-
+        // Validate verdict before database insertion
+        const validVerdicts = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion"];
+        const validatedVerdict = validVerdicts.includes(pipelineResult.verdict) 
+          ? pipelineResult.verdict 
+          : "False";
+        
         await tx
           .update(schema.analyses)
-          .set(analysisUpdate)
+          .set({
+            status: "COMPLETED",
+            topic: pipelineResult.topic,
+            bias: pipelineResult.bias,
+            score: pipelineResult.score,
+            verdict: validatedVerdict as any,
+            confidence: pipelineResult.confidence.toFixed(2),
+            summary: pipelineResult.summary,
+            recommendation: pipelineResult.recommendation,
+            resultJson: JSON.stringify(pipelineResult.resultJson),
+            updatedAt: new Date()
+          })
           .where(eq(schema.analyses.id, payload.analysisId));
 
         const insertedSources = await Promise.all(
@@ -459,13 +463,19 @@ function createWorker(): Worker {
 
         const insertedClaims = await Promise.all(
           pipelineResult.claims.map(async (claim) => {
+            // Validate verdict before database insertion
+            const validVerdicts = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion"];
+            const validatedVerdict = validVerdicts.includes(claim.verdict) 
+              ? claim.verdict 
+              : "False";
+            
             const [row] = await tx
               .insert(schema.claims)
               .values({
                 analysisId: payload.analysisId,
                 text: claim.text,
                 extractionConfidence: claim.extractionConfidence.toFixed(2),
-                verdict: claim.verdict,
+                verdict: validatedVerdict as any,
                 confidence: claim.confidence.toFixed(2)
               })
               .returning({ id: schema.claims.id });
@@ -514,13 +524,11 @@ function createWorker(): Worker {
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "The automatic analysis pipeline encountered an error.";
-      logger.error({ jobId: job.id, err: error, errorMessage }, "Analysis pipeline failed");
+      logger.error({ jobId: job.id, err: error }, "Analysis pipeline failed");
       
-      // Use a more user-friendly error message if it's a content extraction error
       const userFriendlyMessage = errorMessage.includes("Failed to extract") || 
                                    errorMessage.includes("Unable to extract") ||
-                                   errorMessage.includes("Insufficient content") ||
-                                   errorMessage.includes("too short")
+                                   errorMessage.includes("Insufficient content")
         ? errorMessage
         : "The automatic analysis pipeline encountered an error.";
       

@@ -208,41 +208,36 @@ function verdictFromScore(score: number): PipelineResult["verdict"] {
   return "False";
 }
 
+// Validate verdicts match database enum before saving
+const VALID_VERDICTS = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion"] as const;
+
+function validateVerdict(verdict: string): PipelineResult["verdict"] {
+  if (VALID_VERDICTS.includes(verdict as any)) {
+    return verdict as PipelineResult["verdict"];
+  }
+  console.warn(`[Pipeline] Invalid verdict "${verdict}", defaulting to "False"`);
+  return "False";
+}
+
 export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<PipelineResult> {
   const context = normalizeInput(payload);
 
   const ingestion = await ingestAttachments(context.attachments);
 
-  // Log ingestion results for debugging
-  if (ingestion.combinedText) {
-    console.log(`[Pipeline] Ingested content length: ${ingestion.combinedText.length} chars`);
-    console.log(`[Pipeline] Ingested content preview: ${ingestion.combinedText.substring(0, 300)}...`);
-  } else {
-    console.warn(`[Pipeline] No content ingested from attachments`);
-  }
-
-  // Validate content extraction - fail early if attachments were provided but extraction failed
+  // Validate content extraction
   if (context.attachments.length > 0) {
-    // CRITICAL: Check if we have any extracted content at all
-    // This must happen BEFORE building analysisCorpus to prevent hallucination
     const hasExtractedContent = ingestion.combinedText && ingestion.combinedText.trim().length >= 20;
     
     if (!hasExtractedContent) {
-      // Check if we have records with errors
       const errorMessages = ingestion.records
         .filter((r) => r.error)
         .map((r) => r.error)
         .join("; ");
       
       const baseError = errorMessages || "The link may be private, require authentication, or the content may not be accessible.";
-      const errorMsg = `Failed to extract content from the provided link(s). ${baseError} Please try uploading a screenshot of the post instead.`;
-      console.error(`[Pipeline] Content extraction validation failed: ${errorMsg}`);
-      console.error(`[Pipeline] ingestion.combinedText: ${ingestion.combinedText || 'null/undefined'}, length: ${ingestion.combinedText?.length || 0}`);
-      console.error(`[Pipeline] ingestion.records count: ${ingestion.records.length}`);
-      throw new Error(errorMsg);
+      throw new Error(`Failed to extract content from the provided link(s). ${baseError} Please try uploading a screenshot of the post instead.`);
     }
 
-    // Check if all successful extractions have poor quality - fail if so
     const successfulRecords = ingestion.records.filter(
       (r) => r.text && r.text.trim().length > 0 && !r.error
     );
@@ -250,14 +245,10 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       (r) => r.quality && (r.quality.level === "poor" || r.quality.level === "insufficient")
     );
     
-    // If all successful extractions are poor quality, fail the analysis
     if (successfulRecords.length > 0 && poorQualityRecords.length === successfulRecords.length) {
-      const errorMsg = "Unable to extract meaningful content from the provided link. The extracted content quality is insufficient for accurate analysis. The link may be private, require authentication, or the content format may not be supported. Please try uploading a screenshot of the post instead.";
-      console.error(`[Pipeline] Content quality validation failed: ${errorMsg}`);
-      throw new Error(errorMsg);
+      throw new Error("Unable to extract meaningful content from the provided link. Please try uploading a screenshot of the post instead.");
     }
   }
-
 
   const corpusSegments = [context.normalizedText];
   if (ingestion.combinedText) {
@@ -269,8 +260,6 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       .filter((segment) => typeof segment === "string" && segment.trim().length > 0)
       .join("\n\n") || context.normalizedText;
   
-  // Final validation: ensure we have meaningful content to analyze (not just URLs or placeholders)
-  // This check applies even if no attachments were explicitly provided, to prevent analyzing raw URLs sent as text
   const hasUrl = /https?:\/\/[^\s]+/.test(analysisCorpus);
   const hasAttachments = context.attachments.length > 0;
 
@@ -283,16 +272,10 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       .trim();
     
     if (meaningfulContent.length < 20) {
-      const errorMsg = "Insufficient content extracted from the provided link. Unable to perform analysis. Please try uploading a screenshot of the post instead.";
-      console.error(`[Pipeline] Final content validation failed: meaningfulContent length=${meaningfulContent.length}, hasUrl=${hasUrl}, hasAttachments=${hasAttachments}`);
-      console.error(`[Pipeline] Analysis corpus (start): ${analysisCorpus.substring(0, 100)}`);
-      throw new Error(errorMsg);
+      throw new Error("Insufficient content extracted from the provided link. Unable to perform analysis. Please try uploading a screenshot of the post instead.");
     }
   }
   
-  console.log(`[Pipeline] Analysis corpus length: ${analysisCorpus.length} chars`);
-  console.log(`[Pipeline] Analysis corpus preview: ${analysisCorpus.substring(0, 300)}...`);
-
   const classification = await classifyTopicWithOpenAI({
     ...payload.input,
     text: analysisCorpus
@@ -300,6 +283,10 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const claimExtraction = await extractClaimsWithOpenAI(analysisCorpus);
 
   const processedClaims = mergeAndFilterClaims(claimExtraction.claims);
+
+  if (processedClaims.length === 0) {
+    throw new Error("Unable to extract meaningful claims from the content.");
+  }
 
   const evidenceByClaim = await Promise.all(
     processedClaims.map(async (claim) => {
@@ -362,7 +349,6 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     );
   });
 
-  // If we have image-derived claims, add extra validation context to reasoning
   const imageDerivedClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
   const reasoned = await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
   
@@ -408,10 +394,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ? (() => {
         const rawScore = Math.round(Math.min(100, Math.max(0, reasoned.score)));
         const derivedVerdict = verdictFromScore(rawScore);
-        const verdict =
-          reasoned.verdict && ["Verified", "Mostly Accurate", "Partially Accurate", "False"].includes(reasoned.verdict)
-            ? (reasoned.verdict as PipelineResult["verdict"])
-            : derivedVerdict;
+        const verdict = validateVerdict(reasoned.verdict || derivedVerdict);
 
         if (verdict !== derivedVerdict) {
           // eslint-disable-next-line no-console
@@ -426,9 +409,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
           );
         }
 
-        // Ensure Verified verdicts (facts) always have a score of 100
-        // Use the verdict (either from model or derived) to determine if it's Verified
-        const finalVerdict = derivedVerdict;
+        const finalVerdict = validateVerdict(reasoned.verdict || derivedVerdict);
         const finalScore = finalVerdict === "Verified" ? 100 : rawScore;
 
         return {
@@ -442,18 +423,16 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     : synthesizeVerdict(claims, rankedSources);
 
   // Adjust scores: False with high confidence gets 0, Verified (facts) always gets 100
-  const adjustedVerdictData =
-    verdictData.verdict === "False" && verdictData.confidence >= 0.9
-      ? {
-          ...verdictData,
-          score: 0
-        }
-      : verdictData.verdict === "Verified"
-        ? {
-            ...verdictData,
-            score: 100
-          }
-        : verdictData;
+  const adjustedVerdictData = {
+    ...verdictData,
+    verdict: validateVerdict(verdictData.verdict),
+    score:
+      verdictData.verdict === "False" && verdictData.confidence >= 0.9
+        ? 0
+        : verdictData.verdict === "Verified"
+          ? 100
+          : verdictData.score
+  };
 
   // Image generation removed - no longer using DALL-E 3 or Unsplash
 
