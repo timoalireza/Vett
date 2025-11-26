@@ -210,11 +210,12 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   // Validate content extraction - fail early if attachments were provided but extraction failed
   if (context.attachments.length > 0) {
-    const allFailed = ingestion.records.every(
-      (record) => record.error || !record.text || record.text.trim().length === 0
-    );
-
-    if (allFailed && ingestion.records.length > 0) {
+    // CRITICAL: Check if we have any extracted content at all
+    // This must happen BEFORE building analysisCorpus to prevent hallucination
+    const hasExtractedContent = ingestion.combinedText && ingestion.combinedText.trim().length >= 20;
+    
+    if (!hasExtractedContent) {
+      // Check if we have records with errors
       const errorMessages = ingestion.records
         .filter((r) => r.error)
         .map((r) => r.error)
@@ -222,14 +223,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       
       const baseError = errorMessages || "The link may be private, require authentication, or the content may not be accessible.";
       const errorMsg = `Failed to extract content from the provided link(s). ${baseError} Please try uploading a screenshot of the post instead.`;
-      console.error(`[Pipeline] Content extraction failed: ${errorMsg}`);
-      throw new Error(errorMsg);
-    }
-
-    // Check if extracted content is too short or seems invalid
-    if (ingestion.combinedText && ingestion.combinedText.trim().length < 20) {
-      const errorMsg = "Extracted content is too short or invalid. The link may not contain readable content or may require authentication. Please try uploading a screenshot of the post instead.";
-      console.error(`[Pipeline] Content validation failed: ${errorMsg}`);
+      console.error(`[Pipeline] Content extraction validation failed: ${errorMsg}`);
+      console.error(`[Pipeline] ingestion.combinedText: ${ingestion.combinedText || 'null/undefined'}, length: ${ingestion.combinedText?.length || 0}`);
+      console.error(`[Pipeline] ingestion.records count: ${ingestion.records.length}`);
       throw new Error(errorMsg);
     }
 
@@ -249,6 +245,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     }
   }
 
+
   const corpusSegments = [context.normalizedText];
   if (ingestion.combinedText) {
     corpusSegments.push(ingestion.combinedText);
@@ -259,22 +256,19 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       .filter((segment) => typeof segment === "string" && segment.trim().length > 0)
       .join("\n\n") || context.normalizedText;
   
-  // Final validation: ensure we have meaningful content to analyze
-  // Check ingestion.combinedText specifically when attachments are provided, since analysisCorpus
-  // always includes context.normalizedText (which defaults to "No textual content provided.")
+  // Final validation: ensure we have meaningful content to analyze (not just URLs or placeholders)
   if (context.attachments.length > 0) {
-    // If we have attachments but no ingested content, fail
-    if (!ingestion.combinedText || ingestion.combinedText.trim().length < 20) {
-      const errorMsg = "Insufficient content extracted from the provided link. Unable to perform analysis. Please try uploading a screenshot of the post instead.";
-      console.error(`[Pipeline] Final content validation failed: ${errorMsg}`);
-      throw new Error(errorMsg);
-    }
+    // Remove URLs and placeholder text to check for actual content
+    const urlPattern = /https?:\/\/[^\s]+/g;
+    const placeholderPattern = /No textual content provided\./i;
+    const meaningfulContent = analysisCorpus
+      .replace(urlPattern, "")
+      .replace(placeholderPattern, "")
+      .trim();
     
-    // Also check that the analysis corpus has meaningful content beyond just the default text
-    const meaningfulContent = analysisCorpus.replace(context.normalizedText, "").trim();
     if (meaningfulContent.length < 20) {
       const errorMsg = "Insufficient content extracted from the provided link. Unable to perform analysis. Please try uploading a screenshot of the post instead.";
-      console.error(`[Pipeline] Final content validation failed: ${errorMsg}`);
+      console.error(`[Pipeline] Final content validation failed: meaningfulContent length=${meaningfulContent.length}, analysisCorpus=${analysisCorpus.substring(0, 100)}`);
       throw new Error(errorMsg);
     }
   }
