@@ -1,30 +1,110 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Platform, Linking } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { MotiView } from "moti";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useTheme } from "../../src/hooks/use-theme";
 import { LinearGradient } from "expo-linear-gradient";
-import { fetchAnalysis } from "../../src/api/analysis";
+import { fetchAnalysis, submitFeedback, fetchFeedback } from "../../src/api/analysis";
 import { GlassCard } from "../../src/components/GlassCard";
 import { ScoreRing } from "../../src/components/ScoreRing";
 import { ClaimItem } from "../../src/components/ClaimItem";
 import { SourceItem } from "../../src/components/SourceItem";
 import { getScoreGradient, adjustConfidence } from "../../src/utils/scoreColors";
+import { RatingPopup } from "../../src/components/RatingPopup";
+import { FeedbackForm } from "../../src/components/FeedbackForm";
 
 const stages = ["Extracting", "Classifying", "Verifying", "Scoring"];
+
+const FEEDBACK_STORAGE_KEY = "vett.ratedAnalyses";
+const MAX_CONTEXTUAL_LINES = 6; // Show 6 lines before "Read more"
+
+// Component for expandable contextual information card
+function ContextualInfoCard({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  // Approximate: 15 chars per line, 6 lines = ~90 chars, but account for longer words
+  // Using 200 chars as threshold for "Read more" button
+  const CHAR_THRESHOLD = 200;
+  const shouldShowReadMore = text.length > CHAR_THRESHOLD;
+
+  return (
+    <View style={styles.card}>
+      <BlurView intensity={30} tint="dark" style={styles.cardBlur}>
+        <LinearGradient
+          colors={["rgba(255, 255, 255, 0.05)", "rgba(255, 255, 255, 0.02)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.cardGradient}
+        />
+        <View style={styles.cardContent}>
+          <Text style={styles.cardLabel}>
+            CONTEXTUAL INFORMATION
+          </Text>
+          <Text
+            style={styles.cardText}
+            numberOfLines={expanded ? undefined : MAX_CONTEXTUAL_LINES}
+          >
+            {text}
+          </Text>
+          {shouldShowReadMore && (
+            <TouchableOpacity
+              onPress={() => setExpanded(!expanded)}
+              style={styles.readMoreButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.readMoreText}>
+                {expanded ? "Show less" : "Read more"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </BlurView>
+    </View>
+  );
+}
+const FEEDBACK_PROMPT_DELAY = 5000; // Show popup after 5 seconds of viewing
+const FEEDBACK_PROMPT_PROBABILITY = 0.3; // 30% chance to show popup
+
+async function hasRatedAnalysis(analysisId: string): Promise<boolean> {
+  try {
+    const rated = await AsyncStorage.getItem(FEEDBACK_STORAGE_KEY);
+    if (!rated) return false;
+    const ratedIds = JSON.parse(rated) as string[];
+    return ratedIds.includes(analysisId);
+  } catch {
+    return false;
+  }
+}
+
+async function markAnalysisAsRated(analysisId: string): Promise<void> {
+  try {
+    const rated = await AsyncStorage.getItem(FEEDBACK_STORAGE_KEY);
+    const ratedIds = rated ? (JSON.parse(rated) as string[]) : [];
+    if (!ratedIds.includes(analysisId)) {
+      ratedIds.push(analysisId);
+      await AsyncStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(ratedIds));
+    }
+  } catch (error) {
+    console.error("[Feedback] Error marking analysis as rated:", error);
+  }
+}
 
 export default function ResultScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { jobId } = useLocalSearchParams<{ jobId?: string }>();
 
   const analysisId = useMemo(() => (typeof jobId === "string" ? jobId : ""), [jobId]);
+
+  const [showRatingPopup, setShowRatingPopup] = useState(false);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["analysis", analysisId],
@@ -33,6 +113,24 @@ export default function ResultScreen() {
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status && status !== "COMPLETED" ? 2000 : false;
+    }
+  });
+
+  // Check if user has already rated this analysis
+  const { data: existingFeedback } = useQuery({
+    queryKey: ["feedback", analysisId],
+    queryFn: () => fetchFeedback(analysisId),
+    enabled: Boolean(analysisId) && data?.status === "COMPLETED"
+  });
+
+  const feedbackMutation = useMutation({
+    mutationFn: ({ isAgree, comment }: { isAgree: boolean; comment?: string | null }) =>
+      submitFeedback(analysisId, isAgree, comment ?? null),
+    onSuccess: async () => {
+      await markAnalysisAsRated(analysisId);
+      queryClient.invalidateQueries({ queryKey: ["feedback", analysisId] });
+      setShowRatingPopup(false);
+      setShowFeedbackForm(false);
     }
   });
 
@@ -46,6 +144,63 @@ export default function ResultScreen() {
     }
     return undefined;
   }, [analysisId, data, refetch]);
+
+  // Show rating popup occasionally after viewing completed analysis
+  useEffect(() => {
+    if (!analysisId || !data || data.status !== "COMPLETED" || existingFeedback) {
+      return;
+    }
+
+    let mounted = true;
+    let timer: NodeJS.Timeout | null = null;
+
+    const checkAndShowPopup = async () => {
+      // Check if already rated
+      const hasRated = await hasRatedAnalysis(analysisId);
+      if (hasRated || !mounted) return;
+
+      // Random chance to show popup (30% probability)
+      if (Math.random() > FEEDBACK_PROMPT_PROBABILITY) {
+        return;
+      }
+
+      // Show popup after delay
+      timer = setTimeout(() => {
+        if (mounted) {
+          setShowRatingPopup(true);
+        }
+      }, FEEDBACK_PROMPT_DELAY);
+    };
+
+    checkAndShowPopup();
+
+    return () => {
+      mounted = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [analysisId, data?.status, existingFeedback]);
+
+  const handleThumbsUp = useCallback(() => {
+    feedbackMutation.mutate({ isAgree: true });
+  }, [feedbackMutation]);
+
+  const handleThumbsDown = useCallback(() => {
+    setShowRatingPopup(false);
+    setShowFeedbackForm(true);
+  }, []);
+
+  const handleFeedbackSubmit = useCallback(
+    (comment: string) => {
+      feedbackMutation.mutate({ isAgree: false, comment });
+    },
+    [feedbackMutation]
+  );
+
+  const handleDismissRating = useCallback(() => {
+    setShowRatingPopup(false);
+    // Mark as dismissed (don't show again for this analysis)
+    markAnalysisAsRated(analysisId).catch(() => {});
+  }, [analysisId]);
 
   // Move hooks before early returns to maintain consistent hook order
   const adjustedConfidence = useMemo(() => {
@@ -213,7 +368,7 @@ export default function ResultScreen() {
                   <View style={styles.inputClaimDot} />
                   <Text style={styles.inputClaimLabel}>
                     INPUT CLAIM
-                  </Text>
+                </Text>
                 </View>
                 <Text style={styles.inputClaimText}>
                   {data.rawInput || (data.claims.length > 0 ? data.claims[0].text : "")}
@@ -275,11 +430,11 @@ export default function ResultScreen() {
               <View style={styles.confidenceColumn}>
                 <Text style={styles.confidenceLabel}>
                   CONFIDENCE
-                </Text>
+              </Text>
                 <View style={styles.confidenceBarContainer}>
                   <View style={styles.confidenceBarBackground}>
                     <View
-                      style={[
+                  style={[
                         styles.confidenceBarFill,
                         {
                           width: `${Math.min(100, Math.max(0, adjustedConfidence * 100))}%`,
@@ -314,29 +469,12 @@ export default function ResultScreen() {
                     </Text>
                   </View>
                 </BlurView>
-              </View>
-            )}
+                </View>
+              )}
 
             {/* Contextual Information Card */}
             {data.recommendation ? (
-              <View style={styles.card}>
-                <BlurView intensity={30} tint="dark" style={styles.cardBlur}>
-                  <LinearGradient
-                    colors={["rgba(255, 255, 255, 0.05)", "rgba(255, 255, 255, 0.02)"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={styles.cardGradient}
-                  />
-                  <View style={styles.cardContent}>
-                    <Text style={styles.cardLabel}>
-                      CONTEXTUAL INFORMATION
-                    </Text>
-                    <Text style={styles.cardText}>
-                      {data.recommendation}
-                    </Text>
-                  </View>
-                </BlurView>
-              </View>
+              <ContextualInfoCard text={data.recommendation} />
             ) : null}
 
             {/* Sources Card */}
@@ -351,34 +489,52 @@ export default function ResultScreen() {
                 <View style={styles.cardContent}>
                   <Text style={styles.cardLabel}>
                     VERIFIED SOURCES
-                  </Text>
-                  {data.sources.length === 0 ? (
+              </Text>
+              {data.sources.length === 0 ? (
                     <Text style={styles.emptyText}>
-                      No supporting sources yet.
-                    </Text>
-                  ) : (
-                    <View style={styles.sourcesList}>
-                      {data.sources.map((source) => (
-                        <SourceItem
-                          key={source.id}
-                          outlet={source.title || source.provider}
-                          reliability={source.reliability ?? 0}
-                          url={source.url}
-                          onPress={() => {
-                            if (source.url) {
-                              Linking.openURL(source.url).catch(() => {});
-                            }
-                          }}
-                        />
-                      ))}
-                    </View>
-                  )}
+                  No supporting sources yet.
+                </Text>
+              ) : (
+                <View style={styles.sourcesList}>
+                  {data.sources.map((source) => (
+                    <SourceItem
+                      key={source.id}
+                      outlet={source.title || source.provider}
+                      reliability={source.reliability ?? 0}
+                      url={source.url}
+                      onPress={() => {
+                        if (source.url) {
+                          Linking.openURL(source.url).catch(() => {});
+                        }
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
                 </View>
               </BlurView>
             </View>
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {/* Rating Popup */}
+      <RatingPopup
+        visible={showRatingPopup}
+        onThumbsUp={handleThumbsUp}
+        onThumbsDown={handleThumbsDown}
+        onDismiss={handleDismissRating}
+      />
+
+      {/* Feedback Form */}
+      <FeedbackForm
+        visible={showFeedbackForm}
+        onSubmit={handleFeedbackSubmit}
+        onCancel={() => {
+          setShowFeedbackForm(false);
+          markAnalysisAsRated(analysisId).catch(() => {});
+        }}
+      />
     </View>
   );
 }
@@ -689,7 +845,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     fontFamily: "Inter_500Medium",
-    letterSpacing: 0.1
+    letterSpacing: 0.1,
+    flexShrink: 1
+  },
+  readMoreButton: {
+    marginTop: 12,
+    alignSelf: "flex-start"
+  },
+  readMoreText: {
+    color: "#2EFAC0",
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.2
   },
   emptyText: {
     color: "rgba(255, 255, 255, 0.5)",
