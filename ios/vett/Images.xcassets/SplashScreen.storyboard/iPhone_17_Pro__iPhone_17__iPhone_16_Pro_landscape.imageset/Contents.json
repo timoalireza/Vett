@@ -1,0 +1,21 @@
+{
+  "images" : [
+    {
+      "filename" : "iPhone_17_Pro__iPhone_17__iPhone_16_Pro_landscape.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
