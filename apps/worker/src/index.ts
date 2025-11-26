@@ -513,13 +513,23 @@ function createWorker(): Worker {
         }
       });
     } catch (error) {
-      logger.error({ jobId: job.id, err: error }, "Analysis pipeline failed");
+      const errorMessage = error instanceof Error ? error.message : "The automatic analysis pipeline encountered an error.";
+      logger.error({ jobId: job.id, err: error, errorMessage }, "Analysis pipeline failed");
+      
+      // Use a more user-friendly error message if it's a content extraction error
+      const userFriendlyMessage = errorMessage.includes("Failed to extract") || 
+                                   errorMessage.includes("Unable to extract") ||
+                                   errorMessage.includes("Insufficient content") ||
+                                   errorMessage.includes("too short")
+        ? errorMessage
+        : "The automatic analysis pipeline encountered an error.";
+      
       await db
         .update(schema.analyses)
         .set({
           status: "FAILED",
           updatedAt: new Date(),
-          summary: "The automatic analysis pipeline encountered an error."
+          summary: userFriendlyMessage
         })
         .where(eq(schema.analyses.id, payload.analysisId));
       throw error;

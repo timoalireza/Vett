@@ -79,7 +79,7 @@ export function RatingPopup({ visible, onThumbsUp, onThumbsDown, onDismiss, onSu
           transition={{ type: "spring", damping: 20, stiffness: 300 }}
           style={styles.bannerContainer}
         >
-          <SafeAreaView edges={["top"]} style={styles.safeArea}>
+          <SafeAreaView edges={["top"]} style={styles.safeArea} mode="padding">
             <BlurView intensity={40} tint="dark" style={styles.banner}>
               <GlassCard style={styles.card} intensity="heavy">
                 {!showFeedbackForm ? (
@@ -93,7 +93,7 @@ export function RatingPopup({ visible, onThumbsUp, onThumbsDown, onDismiss, onSu
                         style={styles.closeButton}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                        <Ionicons name="close" size={16} color={theme.colors.textSecondary} />
                       </TouchableOpacity>
                     </View>
                     
@@ -114,7 +114,7 @@ export function RatingPopup({ visible, onThumbsUp, onThumbsDown, onDismiss, onSu
                         disabled={isSubmitting}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="thumbs-up" size={28} color={theme.colors.primary} />
+                        <Ionicons name="thumbs-up" size={20} color={theme.colors.primary} />
                         <Text style={[styles.buttonLabel, { color: theme.colors.text }]}>Helpful</Text>
                       </TouchableOpacity>
 
@@ -130,7 +130,7 @@ export function RatingPopup({ visible, onThumbsUp, onThumbsDown, onDismiss, onSu
                         disabled={isSubmitting}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="thumbs-down" size={28} color={theme.colors.primary} />
+                        <Ionicons name="thumbs-down" size={20} color={theme.colors.primary} />
                         <Text style={[styles.buttonLabel, { color: theme.colors.text }]}>Not helpful</Text>
                       </TouchableOpacity>
                     </View>
@@ -146,7 +146,7 @@ export function RatingPopup({ visible, onThumbsUp, onThumbsDown, onDismiss, onSu
                         style={styles.closeButton}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                        <Ionicons name="close" size={16} color={theme.colors.textSecondary} />
                       </TouchableOpacity>
                     </View>
 
@@ -237,13 +237,13 @@ const styles = StyleSheet.create({
   },
   banner: {
     width: "100%",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 8
   },
   card: {
     width: "100%",
-    padding: 20
+    padding: 12
   },
   content: {
     width: "100%",
@@ -257,11 +257,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     width: "100%",
-    marginBottom: 12,
+    marginBottom: 6,
     position: "relative"
   },
   title: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "600",
     textAlign: "center",
     flex: 1
@@ -269,21 +269,21 @@ const styles = StyleSheet.create({
   closeButton: {
     position: "absolute",
     right: 0,
-    padding: 4,
-    width: 28,
-    height: 28,
+    padding: 2,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center"
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 12,
     textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 20
+    marginBottom: 12,
+    lineHeight: 16
   },
   buttonsContainer: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
     width: "100%",
     justifyContent: "center"
   },
@@ -291,16 +291,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
     backgroundColor: "rgba(255, 255, 255, 0.05)",
-    minHeight: 80
+    minHeight: 60
   },
   buttonLabel: {
-    marginTop: 8,
-    fontSize: 14,
+    marginTop: 4,
+    fontSize: 12,
     fontWeight: "500",
     textAlign: "center"
   },

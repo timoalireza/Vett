@@ -13,7 +13,7 @@ import { extractClaimsWithOpenAI } from "./extractors/claims.js";
 import { retrieveEvidence } from "./retrievers/index.js";
 import type { EvidenceResult } from "./retrievers/types.js";
 import { evaluateEvidenceForClaim } from "./evidence/evaluator.js";
-import { reasonVerdict, VERDICT_MODEL } from "./reasoners/verdict.js";
+import { reasonVerdict, VERDICT_MODEL, type ReasonerVerdictOutput } from "./reasoners/verdict.js";
 import { adjustReliability } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
 
@@ -200,6 +200,55 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   const ingestion = await ingestAttachments(context.attachments);
 
+  // Log ingestion results for debugging
+  if (ingestion.combinedText) {
+    console.log(`[Pipeline] Ingested content length: ${ingestion.combinedText.length} chars`);
+    console.log(`[Pipeline] Ingested content preview: ${ingestion.combinedText.substring(0, 300)}...`);
+  } else {
+    console.warn(`[Pipeline] No content ingested from attachments`);
+  }
+
+  // Validate content extraction - fail early if attachments were provided but extraction failed
+  if (context.attachments.length > 0) {
+    const allFailed = ingestion.records.every(
+      (record) => record.error || !record.text || record.text.trim().length === 0
+    );
+
+    if (allFailed && ingestion.records.length > 0) {
+      const errorMessages = ingestion.records
+        .filter((r) => r.error)
+        .map((r) => r.error)
+        .join("; ");
+      
+      const baseError = errorMessages || "The link may be private, require authentication, or the content may not be accessible.";
+      const errorMsg = `Failed to extract content from the provided link(s). ${baseError} Please try uploading a screenshot of the post instead.`;
+      console.error(`[Pipeline] Content extraction failed: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
+    // Check if extracted content is too short or seems invalid
+    if (ingestion.combinedText && ingestion.combinedText.trim().length < 20) {
+      const errorMsg = "Extracted content is too short or invalid. The link may not contain readable content or may require authentication. Please try uploading a screenshot of the post instead.";
+      console.error(`[Pipeline] Content validation failed: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
+    // Check if all successful extractions have poor quality - fail if so
+    const successfulRecords = ingestion.records.filter(
+      (r) => r.text && r.text.trim().length > 0 && !r.error
+    );
+    const poorQualityRecords = successfulRecords.filter(
+      (r) => r.quality && (r.quality.level === "poor" || r.quality.level === "insufficient")
+    );
+    
+    // If all successful extractions are poor quality, fail the analysis
+    if (successfulRecords.length > 0 && poorQualityRecords.length === successfulRecords.length) {
+      const errorMsg = "Unable to extract meaningful content from the provided link. The extracted content quality is insufficient for accurate analysis. The link may be private, require authentication, or the content format may not be supported. Please try uploading a screenshot of the post instead.";
+      console.error(`[Pipeline] Content quality validation failed: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+  }
+
   const corpusSegments = [context.normalizedText];
   if (ingestion.combinedText) {
     corpusSegments.push(ingestion.combinedText);
@@ -209,6 +258,29 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     corpusSegments
       .filter((segment) => typeof segment === "string" && segment.trim().length > 0)
       .join("\n\n") || context.normalizedText;
+  
+  // Final validation: ensure we have meaningful content to analyze
+  // Check ingestion.combinedText specifically when attachments are provided, since analysisCorpus
+  // always includes context.normalizedText (which defaults to "No textual content provided.")
+  if (context.attachments.length > 0) {
+    // If we have attachments but no ingested content, fail
+    if (!ingestion.combinedText || ingestion.combinedText.trim().length < 20) {
+      const errorMsg = "Insufficient content extracted from the provided link. Unable to perform analysis. Please try uploading a screenshot of the post instead.";
+      console.error(`[Pipeline] Final content validation failed: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+    
+    // Also check that the analysis corpus has meaningful content beyond just the default text
+    const meaningfulContent = analysisCorpus.replace(context.normalizedText, "").trim();
+    if (meaningfulContent.length < 20) {
+      const errorMsg = "Insufficient content extracted from the provided link. Unable to perform analysis. Please try uploading a screenshot of the post instead.";
+      console.error(`[Pipeline] Final content validation failed: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+  }
+  
+  console.log(`[Pipeline] Analysis corpus length: ${analysisCorpus.length} chars`);
+  console.log(`[Pipeline] Analysis corpus preview: ${analysisCorpus.substring(0, 300)}...`);
 
   const classification = await classifyTopicWithOpenAI({
     ...payload.input,
@@ -285,7 +357,6 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   
   // Post-process: If image-derived claims have low evidence match, reduce confidence
   if (reasoned && imageDerivedClaims.length > 0) {
-    const imageClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
     const evidenceSupportMap = new Map(
       reasoned.evidenceSupport.map((es) => [es.claimId, es.supportingSources])
     );
@@ -307,7 +378,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       reasoned.confidence = Math.max(0, reasoned.confidence - 0.2);
       // Round score before calling verdictFromScore to match behavior at line 313
       const roundedScore = Math.round(Math.min(100, Math.max(0, reasoned.score)));
-      reasoned.verdict = verdictFromScore(roundedScore);
+      // verdictFromScore returns PipelineResult["verdict"] which includes "Opinion", but reasoned.verdict doesn't
+      // However, verdictFromScore never actually returns "Opinion", so this cast is safe
+      reasoned.verdict = verdictFromScore(roundedScore) as ReasonerVerdictOutput["verdict"];
       
       // eslint-disable-next-line no-console
       console.warn(

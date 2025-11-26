@@ -55,6 +55,14 @@ export async function extractInstagramContent(
     processMedia?: boolean;
   }
 ): Promise<InstagramExtractionResult | null> {
+  // Validate URL
+  if (!url || !url.includes("instagram.com")) {
+    console.error(`[Instagram] Invalid Instagram URL: ${url}`);
+    return null;
+  }
+  
+  console.log(`[Instagram] Extracting content from URL: ${url}`);
+  
   // Try Instaloader first if enabled (default: true)
   const useInstaloader = options?.useInstaloader !== false;
   
@@ -67,6 +75,9 @@ export async function extractInstagramContent(
       
       if (instaloaderResult.success && instaloaderResult.text) {
         console.log(`[Instagram] Instaloader extraction successful: ${instaloaderResult.text.length} chars`);
+        console.log(`[Instagram] Extracted text preview: ${instaloaderResult.text.substring(0, 200)}...`);
+        console.log(`[Instagram] Post URL: ${instaloaderResult.postUrl || url}`);
+        console.log(`[Instagram] Author: ${instaloaderResult.author || 'unknown'}`);
         
         // Combine text with media descriptions if available
         let combinedText = instaloaderResult.text;
@@ -143,7 +154,44 @@ export async function extractInstagramContent(
           
           // Check if we got actual HTML content (not a redirect or error page)
           if (html && html.length > 1000 && html.includes("<html")) {
-            break; // Success, exit loop
+            // Verify we have post content indicators first (more reliable check)
+            const hasPostContent = html.includes("shortcode_media") || 
+                                  html.includes("PostPage") || 
+                                  html.includes("ReelPage") || 
+                                  html.includes("og:description") ||
+                                  html.includes('property="og:type" content="instapp:photo"') ||
+                                  html.includes('property="og:type" content="instapp:video"');
+            
+            if (hasPostContent) {
+              console.log(`[Instagram] Successfully fetched HTML (${html.length} chars) for ${url}`);
+              break; // Success, exit loop
+            }
+            
+            // Only check for login page if we don't have post content indicators
+            // Use structural HTML indicators instead of plain text to avoid false positives
+            const hasLoginForm = html.includes('<form') && (
+              html.includes('name="username"') || 
+              html.includes('name="password"') ||
+              html.includes('type="password"') ||
+              html.includes('id="loginForm"') ||
+              html.includes('class="login"') ||
+              html.includes('action="/accounts/login/"')
+            );
+            
+            // Check for Instagram's login page specific meta tags or structure
+            const isLoginPage = html.includes('<title>Login') && html.includes('Instagram') ||
+                               (html.includes('/accounts/login/') && !hasPostContent);
+            
+            if (hasLoginForm || isLoginPage) {
+              console.warn(`[Instagram] Got login page instead of post content for ${url}`);
+              lastError = new Error("Instagram login page detected");
+              continue;
+            }
+            
+            // If we don't have post content and it's not clearly a login page, warn but continue
+            console.warn(`[Instagram] HTML doesn't contain expected post content indicators for ${url}`);
+            lastError = new Error("Response doesn't contain post content");
+            continue;
           } else {
             lastError = new Error("Response does not contain valid HTML");
             continue;
@@ -155,7 +203,8 @@ export async function extractInstagramContent(
       }
 
       if (!html) {
-        console.error(`[Instagram] Failed to fetch HTML for ${url}:`, lastError?.message);
+        const errorMsg = `Failed to fetch Instagram content from ${url}. ${lastError?.message || "The post may be private, require authentication, or Instagram may be blocking access."} Please try uploading a screenshot of the post instead.`;
+        console.error(`[Instagram] ${errorMsg}`);
         return null;
       }
 
@@ -293,7 +342,8 @@ export async function extractInstagramContent(
       const combinedText = textSources.join(" ").trim() || null;
 
       if (!combinedText) {
-        console.warn(`[Instagram] No text extracted from ${url}. HTML length: ${html.length}`);
+        const errorMsg = `No readable content could be extracted from Instagram post ${url}. The post may be private, require authentication, or contain only media without captions. Please try uploading a screenshot of the post instead.`;
+        console.warn(`[Instagram] ${errorMsg}. HTML length: ${html.length}`);
         // Log a sample of the HTML for debugging (first 500 chars)
         console.debug(`[Instagram] HTML sample: ${html.substring(0, 500)}`);
         return null;
@@ -305,6 +355,7 @@ export async function extractInstagramContent(
       const hashtags = collectHashtags(combinedText);
 
       console.log(`[Instagram] Successfully extracted content from ${url}: ${combinedText.length} chars, author: ${finalAuthor || 'unknown'}`);
+      console.log(`[Instagram] Extracted text preview: ${combinedText.substring(0, 200)}...`);
 
       return {
         text: combinedText,
