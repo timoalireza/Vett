@@ -351,9 +351,10 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
     }
   } else if (platformInfo.platform === "instagram") {
     console.log(`[LinkFetcher] Attempting Instagram extraction for: ${attachment.url}`);
+    // Apify is now prioritized within extractInstagramContent function
     const instagramResult = await extractInstagramContent(attachment.url, platformInfo.isReel ?? false, {
-      useInstaloader: true, // Try Instaloader first
-      processMedia: true // Process media through OpenAI Vision API
+      useInstaloader: true, // Fallback to Instaloader if Apify fails
+      processMedia: true
     });
     
     if (instagramResult?.text && instagramResult.text.trim().length > 0) {
@@ -445,6 +446,43 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
         };
       }
     }
+  } else if (platformInfo.platform === "facebook") {
+    console.log(`[LinkFetcher] Attempting Facebook extraction for: ${attachment.url}`);
+    const facebookResult = await extractFacebookContent(attachment.url);
+    
+    if (facebookResult?.text) {
+      const segments: string[] = [facebookResult.text];
+      
+      if (facebookResult.author) {
+        segments.push(`Author: ${facebookResult.author}`);
+      }
+      
+      const combined = segments.join("\n");
+      const { text, truncated } = truncateContent(combined);
+      const words = text.split(/\s+/).filter(Boolean);
+      
+      if (words.length > 0) {
+        // Assess quality
+        const quality = assessExtractionQuality(
+          text,
+          words.length,
+          "facebook",
+          Boolean(facebookResult.author),
+          Boolean(facebookResult.imageUrl),
+          truncated
+        );
+        
+        return {
+          text,
+          truncated,
+          wordCount: words.length,
+          imageUrl: facebookResult.imageUrl,
+          warnings: undefined,
+          quality
+        };
+      }
+    }
+    // Fallback to generic extraction if Facebook specific fails
   }
 
   // Fall back to generic extraction for non-social media or if platform-specific extraction failed

@@ -1,8 +1,9 @@
+import { scrapeTwitterPost } from "../../../services/apify-service.js";
+
 /**
  * X (Twitter) content extraction
  * 
- * Uses Twitter's oEmbed API which is free and doesn't require authentication.
- * For production, consider Twitter API v2 for better metadata (requires API key).
+ * Uses Apify (primary) or Twitter's oEmbed API (fallback).
  */
 
 export interface TwitterExtractionResult {
@@ -19,9 +20,51 @@ export interface TwitterExtractionResult {
 const TWITTER_OEMBED_BASE = "https://publish.twitter.com/oembed";
 
 /**
- * Extracts content from a Twitter/X post using oEmbed API
+ * Extracts content from a Twitter/X post using Apify or oEmbed API
  */
 export async function extractTwitterContent(url: string): Promise<TwitterExtractionResult | null> {
+  // 1. Try Apify first
+  try {
+    console.log(`[Twitter] Attempting Apify extraction for: ${url}`);
+    const apifyResult = await scrapeTwitterPost(url);
+    
+    if (apifyResult) {
+      const text = apifyResult.fullText || apifyResult.text || "";
+      if (text) {
+        console.log(`[Twitter] Apify extraction successful: ${text.length} chars`);
+        
+        // Extract media
+        let imageUrl = undefined;
+        let videoUrl = undefined;
+        
+        if (apifyResult.media && apifyResult.media.length > 0) {
+          const firstMedia = apifyResult.media[0];
+          if (firstMedia.type === "photo") {
+            imageUrl = firstMedia.media_url_https;
+          } else if (firstMedia.type === "video" || firstMedia.type === "animated_gif") {
+            videoUrl = firstMedia.video_info?.variants?.[0]?.url;
+            imageUrl = firstMedia.media_url_https; // Thumbnail
+          }
+        }
+
+        return {
+          text: text,
+          author: apifyResult.user?.name,
+          authorUrl: apifyResult.user?.screen_name ? `https://twitter.com/${apifyResult.user.screen_name}` : undefined,
+          imageUrl,
+          videoUrl,
+          timestamp: apifyResult.createdAt,
+          retweetCount: apifyResult.retweetCount,
+          likeCount: apifyResult.likeCount
+        };
+      }
+    }
+  } catch (error) {
+    console.warn(`[Twitter] Apify extraction error:`, error instanceof Error ? error.message : String(error));
+    // Fall through to oEmbed
+  }
+
+  // 2. Fallback to oEmbed
   try {
     const oembedUrl = `${TWITTER_OEMBED_BASE}?url=${encodeURIComponent(url)}&omit_script=true&dnt=true`;
     

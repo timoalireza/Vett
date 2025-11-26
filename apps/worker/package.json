@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@vett/shared": "workspace:*",
+    "apify-client": "^2.20.0",
     "bullmq": "^5.7.8",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.39.1",

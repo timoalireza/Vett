@@ -12,6 +12,7 @@
 
 import { parseHTML } from "linkedom";
 import { extractWithInstaloader } from "../../../services/instaloader-service.js";
+import { scrapeInstagramPost } from "../../../services/apify-service.js";
 
 export interface InstagramExtractionResult {
   text: string;
@@ -44,8 +45,9 @@ function collectHashtags(text: string | null | undefined): string[] {
  * Uses multiple extraction strategies for better reliability
  * 
  * Strategy:
- * 1. Try Instaloader first (most reliable, requires Python/instaloader)
- * 2. Fall back to HTML scraping if Instaloader fails
+ * 1. Try Apify first (most reliable, requires API key)
+ * 2. Try Instaloader second (reliable, requires Python/instaloader)
+ * 3. Fall back to HTML scraping if others fail
  */
 export async function extractInstagramContent(
   url: string,
@@ -63,7 +65,39 @@ export async function extractInstagramContent(
   
   console.log(`[Instagram] Extracting content from URL: ${url}`);
   
-  // Try Instaloader first if enabled (default: true)
+  // 1. Try Apify Extraction first
+  try {
+    console.log(`[Instagram] Attempting Apify extraction for: ${url}`);
+    const apifyResult = await scrapeInstagramPost(url);
+    
+    if (apifyResult) {
+      const caption = apifyResult.caption || "";
+      // Add alt text from images if available and caption is empty
+      const altText = apifyResult.alt || "";
+      const text = caption || altText || "";
+      
+      if (text) {
+        console.log(`[Instagram] Apify extraction successful: ${text.length} chars`);
+        return {
+          text: text,
+          author: apifyResult.ownerUsername,
+          authorUrl: apifyResult.ownerUsername ? `https://instagram.com/${apifyResult.ownerUsername}` : undefined,
+          imageUrl: apifyResult.displayUrl || apifyResult.images?.[0],
+          videoUrl: apifyResult.videoUrl,
+          isReel: isReel || !!apifyResult.videoUrl,
+          hashtags: apifyResult.hashtags || collectHashtags(text),
+          timestamp: apifyResult.timestamp,
+          likeCount: apifyResult.likesCount,
+          commentCount: apifyResult.commentsCount
+        };
+      }
+    }
+  } catch (error) {
+    console.warn(`[Instagram] Apify extraction error:`, error instanceof Error ? error.message : String(error));
+    // Fall through to next method
+  }
+
+  // 2. Try Instaloader first if enabled (default: true)
   const useInstaloader = options?.useInstaloader !== false;
   
   if (useInstaloader) {

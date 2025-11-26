@@ -257,8 +257,11 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       .join("\n\n") || context.normalizedText;
   
   // Final validation: ensure we have meaningful content to analyze (not just URLs or placeholders)
-  if (context.attachments.length > 0) {
-    // Remove URLs and placeholder text to check for actual content
+  // This check applies even if no attachments were explicitly provided, to prevent analyzing raw URLs sent as text
+  const hasUrl = /https?:\/\/[^\s]+/.test(analysisCorpus);
+  const hasAttachments = context.attachments.length > 0;
+
+  if (hasUrl || hasAttachments) {
     const urlPattern = /https?:\/\/[^\s]+/g;
     const placeholderPattern = /No textual content provided\./i;
     const meaningfulContent = analysisCorpus
@@ -268,7 +271,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     
     if (meaningfulContent.length < 20) {
       const errorMsg = "Insufficient content extracted from the provided link. Unable to perform analysis. Please try uploading a screenshot of the post instead.";
-      console.error(`[Pipeline] Final content validation failed: meaningfulContent length=${meaningfulContent.length}, analysisCorpus=${analysisCorpus.substring(0, 100)}`);
+      console.error(`[Pipeline] Final content validation failed: meaningfulContent length=${meaningfulContent.length}, hasUrl=${hasUrl}, hasAttachments=${hasAttachments}`);
+      console.error(`[Pipeline] Analysis corpus (start): ${analysisCorpus.substring(0, 100)}`);
       throw new Error(errorMsg);
     }
   }

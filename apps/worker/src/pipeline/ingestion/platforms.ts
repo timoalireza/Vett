@@ -2,7 +2,7 @@
  * Platform detection and identification utilities for social media links
  */
 
-export type SocialPlatform = "twitter" | "x" | "instagram" | "threads" | "unknown";
+export type SocialPlatform = "twitter" | "x" | "instagram" | "threads" | "facebook" | "unknown";
 
 export interface PlatformInfo {
   platform: SocialPlatform;
@@ -71,6 +71,18 @@ export function detectPlatform(url: string): PlatformInfo {
         isPost: true,
         postId: match?.[2],
         username: match?.[1]
+      };
+    }
+
+    // Facebook
+    if (hostname.includes("facebook.com") || hostname.includes("fb.com") || hostname.includes("fb.watch")) {
+      // Facebook URLs can be complex (e.g. /watch, /posts, /permalink.php, /groups)
+      // We'll just identify it as Facebook for now and let Apify handle parsing
+      const isPost = pathname.includes("/posts/") || pathname.includes("/permalink.php") || pathname.includes("/watch") || urlObj.searchParams.has("story_fbid");
+      
+      return {
+        platform: "facebook",
+        isPost: isPost
       };
     }
 

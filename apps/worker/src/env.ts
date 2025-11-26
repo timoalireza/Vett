@@ -91,7 +91,9 @@ const envSchema = z.object({
   RAPIDAPI_TWITTER_HOST: z.string().optional(),
   RAPIDAPI_THREADS_HOST: z.string().optional(),
   // Unsplash API for image search
-  UNSPLASH_ACCESS_KEY: z.string().optional()
+  UNSPLASH_ACCESS_KEY: z.string().optional(),
+  // Apify API Token for social media scraping
+  APIFY_API_TOKEN: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);
