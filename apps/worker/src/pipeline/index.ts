@@ -190,7 +190,7 @@ function synthesizeVerdict(claims: PipelineClaim[], sources: PipelineSource[]): 
 
 function verdictFromScore(score: number): PipelineResult["verdict"] {
   if (score >= 76) return "Verified";
-  if (score >= 51) return "Mostly Accurate";
+  if (score >= 61) return "Mostly Accurate";
   if (score >= 41) return "Partially True";
   return "False";
 }
