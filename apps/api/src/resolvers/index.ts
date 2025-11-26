@@ -4,6 +4,8 @@ import { analysisService } from "../services/analysis-service.js";
 import { userService } from "../services/user-service.js";
 import { subscriptionService } from "../services/subscription-service.js";
 import { cacheService } from "../services/cache-service.js";
+import { feedbackService } from "../services/feedback-service.js";
+import { vettAIService } from "../services/vettai-service.js";
 import type { DataLoaderContext } from "../loaders/index.js";
 import type { PaginationArgs } from "../utils/pagination.js";
 
@@ -134,6 +136,40 @@ export const resolvers: IResolvers<GraphQLContext> = {
         periodEnd: usage.periodEnd.toISOString(),
         hasUnlimited: usage.hasUnlimited
       };
+    },
+    feedback: async (_parent, args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        return null;
+      }
+
+      try {
+        const user = await ctx.loaders.userByExternalId.load(ctx.userId);
+        if (!user) {
+          return null;
+        }
+
+        const result = await feedbackService.getFeedbackForAnalysis(args.analysisId, user.id);
+        if (!result) {
+          return null;
+        }
+
+        return {
+          id: result.id,
+          analysisId: result.analysisId,
+          userId: result.userId,
+          isAgree: result.isAgree,
+          comment: result.comment,
+          createdAt: result.createdAt.toISOString()
+        };
+      } catch (error: any) {
+        console.error("[GraphQL] Error fetching feedback:", {
+          userId: ctx.userId,
+          analysisId: args.analysisId,
+          error: error.message
+        });
+        return null;
+      }
     }
   },
   Mutation: {
@@ -195,6 +231,85 @@ export const resolvers: IResolvers<GraphQLContext> = {
         }
         
         // Re-throw the original error with better context
+        throw error;
+      }
+    },
+    submitFeedback: async (_parent, args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        // Get or create user in database
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+
+        const result = await feedbackService.submitFeedback({
+          analysisId: args.input.analysisId,
+          userId: dbUserId,
+          isAgree: args.input.isAgree,
+          comment: args.input.comment ?? null
+        });
+
+        return {
+          feedback: {
+            id: result.id,
+            analysisId: result.analysisId,
+            userId: result.userId,
+            isAgree: result.isAgree,
+            comment: result.comment,
+            createdAt: result.createdAt.toISOString()
+          }
+        };
+      } catch (error: any) {
+        console.error("[GraphQL] Error submitting feedback:", {
+          userId: ctx.userId,
+          analysisId: args.input.analysisId,
+          error: error.message,
+          stack: error.stack
+        });
+        throw error;
+      }
+    },
+    chatWithVettAI: async (_parent, args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        // Check if user has Pro subscription
+        const user = await ctx.loaders.userByExternalId.load(ctx.userId);
+        if (!user) {
+          throw new Error("User not found");
+        }
+
+        const subscription = await subscriptionService.getSubscriptionInfo(user.id);
+        if (subscription.plan !== "PRO") {
+          throw new Error("VettAI is only available for Pro members. Please upgrade to access this feature.");
+        }
+
+        // Fetch analysis if analysisId is provided
+        let analysis = null;
+        if (args.input.analysisId) {
+          analysis = await context.loaders.analysisById.load({
+            id: args.input.analysisId,
+            userId: ctx.userId
+          });
+        }
+
+        const response = await vettAIService.chat(args.input, analysis);
+
+        return {
+          response
+        };
+      } catch (error: any) {
+        console.error("[GraphQL] Error in VettAI chat:", {
+          userId: ctx.userId,
+          analysisId: args.input.analysisId,
+          error: error.message,
+          stack: error.stack
+        });
         throw error;
       }
     }

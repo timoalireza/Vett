@@ -19,6 +19,9 @@ import { SourceItem } from "../../src/components/SourceItem";
 import { getScoreGradient, adjustConfidence } from "../../src/utils/scoreColors";
 import { RatingPopup } from "../../src/components/RatingPopup";
 import { FeedbackForm } from "../../src/components/FeedbackForm";
+import { VettAIChat } from "../../src/components/VettAIChat";
+import { fetchSubscription } from "../../src/api/subscription";
+import { chatWithVettAI } from "../../src/api/vettai";
 
 const stages = ["Extracting", "Classifying", "Verifying", "Scoring"];
 
@@ -105,6 +108,15 @@ export default function ResultScreen() {
 
   const [showRatingPopup, setShowRatingPopup] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [showVettAI, setShowVettAI] = useState(false);
+
+  // Check subscription status for Pro members
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: fetchSubscription,
+    staleTime: 60000
+  });
+  const isPro = subscription?.plan === "PRO";
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["analysis", analysisId],
@@ -343,16 +355,28 @@ export default function ResultScreen() {
             </View>
           )}
 
-          {/* Share Button */}
-          <TouchableOpacity
-            onPress={handleShare}
-            style={styles.shareButton}
-            activeOpacity={0.6}
-          >
-            <View style={styles.shareButtonInner}>
-              <Ionicons name="share-social-outline" size={18} color="rgba(255, 255, 255, 0.9)" />
-            </View>
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            {isPro && (
+              <TouchableOpacity
+                onPress={() => setShowVettAI(true)}
+                style={styles.vettAIButton}
+                activeOpacity={0.6}
+              >
+                <View style={styles.vettAIButtonInner}>
+                  <Ionicons name="sparkles" size={16} color="#2EFAC0" />
+                </View>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={handleShare}
+              style={styles.shareButton}
+              activeOpacity={0.6}
+            >
+              <View style={styles.shareButtonInner}>
+                <Ionicons name="share-social-outline" size={18} color="rgba(255, 255, 255, 0.9)" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
@@ -535,6 +559,23 @@ export default function ResultScreen() {
           markAnalysisAsRated(analysisId).catch(() => {});
         }}
       />
+
+      {/* VettAI Chat - Pro members only */}
+      {isPro && (
+        <VettAIChat
+          visible={showVettAI}
+          onClose={() => setShowVettAI(false)}
+          analysisId={analysisId}
+          analysisData={{
+            claim: data.rawInput || (data.claims.length > 0 ? data.claims[0].text : undefined),
+            verdict: data.verdict ?? undefined,
+            score: data.score ?? undefined,
+            summary: data.summary ?? undefined,
+            sources: data.sources.map((s) => ({ title: s.title, url: s.url }))
+          }}
+          onSendMessage={chatWithVettAI}
+        />
+      )}
     </View>
   );
 }
@@ -661,6 +702,32 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     letterSpacing: 0.4,
     textTransform: "uppercase"
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  vettAIButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  vettAIButtonInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(46, 250, 192, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(46, 250, 192, 0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#2EFAC0",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
   },
   shareButton: {
     width: 36,

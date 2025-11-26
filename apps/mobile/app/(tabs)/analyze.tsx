@@ -51,7 +51,49 @@ import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { AnalysisCardVertical } from "../../src/components/AnalysisCardVertical";
 import { submitAnalysis, fetchAnalyses } from "../../src/api/analysis";
+import { fetchSubscription } from "../../src/api/subscription";
 import { useQuery } from "@tanstack/react-query";
+
+// Membership Badge Component
+function MembershipBadge() {
+  const theme = useTheme();
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: fetchSubscription,
+    staleTime: 60000 // Cache for 1 minute
+  });
+
+  if (!subscription) return null;
+
+  const plan = subscription.plan;
+  const isPro = plan === "PRO";
+  const isPlus = plan === "PLUS";
+
+  return (
+    <View style={styles.membershipBadge}>
+      <BlurView intensity={20} tint="dark" style={styles.membershipBadgeBlur}>
+        <View style={styles.membershipBadgeContent}>
+          {isPro ? (
+            <>
+              <Ionicons name="diamond" size={14} color="#2EFAC0" />
+              <Text style={styles.membershipBadgeText}>PRO</Text>
+            </>
+          ) : isPlus ? (
+            <>
+              <Ionicons name="star" size={14} color="#53D8FF" />
+              <Text style={styles.membershipBadgeText}>PLUS</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="person" size={14} color="rgba(255, 255, 255, 0.6)" />
+              <Text style={styles.membershipBadgeTextFree}>FREE</Text>
+            </>
+          )}
+        </View>
+      </BlurView>
+    </View>
+  );
+}
 
 export default function AnalyzeScreen() {
   const theme = useTheme();
@@ -263,6 +305,7 @@ export default function AnalyzeScreen() {
           >
             Vett
           </Text>
+          <MembershipBadge />
         </View>
 
         {/* Dominant glass card for new analysis - Multiple concentrated color points with blur */}
@@ -974,7 +1017,11 @@ const styles = StyleSheet.create({
     gap: 24
   },
   header: {
-    marginBottom: 8
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%"
   },
   headerTitle: {
     letterSpacing: -0.5
@@ -1088,5 +1135,36 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     letterSpacing: 0.1
+  },
+  membershipBadge: {
+    borderRadius: 12,
+    overflow: "hidden"
+  },
+  membershipBadgeBlur: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(15, 15, 15, 0.6)"
+  },
+  membershipBadgeContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  membershipBadgeText: {
+    color: "#2EFAC0",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+    textTransform: "uppercase"
+  },
+  membershipBadgeTextFree: {
+    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+    textTransform: "uppercase"
   }
 });

@@ -250,10 +250,41 @@ export const schema = `
     ): AnalysisConnection!
     subscription: SubscriptionInfo!
     usage: UsageInfo!
+    feedback(analysisId: ID!): Feedback
+  }
+
+  type Feedback {
+    id: ID!
+    analysisId: ID!
+    userId: ID
+    isAgree: Boolean!
+    comment: String
+    createdAt: String!
+  }
+
+  input SubmitFeedbackInput {
+    analysisId: ID!
+    isAgree: Boolean!
+    comment: String
+  }
+
+  type SubmitFeedbackPayload {
+    feedback: Feedback!
+  }
+
+  input VettAIChatInput {
+    message: String!
+    analysisId: ID
+  }
+
+  type VettAIChatPayload {
+    response: String!
   }
 
   type Mutation {
     submitAnalysis(input: SubmitAnalysisInput!): SubmitAnalysisPayload!
+    submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
+    chatWithVettAI(input: VettAIChatInput!): VettAIChatPayload!
   }
 `;
 

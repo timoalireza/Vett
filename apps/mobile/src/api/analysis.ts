@@ -162,4 +162,65 @@ export async function fetchAnalyses(first: number = 10, after?: string): Promise
   return result.analyses;
 }
 
+export interface FeedbackResponse {
+  id: string;
+  analysisId: string;
+  userId: string | null;
+  isAgree: boolean;
+  comment: string | null;
+  createdAt: string;
+}
+
+const SUBMIT_FEEDBACK_MUTATION = `
+  mutation SubmitFeedback($input: SubmitFeedbackInput!) {
+    submitFeedback(input: $input) {
+      feedback {
+        id
+        analysisId
+        userId
+        isAgree
+        comment
+        createdAt
+      }
+    }
+  }
+`;
+
+const FEEDBACK_QUERY = `
+  query Feedback($analysisId: ID!) {
+    feedback(analysisId: $analysisId) {
+      id
+      analysisId
+      userId
+      isAgree
+      comment
+      createdAt
+    }
+  }
+`;
+
+export async function submitFeedback(
+  analysisId: string,
+  isAgree: boolean,
+  comment?: string | null
+): Promise<FeedbackResponse> {
+  const result = await graphqlRequest<{ submitFeedback: { feedback: FeedbackResponse } }>(
+    SUBMIT_FEEDBACK_MUTATION,
+    {
+      input: {
+        analysisId,
+        isAgree,
+        comment: comment ?? null
+      }
+    }
+  );
+  return result.submitFeedback.feedback;
+}
+
+export async function fetchFeedback(analysisId: string): Promise<FeedbackResponse | null> {
+  const result = await graphqlRequest<{ feedback: FeedbackResponse | null }>(FEEDBACK_QUERY, {
+    analysisId
+  });
+  return result.feedback;
+}
 
