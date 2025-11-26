@@ -34,7 +34,7 @@ export const quickActions = [
 
 export const dummyClaims = [
   { text: "EU granted WHO full pandemic override powers", verdict: "False", confidence: 0.94 },
-  { text: "CDC halted all flu shots for pregnant people", verdict: "Partially True", confidence: 0.68 },
+  { text: "CDC halted all flu shots for pregnant people", verdict: "Partially Accurate", confidence: 0.68 },
   { text: "Solar panels shut down whenever it snows", verdict: "False", confidence: 0.91 }
 ];
 

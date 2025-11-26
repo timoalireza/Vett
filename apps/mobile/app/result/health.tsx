@@ -62,7 +62,7 @@ export default function HealthResultScreen() {
       topic="health"
       title="CDC halted flu shots for pregnancy?"
       platform="Health blog screenshot"
-      verdict="Partially True"
+      verdict="Partially Accurate"
       score={46}
       confidence={0.72}
       summary="Policy review indicates certain waivers expired, but core immunization guidance is unchanged."

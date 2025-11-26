@@ -24,7 +24,7 @@ const JSON_SCHEMA = {
           text: { type: "string", minLength: 6, maxLength: 512 },
           verdict: {
             type: "string",
-            enum: ["Verified", "Mostly Accurate", "Partially True", "False", "Opinion"]
+            enum: ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion"]
           },
           confidence: {
             type: "number",
@@ -166,7 +166,7 @@ export async function extractClaimsWithOpenAI(text: string): Promise<ClaimExtrac
         }
         const verdict =
           typeof claimCandidate.verdict === "string" &&
-          ["Verified", "Mostly Accurate", "Partially True", "False", "Opinion"].includes(claimCandidate.verdict)
+          ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion"].includes(claimCandidate.verdict)
             ? (claimCandidate.verdict as PipelineClaim["verdict"])
             : FALLBACK_VERDICT;
 

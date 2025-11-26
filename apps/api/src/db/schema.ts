@@ -11,7 +11,7 @@ export const analysisStatusEnum = pgEnum("analysis_status", [
 export const analysisVerdictEnum = pgEnum("analysis_verdict", [
   "Verified",
   "Mostly Accurate",
-  "Partially True",
+  "Partially Accurate",
   "False",
   "Opinion"
 ]);

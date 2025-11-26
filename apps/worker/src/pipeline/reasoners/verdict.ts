@@ -10,7 +10,7 @@ Respond in English JSON ONLY, matching the schema. Cite evidence using the provi
 If evidence contradicts a claim, LOWER the numeric score. If evidence strongly supports it, raise the score.
 Map scores to verdicts as follows:
 - 0-40 => "False"
-- 41-60 => "Partially True"
+- 41-60 => "Partially Accurate"
 - 61-75 => "Mostly Accurate"
 - 76-100 => "Verified"
 Confidence must be 0-1.
@@ -18,7 +18,7 @@ Explain rationale succinctly (<=200 chars).
 
 CRITICAL: For claims derived from images (marked with \`is_image_derived: true\`):
 - If a claim identifies a specific location, landmark, or person from an image, you MUST verify this identification against evidence
-- If evidence does NOT support the identification (e.g., evidence talks about a different location/person), mark the claim as "False" or "Partially True" with LOW score
+- If evidence does NOT support the identification (e.g., evidence talks about a different location/person), mark the claim as "False" or "Partially Accurate" with LOW score
 - Do NOT confirm image-based identifications unless evidence explicitly supports them
 - If evidence is about a different subject than the claim, this is a contradiction - lower the score significantly
 - Pay special attention to claims with \`is_image_derived: true\` - they require explicit evidence support for any identifications
@@ -52,7 +52,7 @@ const JSON_SCHEMA = {
   properties: {
     verdict: {
       type: "string",
-      enum: ["Verified", "Mostly Accurate", "Partially True", "False"]
+      enum: ["Verified", "Mostly Accurate", "Partially Accurate", "False"]
     },
     score: { type: "number", minimum: 0, maximum: 100 },
     confidence: { type: "number", minimum: 0, maximum: 1 },
@@ -84,7 +84,7 @@ const JSON_SCHEMA = {
 } as const;
 
 export type ReasonerVerdictOutput = {
-  verdict: "Verified" | "Mostly Accurate" | "Partially True" | "False";
+  verdict: "Verified" | "Mostly Accurate" | "Partially Accurate" | "False";
   score: number;
   confidence: number;
   summary: string;

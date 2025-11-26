@@ -191,7 +191,7 @@ function synthesizeVerdict(claims: PipelineClaim[], sources: PipelineSource[]): 
 function verdictFromScore(score: number): PipelineResult["verdict"] {
   if (score >= 76) return "Verified";
   if (score >= 61) return "Mostly Accurate";
-  if (score >= 41) return "Partially True";
+  if (score >= 41) return "Partially Accurate";
   return "False";
 }
 
@@ -325,7 +325,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         const rawScore = Math.round(Math.min(100, Math.max(0, reasoned.score)));
         const derivedVerdict = verdictFromScore(rawScore);
         const verdict =
-          reasoned.verdict && ["Verified", "Mostly Accurate", "Partially True", "False"].includes(reasoned.verdict)
+          reasoned.verdict && ["Verified", "Mostly Accurate", "Partially Accurate", "False"].includes(reasoned.verdict)
             ? (reasoned.verdict as PipelineResult["verdict"])
             : derivedVerdict;
 

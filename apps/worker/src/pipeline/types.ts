@@ -18,7 +18,7 @@ export type PipelineClaim = {
   id: string;
   text: string;
   extractionConfidence: number;
-  verdict: "Verified" | "Mostly Accurate" | "Partially True" | "False" | "Opinion";
+  verdict: "Verified" | "Mostly Accurate" | "Partially Accurate" | "False" | "Opinion";
   confidence: number;
   sourceKeys: string[];
 };
@@ -88,7 +88,7 @@ export type PipelineResult = {
   topic: string;
   bias: "Left" | "Center-left" | "Center" | "Center-right" | "Right" | null;
   score: number;
-  verdict: "Verified" | "Mostly Accurate" | "Partially True" | "False" | "Opinion";
+  verdict: "Verified" | "Mostly Accurate" | "Partially Accurate" | "False" | "Opinion";
   confidence: number;
   summary: string;
   recommendation: string;
