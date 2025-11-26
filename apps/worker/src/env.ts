@@ -81,8 +81,6 @@ const envSchema = z.object({
   INSTAGRAM_APP_ID: z.string().optional(),
   INSTAGRAM_APP_SECRET: z.string().optional(),
   INSTAGRAM_ACCESS_TOKEN: z.string().optional(),
-  INSTAGRAM_USERNAME: z.string().optional(),
-  INSTAGRAM_PASSWORD: z.string().optional(),
   META_APP_ID: z.string().optional(),
   META_APP_SECRET: z.string().optional(),
   THREADS_ACCESS_TOKEN: z.string().optional(),

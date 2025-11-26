@@ -11,7 +11,6 @@
  */
 
 import { parseHTML } from "linkedom";
-import { extractWithInstaloader } from "../../../services/instaloader-service.js";
 import { scrapeInstagramPost } from "../../../services/apify-service.js";
 
 export interface InstagramExtractionResult {
@@ -46,14 +45,12 @@ function collectHashtags(text: string | null | undefined): string[] {
  * 
  * Strategy:
  * 1. Try Apify first (most reliable, requires API key)
- * 2. Try Instaloader second (reliable, requires Python/instaloader)
- * 3. Fall back to HTML scraping if others fail
+ * 2. Fall back to HTML scraping if Apify fails
  */
 export async function extractInstagramContent(
   url: string,
   isReel: boolean = false,
   options?: {
-    useInstaloader?: boolean;
     processMedia?: boolean;
   }
 ): Promise<InstagramExtractionResult | null> {
@@ -94,56 +91,10 @@ export async function extractInstagramContent(
     }
   } catch (error) {
     console.warn(`[Instagram] Apify extraction error:`, error instanceof Error ? error.message : String(error));
-    // Fall through to next method
-  }
-
-  // 2. Try Instaloader first if enabled (default: true)
-  const useInstaloader = options?.useInstaloader !== false;
-  
-  if (useInstaloader) {
-    try {
-      console.log(`[Instagram] Attempting Instaloader extraction for: ${url}`);
-      const instaloaderResult = await extractWithInstaloader(url, {
-        processMedia: options?.processMedia ?? true
-      });
-      
-      if (instaloaderResult.success && instaloaderResult.text) {
-        console.log(`[Instagram] Instaloader extraction successful: ${instaloaderResult.text.length} chars`);
-        console.log(`[Instagram] Extracted text preview: ${instaloaderResult.text.substring(0, 200)}...`);
-        console.log(`[Instagram] Post URL: ${instaloaderResult.postUrl || url}`);
-        console.log(`[Instagram] Author: ${instaloaderResult.author || 'unknown'}`);
-        
-        // Combine text with media descriptions if available
-        let combinedText = instaloaderResult.text;
-        if (instaloaderResult.mediaDescriptions && instaloaderResult.mediaDescriptions.length > 0) {
-          const mediaDescriptions = instaloaderResult.mediaDescriptions
-            .map((m) => `[${m.type === "image" ? "Image" : "Video"}]: ${m.description}`)
-            .join("\n");
-          combinedText = `${combinedText}\n\n${mediaDescriptions}`;
-        }
-        
-        return {
-          text: combinedText,
-          author: instaloaderResult.author,
-          authorUrl: instaloaderResult.authorUrl,
-          imageUrl: instaloaderResult.imageUrls?.[0],
-          videoUrl: instaloaderResult.videoUrls?.[0],
-          isReel: instaloaderResult.isReel ?? isReel,
-          hashtags: instaloaderResult.hashtags,
-          timestamp: instaloaderResult.timestamp,
-          likeCount: instaloaderResult.likeCount,
-          commentCount: instaloaderResult.commentCount
-        };
-      } else {
-        console.warn(`[Instagram] Instaloader extraction failed: ${instaloaderResult.error}, falling back to HTML scraping`);
-      }
-    } catch (error) {
-      console.warn(`[Instagram] Instaloader extraction error:`, error instanceof Error ? error.message : String(error));
-      // Fall through to HTML scraping
-    }
+    // Fall through to HTML scraping
   }
   
-  // Fall back to HTML scraping
+  // 2. Fall back to HTML scraping
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000); // Increased timeout

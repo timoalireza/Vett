@@ -352,10 +352,7 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
   } else if (platformInfo.platform === "instagram") {
     console.log(`[LinkFetcher] Attempting Instagram extraction for: ${attachment.url}`);
     // Apify is now prioritized within extractInstagramContent function
-    const instagramResult = await extractInstagramContent(attachment.url, platformInfo.isReel ?? false, {
-      useInstaloader: true, // Fallback to Instaloader if Apify fails
-      processMedia: true
-    });
+    const instagramResult = await extractInstagramContent(attachment.url, platformInfo.isReel ?? false);
     
     if (instagramResult?.text && instagramResult.text.trim().length > 0) {
       // Log extracted content for debugging
