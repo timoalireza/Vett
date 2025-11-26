@@ -11,7 +11,7 @@
  */
 
 import { parseHTML } from "linkedom";
-import { extractWithInstaloader } from "../../services/instaloader-service.js";
+import { extractWithInstaloader } from "../../../services/instaloader-service.js";
 
 export interface InstagramExtractionResult {
   text: string;
