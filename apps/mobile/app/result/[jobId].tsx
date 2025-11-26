@@ -114,7 +114,9 @@ export default function ResultScreen() {
   const { data: subscription } = useQuery({
     queryKey: ["subscription"],
     queryFn: fetchSubscription,
-    staleTime: 60000
+    staleTime: 60000,
+    retry: 1,
+    refetchOnWindowFocus: false
   });
   const isPro = subscription?.plan === "PRO";
 
@@ -571,7 +573,10 @@ export default function ResultScreen() {
             verdict: data.verdict ?? undefined,
             score: data.score ?? undefined,
             summary: data.summary ?? undefined,
-            sources: data.sources.map((s) => ({ title: s.title, url: s.url }))
+            sources: (data.sources || []).map((s) => ({ 
+              title: s.title || "Untitled Source", 
+              url: s.url || "" 
+            }))
           }}
           onSendMessage={chatWithVettAI}
         />

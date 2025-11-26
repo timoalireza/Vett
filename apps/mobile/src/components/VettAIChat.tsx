@@ -89,11 +89,14 @@ export function VettAIChat({
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("[VettAI] Error sending message:", error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "I apologize, but I encountered an error. Please try again.",
+        content: error?.message?.includes("Pro members")
+          ? "VettAI is only available for Pro members. Please upgrade to access this feature."
+          : "I apologize, but I encountered an error. Please try again.",
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, errorMessage]);

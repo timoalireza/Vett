@@ -60,7 +60,9 @@ function MembershipBadge() {
   const { data: subscription } = useQuery({
     queryKey: ["subscription"],
     queryFn: fetchSubscription,
-    staleTime: 60000 // Cache for 1 minute
+    staleTime: 60000, // Cache for 1 minute
+    retry: 1,
+    refetchOnWindowFocus: false
   });
 
   if (!subscription) return null;
