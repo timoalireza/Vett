@@ -350,8 +350,13 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       }
     }
   } else if (platformInfo.platform === "instagram") {
-    const instagramResult = await extractInstagramContent(attachment.url, platformInfo.isReel ?? false);
-    if (instagramResult?.text) {
+    console.log(`[LinkFetcher] Attempting Instagram extraction for: ${attachment.url}`);
+    const instagramResult = await extractInstagramContent(attachment.url, platformInfo.isReel ?? false, {
+      useInstaloader: true, // Try Instaloader first
+      processMedia: true // Process media through OpenAI Vision API
+    });
+    
+    if (instagramResult?.text && instagramResult.text.trim().length > 0) {
       const segments: string[] = [instagramResult.text];
       
       if (instagramResult.author) {
@@ -371,6 +376,8 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       const words = text.split(/\s+/).filter(Boolean);
       
       if (words.length > 0) {
+        console.log(`[LinkFetcher] Instagram extraction successful: ${words.length} words extracted`);
+        
         // Assess quality for Instagram extraction
         const quality = assessExtractionQuality(
           text,
@@ -386,11 +393,16 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
           truncated,
           wordCount: words.length,
           imageUrl: instagramResult.imageUrl || instagramResult.videoUrl,
-          warnings: undefined,
+          warnings: quality.level === "poor" || quality.level === "insufficient" 
+            ? ["Instagram content extraction quality is low. Consider using Instagram API for better results."]
+            : undefined,
           quality
         };
       }
     }
+    
+    // Instagram-specific extraction failed, fall through to generic HTML scraper
+    console.warn(`[LinkFetcher] Instagram-specific extraction failed for ${attachment.url}, falling back to generic HTML scraper`);
   } else if (platformInfo.platform === "threads") {
     const threadsResult = await extractThreadsContent(attachment.url);
     if (threadsResult?.text) {
