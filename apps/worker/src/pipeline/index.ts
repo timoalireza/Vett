@@ -76,7 +76,7 @@ function mergeAndFilterClaims(claims: Omit<PipelineClaim, "sourceKeys">[]): Omit
         claim.extractionConfidence ?? CLAIM_CONFIDENCE_THRESHOLD
       );
       if (last.verdict === "Opinion" && claim.verdict) {
-        last.verdict = claim.verdict;
+        last.verdict = validateVerdict(claim.verdict);
       }
     } else {
       merged.push({ ...claim });
@@ -181,7 +181,7 @@ function synthesizeVerdict(claims: PipelineClaim[], sources: PipelineSource[]): 
 
   const baseScore = ((avgClaimConfidence + avgReliability) / 2) * 100;
   const calculatedScore = Math.round(Math.min(100, Math.max(0, baseScore + corroborationBonus)));
-  const verdict = verdictFromScore(calculatedScore);
+  const verdict = validateVerdict(verdictFromScore(calculatedScore));
   
   // Ensure Verified verdicts (facts) always have a score of 100
   const score = verdict === "Verified" ? 100 : calculatedScore;
@@ -350,7 +350,12 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   });
 
   const imageDerivedClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
-  const reasoned = await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
+  let reasoned = await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
+  
+  // Validate reasoned verdict immediately after receiving it
+  if (reasoned) {
+    reasoned.verdict = validateVerdict(reasoned.verdict) as ReasonerVerdictOutput["verdict"];
+  }
   
   // Post-process: If image-derived claims have low evidence match, reduce confidence
   if (reasoned && imageDerivedClaims.length > 0) {
@@ -375,9 +380,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       reasoned.confidence = Math.max(0, reasoned.confidence - 0.2);
       // Round score before calling verdictFromScore to match behavior at line 313
       const roundedScore = Math.round(Math.min(100, Math.max(0, reasoned.score)));
-      // verdictFromScore returns PipelineResult["verdict"] which includes "Opinion", but reasoned.verdict doesn't
-      // However, verdictFromScore never actually returns "Opinion", so this cast is safe
-      reasoned.verdict = verdictFromScore(roundedScore) as ReasonerVerdictOutput["verdict"];
+      // Validate the verdict after modification
+      reasoned.verdict = validateVerdict(verdictFromScore(roundedScore)) as ReasonerVerdictOutput["verdict"];
       
       // eslint-disable-next-line no-console
       console.warn(
