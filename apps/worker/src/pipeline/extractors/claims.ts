@@ -76,7 +76,7 @@ function fallbackClaims(text: string): ClaimExtractionOutput {
           id: randomUUID(),
           text: sentence,
           extractionConfidence: Number((0.55 + index * 0.1).toFixed(2)),
-          verdict: index === 0 ? "Mostly Accurate" : FALLBACK_VERDICT,
+          verdict: (index === 0 ? "Mostly Accurate" : FALLBACK_VERDICT) as PipelineClaim["verdict"],
           confidence: Number((0.55 + index * 0.08).toFixed(2))
         }))
       : [
@@ -84,7 +84,7 @@ function fallbackClaims(text: string): ClaimExtractionOutput {
             id: randomUUID(),
             text: "No concrete factual claims detected.",
             extractionConfidence: 0.4,
-            verdict: "Opinion",
+            verdict: "Opinion" as PipelineClaim["verdict"],
             confidence: 0.4
           }
         ];
@@ -136,7 +136,7 @@ export async function extractClaimsWithOpenAI(text: string): Promise<ClaimExtrac
       }
     });
 
-    const firstOutput = response.output?.[0];
+    const firstOutput = response.output?.[0] as any;
     const firstContent = firstOutput?.content?.[0];
 
     if (!firstOutput || !firstContent) {
@@ -151,7 +151,6 @@ export async function extractClaimsWithOpenAI(text: string): Promise<ClaimExtrac
         extraction_confidence?: unknown;
         notes?: unknown;
       }>;
-      warnings?: unknown;
       warnings?: unknown;
     }>(firstContent, "claim_extraction");
 

@@ -4,6 +4,8 @@ import { detectPlatform } from "./platforms.js";
 import { extractTwitterContent, extractTwitterContentFallback } from "./extractors/twitter.js";
 import { extractInstagramContent } from "./extractors/instagram.js";
 import { extractThreadsContent } from "./extractors/threads.js";
+import { extractFacebookContent } from "./extractors/facebook.js";
+import { extractFacebookContent } from "./extractors/facebook.js";
 import { assessExtractionQuality } from "./quality.js";
 
 const FETCH_TIMEOUT_MS = 8_000;
@@ -92,7 +94,7 @@ function parseJsonLd(document: any): {
   const keywordsSet = new Set<string>();
 
   for (const script of scripts) {
-    const raw = script.textContent;
+    const raw = (script as any).textContent;
     if (!raw) continue;
     try {
       const data = JSON.parse(raw);
@@ -124,9 +126,9 @@ function parseJsonLd(document: any): {
             .forEach((entry: string) => keywordsSet.add(entry.toLowerCase()));
         } else if (Array.isArray(node.keywords)) {
           node.keywords
-            .map((entry) => (typeof entry === "string" ? entry.trim() : null))
-            .filter((entry): entry is string => Boolean(entry))
-            .forEach((entry) => keywordsSet.add(entry.toLowerCase()));
+            .map((entry: unknown) => (typeof entry === "string" ? entry.trim() : null))
+            .filter((entry: unknown): entry is string => Boolean(entry))
+            .forEach((entry: string) => keywordsSet.add(entry.toLowerCase()));
         }
 
         const nodeComments = node.comment;
@@ -234,9 +236,9 @@ function extractSharedData(rawHtml: string): {
       }
       if (Array.isArray(media.accessibility_caption)) {
         media.accessibility_caption
-          .map((entry) => sanitize(entry))
-          .filter((entry): entry is string => Boolean(entry))
-          .forEach((entry) => captions.push(entry));
+          .map((entry: unknown) => (typeof entry === "string" ? sanitize(entry) : null))
+          .filter((entry: unknown): entry is string => Boolean(entry))
+          .forEach((entry: string) => captions.push(entry));
       } else if (typeof media.accessibility_caption === "string") {
         const text = sanitize(media.accessibility_caption);
         if (text) captions.push(text);
@@ -623,7 +625,7 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       quality = assessExtractionQuality(
         text,
         words.length,
-        platformInfo.platform,
+        platformInfo.platform as "twitter" | "x" | "instagram" | "threads" | "facebook",
         segments.some((s) => s.includes("Author:")),
         Boolean(imageUrl),
         truncated

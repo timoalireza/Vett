@@ -138,7 +138,7 @@ export async function classifyTopicWithOpenAI(input: AnalysisJobInput): Promise<
       }
     });
 
-    const firstOutput = response.output?.[0];
+    const firstOutput = response.output?.[0] as any;
     const firstContent = firstOutput?.content?.[0];
     if (!firstOutput || !firstContent) {
       return heuristicClassification(text);

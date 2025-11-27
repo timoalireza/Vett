@@ -234,7 +234,7 @@ const connectionFactory = {
     
     return conn;
   }
-} as ConnectionOptions;
+} as unknown as ConnectionOptions;
 
 const pool = new Pool({
   connectionString: env.DATABASE_URL
@@ -370,7 +370,7 @@ function createWorker(): Worker {
     // Log connection factory before creating worker
     logger.info("[Worker] Connection factory:", { 
       hasFactory: !!connectionFactory,
-      hasCreateClient: !!connectionFactory.createClient 
+      hasCreateClient: !!(connectionFactory as any).createClient 
     });
     console.log("[Worker] Connection factory ready:", !!connectionFactory);
     
@@ -388,7 +388,7 @@ function createWorker(): Worker {
     // CRITICAL: Test connection factory by calling it manually
     // This ensures it works and logs when called
     try {
-      const testConn = connectionFactory.createClient("test");
+      const testConn = (connectionFactory as any).createClient("test");
       logger.info({ testConnStatus: testConn.status }, "[Worker] Connection factory test result");
       console.log(`[Worker] Connection factory test: Redis status=${testConn.status}`);
     } catch (error) {

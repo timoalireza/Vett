@@ -29,7 +29,7 @@ const MIN_INFORMATION_DENSITY = 0.3; // At least 30% meaningful content
 export function assessExtractionQuality(
   text: string,
   wordCount: number,
-  platform: "twitter" | "x" | "instagram" | "threads" | "unknown",
+  platform: "twitter" | "x" | "instagram" | "threads" | "facebook" | "unknown",
   hasAuthor: boolean,
   hasMedia: boolean,
   truncated: boolean
@@ -92,7 +92,7 @@ export function assessExtractionQuality(
   }
 
   // Missing metadata
-  if (!hasAuthor && (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads")) {
+  if (!hasAuthor && (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads" || platform === "facebook")) {
     score -= 0.1;
     reasons.push("Missing author information");
   }
@@ -125,14 +125,14 @@ export function assessExtractionQuality(
   let message: string | undefined;
 
   if (level === "insufficient" || level === "poor") {
-    if (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads") {
+    if (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads" || platform === "facebook") {
       recommendation = "screenshot";
       message = `The extracted content from this ${platform} link is insufficient for accurate analysis. Please upload a screenshot of the post for better results.`;
     } else {
       recommendation = "none";
       message = "Content extraction quality is low. Consider providing additional context.";
     }
-  } else if (level === "fair" && (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads")) {
+  } else if (level === "fair" && (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads" || platform === "facebook")) {
     // Suggest API key for better extraction, but also allow screenshot
     recommendation = "api_key";
     message = `Content extraction quality is fair. For better results, consider configuring API credentials for ${platform}, or upload a screenshot of the post.`;
