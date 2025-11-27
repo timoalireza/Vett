@@ -2,7 +2,7 @@
   "name": "mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "dev": "expo start --clear",
     "ios": "expo run:ios",
@@ -37,7 +37,7 @@
     "expo-local-authentication": "~13.8.0",
     "expo-router": "^3.5.23",
     "expo-secure-store": "^13.0.2",
-    "expo-share-intent": "^5.1.0",
+    "expo-share-intent": "^4.1.2",
     "expo-splash-screen": "~0.27.5",
     "expo-status-bar": "~1.12.1",
     "expo-system-ui": "~3.0.4",
