@@ -61,12 +61,13 @@ export default fp(async (fastify: FastifyInstance) => {
 
   // Add authentication hook
   fastify.addHook("onRequest", async (request: AuthenticatedRequest) => {
-    // Skip auth for health checks and public endpoints
+    // Skip auth for health checks, webhooks, and public endpoints
     if (
       request.url.startsWith("/health") ||
       request.url.startsWith("/live") ||
       request.url.startsWith("/ready") ||
       request.url.startsWith("/auth/test") ||
+      request.url.startsWith("/webhooks/") || // RevenueCat and other webhooks
       (request.url.startsWith("/graphql") && request.method === "GET") // GraphiQL in dev
     ) {
       return;

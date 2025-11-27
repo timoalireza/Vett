@@ -264,7 +264,9 @@ export const subscriptions = pgTable("subscriptions", {
   currentPeriodStart: timestamp("current_period_start", { withTimezone: true }).notNull(),
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }).notNull(),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
-  clerkSubscriptionId: text("clerk_subscription_id"), // External subscription ID from payment provider
+  clerkSubscriptionId: text("clerk_subscription_id"), // Legacy: External subscription ID from payment provider
+  revenueCatCustomerId: text("revenuecat_customer_id"), // RevenueCat customer ID (app user ID)
+  revenueCatSubscriptionId: text("revenuecat_subscription_id"), // RevenueCat subscription/transaction ID
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 });

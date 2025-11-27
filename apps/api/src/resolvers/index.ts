@@ -123,6 +123,27 @@ export const resolvers: IResolvers<GraphQLContext> = {
       if (!user) {
         throw new Error("User not found");
       }
+      
+      // Optionally trigger background sync with RevenueCat if API key is configured
+      // Note: This is a fire-and-forget background update. The current response reflects
+      // the database state. Webhooks keep subscriptions in sync automatically, so this
+      // is primarily a fallback for manual syncs or when webhooks haven't fired yet.
+      // Future queries will reflect the synced state.
+      if (process.env.REVENUECAT_API_KEY) {
+        try {
+          const { syncUserSubscriptionFromRevenueCat } = await import("../services/revenuecat-sync.js");
+          // Sync in background - don't await to avoid blocking the response
+          syncUserSubscriptionFromRevenueCat(ctx.userId).catch((error) => {
+            console.warn("[GraphQL] RevenueCat sync failed (non-blocking):", error.message);
+          });
+        } catch (error) {
+          // Ignore sync errors - use cached subscription info
+          console.debug("[GraphQL] RevenueCat sync not available:", error);
+        }
+      }
+      
+      // Return current subscription state from database
+      // (Background sync will update database for future queries)
       const info = await subscriptionService.getSubscriptionInfo(user.id);
       return {
         plan: info.plan,

@@ -122,7 +122,10 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => (value ? Number(value) : undefined))
-    .pipe(z.number().min(0).max(1).optional())
+    .pipe(z.number().min(0).max(1).optional()),
+  // RevenueCat configuration
+  REVENUECAT_API_KEY: z.string().optional(),
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional()
 });
 
 // Debug: Log available environment variables (without sensitive values)

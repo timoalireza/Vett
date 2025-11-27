@@ -209,7 +209,9 @@ class SubscriptionService {
     userId: string,
     plan: SubscriptionPlan,
     billingCycle: BillingCycle,
-    clerkSubscriptionId?: string
+    clerkSubscriptionId?: string,
+    revenueCatCustomerId?: string,
+    revenueCatSubscriptionId?: string
   ) {
     const now = new Date();
     const periodEnd = new Date(now);
@@ -233,6 +235,8 @@ class SubscriptionService {
           currentPeriodStart: now,
           currentPeriodEnd: periodEnd,
           clerkSubscriptionId: clerkSubscriptionId ?? null,
+          revenueCatCustomerId: revenueCatCustomerId ?? null,
+          revenueCatSubscriptionId: revenueCatSubscriptionId ?? null,
           updatedAt: now
         })
         .where(eq(subscriptions.userId, userId))
@@ -260,7 +264,9 @@ class SubscriptionService {
           billingCycle,
           currentPeriodStart: now,
           currentPeriodEnd: periodEnd,
-          clerkSubscriptionId: clerkSubscriptionId ?? null
+          clerkSubscriptionId: clerkSubscriptionId ?? null,
+          revenueCatCustomerId: revenueCatCustomerId ?? null,
+          revenueCatSubscriptionId: revenueCatSubscriptionId ?? null
         })
         .returning();
 
