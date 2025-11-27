@@ -40,10 +40,28 @@ export const resolvers: IResolvers<GraphQLContext> = {
       if (context.userId) {
         // Use DataLoader for user lookup (batches multiple user lookups)
         const user = await context.loaders.userByExternalId.load(context.userId);
-        if (user && analysis.userId !== user.id) {
-          // Check if analysis is public (for future public collections feature)
-          // For now, only allow access to own analyses
+        if (!user) {
+          // User not found - log for debugging but be permissive for anonymous analyses
+          console.warn("[GraphQL] User not found for externalId:", context.userId, "analysisId:", args.id);
+          // Allow access if analysis has no userId (anonymous analysis)
+          if (analysis.userId !== null) {
+            throw new Error("Unauthorized: You can only access your own analyses");
+          }
+        } else if (analysis.userId !== null && analysis.userId !== user.id) {
+          // Analysis belongs to a different user - log for debugging
+          console.warn("[GraphQL] Authorization mismatch:", {
+            analysisId: args.id,
+            analysisUserId: analysis.userId,
+            userInternalId: user.id,
+            userExternalId: context.userId
+          });
           throw new Error("Unauthorized: You can only access your own analyses");
+        }
+        // If analysis.userId is null (anonymous) OR analysis.userId === user.id, allow access
+      } else {
+        // No authenticated user - only allow access to anonymous analyses (userId === null)
+        if (analysis.userId !== null) {
+          throw new Error("Unauthorized: Authentication required to access this analysis");
         }
       }
       

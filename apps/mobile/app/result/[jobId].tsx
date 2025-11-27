@@ -118,13 +118,25 @@ export default function ResultScreen() {
   });
   const isPro = subscription?.plan === "PRO";
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch, error } = useQuery({
     queryKey: ["analysis", analysisId],
     queryFn: () => fetchAnalysis(analysisId),
     enabled: Boolean(analysisId),
     refetchInterval: (query) => {
+      // Stop polling if there's an authorization error
+      if (query.state.error?.message?.includes("Unauthorized")) {
+        return false;
+      }
       const status = query.state.data?.status;
       return status && status !== "COMPLETED" ? 2000 : false;
+    },
+    retry: (failureCount, error: any) => {
+      // Don't retry on authorization errors - they won't resolve
+      if (error?.message?.includes("Unauthorized")) {
+        return false;
+      }
+      // Retry up to 3 times for other errors
+      return failureCount < 3;
     }
   });
 
@@ -145,16 +157,8 @@ export default function ResultScreen() {
     }
   });
 
-  useEffect(() => {
-    if (!analysisId) return;
-    if (!data || data.status !== "COMPLETED") {
-      const timer = setInterval(() => {
-        refetch();
-      }, 4000);
-      return () => clearInterval(timer);
-    }
-    return undefined;
-  }, [analysisId, data, refetch]);
+  // REMOVED: Duplicate polling mechanism - useQuery's refetchInterval handles this
+  // This was causing double polling and performance issues
 
   // Show rating popup occasionally after viewing completed analysis
   useEffect(() => {
