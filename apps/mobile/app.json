@@ -24,6 +24,17 @@
           "photosPermission": "The app accesses your photos to let you select images for analysis.",
           "cameraPermission": "The app accesses your camera to let you take photos for analysis."
         }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsImageWithMaxCount": 1
+          },
+          "androidIntentFilters": ["text/plain", "image/*"]
+        }
       ]
     ],
     "extra": {

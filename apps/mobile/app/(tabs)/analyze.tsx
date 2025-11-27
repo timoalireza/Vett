@@ -20,6 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { useAuth } from "@clerk/clerk-expo";
 import { tokenProvider } from "../../src/api/token-provider";
+import { useShareIntent } from "expo-share-intent";
 
 import * as ImagePicker from "expo-image-picker";
 
@@ -107,6 +108,42 @@ export default function AnalyzeScreen() {
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+
+  // Handle incoming share intents
+  useEffect(() => {
+    if (hasShareIntent && shareIntent) {
+      console.log("[Analyze] Received share intent:", shareIntent);
+      
+      // Handle Web URL or Text (Instagram links, etc.)
+      // Check for specific properties rather than 'type'
+      if (shareIntent.webUrl || shareIntent.text || (shareIntent as any).url) {
+        const content = shareIntent.webUrl || shareIntent.text || (shareIntent as any).url;
+        
+        if (content && typeof content === "string") {
+          setInput(content);
+          setSheetVisible(true);
+        }
+      } 
+      // Handle Image/Media (files array)
+      else if (shareIntent.files && shareIntent.files.length > 0) {
+        const file = shareIntent.files[0];
+        // Prioritize file path/uri
+        const uri = file.path || (file as any).contentUri || (file as any).uri;
+        
+        if (uri && typeof uri === "string") {
+          setSelectedImage(uri);
+          setSheetVisible(true);
+        }
+      }
+      
+      // Reset immediately to avoid re-triggering
+      resetShareIntent();
+    }
+    // Remove resetShareIntent from dependencies to avoid loops if it's not memoized
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasShareIntent, shareIntent]);
 
   // Open sheet when navigating from history page
   useEffect(() => {
