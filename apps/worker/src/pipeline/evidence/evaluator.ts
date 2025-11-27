@@ -59,14 +59,15 @@ export async function evaluateEvidenceForClaim(
     return evidence;
   }
 
+  // OPTIMIZATION: Process batches in parallel if multiple batches exist
   const batches: EvidenceResult[][] = [];
   for (let i = 0; i < evidence.length; i += MAX_EVIDENCE_PER_REQUEST) {
     batches.push(evidence.slice(i, i + MAX_EVIDENCE_PER_REQUEST));
   }
 
-  const evaluated: EvidenceResult[] = [];
-
-  for (const batch of batches) {
+  // Process all batches in parallel for faster evaluation
+  const batchResults = await Promise.all(
+    batches.map(async (batch) => {
     try {
       const response = await openai.responses.create({
         model: MODEL_NAME,
@@ -102,16 +103,14 @@ export async function evaluateEvidenceForClaim(
       const firstOutput = response.output?.[0] as any;
       const firstContent = firstOutput?.content?.[0];
       if (!firstOutput || !firstContent) {
-        evaluated.push(...batch);
-        continue;
+        return batch;
       }
 
       const parsed = await parseJsonContent<{
         evaluations?: Array<{ index?: number; reliability?: number; relevance?: number; assessment?: string }>;
       }>(firstContent, "evidence_evaluation");
       if (!parsed) {
-        evaluated.push(...batch);
-        continue;
+        return batch;
       }
 
       const evaluations = parsed.evaluations ?? [];
@@ -134,15 +133,16 @@ export async function evaluateEvidenceForClaim(
         }
       });
 
-      evaluated.push(...batch);
+      return batch;
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("Evidence evaluation failed:", error);
-      evaluated.push(...batch);
+      return batch;
     }
-  }
+    })
+  );
 
-  return evaluated;
+  return batchResults.flat();
 }
 
 

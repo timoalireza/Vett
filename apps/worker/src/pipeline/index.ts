@@ -220,9 +220,15 @@ function validateVerdict(verdict: string): PipelineResult["verdict"] {
 }
 
 export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<PipelineResult> {
+  const startTime = Date.now();
+  const timings: Record<string, number> = {};
+  
   const context = normalizeInput(payload);
+  timings.normalizeInput = Date.now() - startTime;
 
+  const ingestionStart = Date.now();
   const ingestion = await ingestAttachments(context.attachments);
+  timings.ingestion = Date.now() - ingestionStart;
 
   // Validate content extraction
   if (context.attachments.length > 0) {
@@ -277,6 +283,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   }
   
   // Run classification and extraction in parallel to save time
+  const classificationStart = Date.now();
   const [classification, claimExtraction] = await Promise.all([
     classifyTopicWithOpenAI({
       ...payload.input,
@@ -284,6 +291,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     }),
     extractClaimsWithOpenAI(analysisCorpus)
   ]);
+  timings.classificationAndExtraction = Date.now() - classificationStart;
 
   const processedClaims = mergeAndFilterClaims(claimExtraction.claims);
 
@@ -291,17 +299,30 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     throw new Error("Unable to extract meaningful claims from the content.");
   }
 
+  // OPTIMIZATION: Parallelize evidence retrieval and evaluation across all claims
+  const evidenceStart = Date.now();
   const evidenceByClaim = await Promise.all(
     processedClaims.map(async (claim) => {
+      const retrieveStart = Date.now();
       const evidence = await retrieveEvidence({
         topic: classification.topic,
         claimText: claim.text,
-        maxResults: 3
+        maxResults: 2 // Reduced from 3 to speed up retrieval
       });
+      const retrieveTime = Date.now() - retrieveStart;
+      
+      const evalStart = Date.now();
       const evaluated = await evaluateEvidenceForClaim(claim.text, evidence);
-      return { claimId: claim.id, evidence: evaluated };
+      const evalTime = Date.now() - evalStart;
+      
+      return { 
+        claimId: claim.id, 
+        evidence: evaluated,
+        timings: { retrieve: retrieveTime, evaluate: evalTime }
+      };
     })
   );
+  timings.evidenceRetrievalAndEvaluation = Date.now() - evidenceStart;
 
   const evidenceResults: EvidenceResult[] = evidenceByClaim.flatMap((entry) => entry.evidence);
 
@@ -353,7 +374,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   });
 
   const imageDerivedClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
+  const reasonStart = Date.now();
   let reasoned = await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
+  timings.reasoning = Date.now() - reasonStart;
   
   // Validate reasoned verdict immediately after receiving it
   if (reasoned) {
@@ -456,6 +479,19 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         fallbackUsed: true,
         rationale: "Reasoning model unavailable. Heuristic verdict applied."
       };
+
+  const totalTime = Date.now() - startTime;
+  timings.total = totalTime;
+  
+  // Log timing breakdown for performance analysis
+  console.log(`[Pipeline] Timing breakdown (ms):`, {
+    ingestion: timings.ingestion,
+    classificationAndExtraction: timings.classificationAndExtraction,
+    evidenceRetrievalAndEvaluation: timings.evidenceRetrievalAndEvaluation,
+    reasoning: timings.reasoning,
+    total: timings.total,
+    claimsProcessed: processedClaims.length
+  });
 
   const metadata: PipelineMetadata = {
     classification: classification.meta,

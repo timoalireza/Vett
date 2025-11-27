@@ -73,13 +73,13 @@ export function RatingPopup({ visible, onThumbsUp, onThumbsDown, onDismiss, onSu
         style={styles.container}
       >
         <MotiView
-          from={{ translateY: -200, opacity: 0 }}
+          from={{ translateY: 200, opacity: 0 }}
           animate={{ translateY: 0, opacity: 1 }}
-          exit={{ translateY: -200, opacity: 0 }}
+          exit={{ translateY: 200, opacity: 0 }}
           transition={{ type: "spring", damping: 20, stiffness: 300 }}
           style={styles.bannerContainer}
         >
-          <SafeAreaView edges={["top"]} style={styles.safeArea} mode="padding">
+          <SafeAreaView edges={["bottom"]} style={styles.safeArea} mode="padding">
             <BlurView intensity={40} tint="dark" style={styles.banner}>
               <GlassCard style={styles.card} intensity="heavy">
                 {!showFeedbackForm ? (
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   bannerContainer: {
     position: "absolute",
-    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
     zIndex: 1000
@@ -238,8 +238,8 @@ const styles = StyleSheet.create({
   banner: {
     width: "100%",
     paddingHorizontal: 12,
-    paddingTop: 4,
-    paddingBottom: 8
+    paddingTop: 8,
+    paddingBottom: 4
   },
   card: {
     width: "100%",

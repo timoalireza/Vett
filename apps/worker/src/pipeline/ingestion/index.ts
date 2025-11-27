@@ -27,98 +27,147 @@ export async function ingestAttachments(attachments: AnalysisAttachmentInput[]):
   let totalCharacters = 0;
   const warnings: string[] = [];
 
-  for (const attachment of attachments) {
-    if (attachment.kind === "link") {
-      processedLinks += 1;
-      const result = await fetchLinkAttachment(attachment);
-      if ("error" in result) {
-        failed += 1;
-        records.push({
-          attachment,
-          truncated: false,
-          error: result.error
-        });
-        continue;
-      }
-
-      successful += 1;
-      totalCharacters += result.text.length;
-      textFragments.push(result.text);
-
-      if (result.warnings) {
-        warnings.push(...result.warnings);
-      }
-
-      let combinedWordCount = result.wordCount;
-      let combinedTruncated = result.truncated;
-      const recordSegments: string[] = [result.text];
-
-      if (result.imageUrl) {
-        const imageResult = await describeImageAttachment({
-          kind: "image",
-          url: result.imageUrl,
-          mediaType: "image/jpeg"
-        });
-
-        if ("error" in imageResult) {
-          warnings.push(`Image description failed for ${result.imageUrl}: ${imageResult.error}`);
-        } else {
-          totalCharacters += imageResult.text.length;
-          textFragments.push(`Image summary: ${imageResult.text}`);
-          combinedWordCount += imageResult.wordCount;
-          combinedTruncated = combinedTruncated || imageResult.truncated;
-          recordSegments.push(`Image summary: ${imageResult.text}`);
+  // OPTIMIZATION: Process all attachments in parallel
+  const attachmentResults = await Promise.all(
+    attachments.map(async (attachment) => {
+      if (attachment.kind === "link") {
+        const result = await fetchLinkAttachment(attachment);
+        if ("error" in result) {
+          return {
+            attachment,
+            record: {
+              attachment,
+              truncated: false,
+              error: result.error
+            } as IngestionRecord,
+            text: null,
+            warnings: [],
+            stats: { links: 1, images: 0, documents: 0, successful: 0, failed: 1, characters: 0 }
+          };
         }
-      }
 
-      records.push({
-        attachment,
-        text: recordSegments.join(SEPARATOR),
-        truncated: combinedTruncated,
-        wordCount: combinedWordCount,
-        quality: result.quality
-      });
-    } else if (attachment.kind === "image") {
-      processedImages += 1;
-      const result = await describeImageAttachment(attachment);
-      if ("error" in result) {
-        failed += 1;
-        warnings.push(`Image ingestion failed for ${attachment.url}: ${result.error}`);
-        records.push({
+        let combinedWordCount = result.wordCount;
+        let combinedTruncated = result.truncated;
+        const recordSegments: string[] = [result.text];
+        const attachmentWarnings: string[] = [];
+
+        if (result.warnings) {
+          attachmentWarnings.push(...result.warnings);
+        }
+
+        // Process image URL if present (sequential within this attachment)
+        if (result.imageUrl) {
+          const imageResult = await describeImageAttachment({
+            kind: "image",
+            url: result.imageUrl,
+            mediaType: "image/jpeg"
+          });
+
+          if ("error" in imageResult) {
+            attachmentWarnings.push(`Image description failed for ${result.imageUrl}: ${imageResult.error}`);
+          } else {
+            const imageText = `Image summary: ${imageResult.text}`;
+            recordSegments.push(imageText);
+            combinedWordCount += imageResult.wordCount;
+            combinedTruncated = combinedTruncated || imageResult.truncated;
+            return {
+              attachment,
+              record: {
+                attachment,
+                text: recordSegments.join(SEPARATOR),
+                truncated: combinedTruncated,
+                wordCount: combinedWordCount,
+                quality: result.quality
+              } as IngestionRecord,
+              text: `${result.text}${SEPARATOR}${imageText}`,
+              warnings: attachmentWarnings,
+              stats: { links: 1, images: 1, documents: 0, successful: 1, failed: 0, characters: result.text.length + imageResult.text.length }
+            };
+          }
+        }
+
+        return {
           attachment,
-          truncated: false,
-          error: result.error
-        });
-        continue;
-      }
+          record: {
+            attachment,
+            text: recordSegments.join(SEPARATOR),
+            truncated: combinedTruncated,
+            wordCount: combinedWordCount,
+            quality: result.quality
+          } as IngestionRecord,
+          text: result.text,
+          warnings: attachmentWarnings,
+          stats: { links: 1, images: 0, documents: 0, successful: 1, failed: 0, characters: result.text.length }
+        };
+      } else if (attachment.kind === "image") {
+        const result = await describeImageAttachment(attachment);
+        if ("error" in result) {
+          return {
+            attachment,
+            record: {
+              attachment,
+              truncated: false,
+              error: result.error
+            } as IngestionRecord,
+            text: null,
+            warnings: [`Image ingestion failed for ${attachment.url}: ${result.error}`],
+            stats: { links: 0, images: 1, documents: 0, successful: 0, failed: 1, characters: 0 }
+          };
+        }
 
-      successful += 1;
-      totalCharacters += result.text.length;
+        return {
+          attachment,
+          record: {
+            attachment,
+            text: result.text,
+            truncated: result.truncated,
+            wordCount: result.wordCount
+          } as IngestionRecord,
+          text: result.text,
+          warnings: [],
+          stats: { links: 0, images: 1, documents: 0, successful: 1, failed: 0, characters: result.text.length }
+        };
+      } else if (attachment.kind === "document") {
+        return {
+          attachment,
+          record: {
+            attachment,
+            truncated: false,
+            error: "Document ingestion not yet implemented."
+          } as IngestionRecord,
+          text: null,
+          warnings: [`Document ingestion not yet implemented for ${attachment.url}`],
+          stats: { links: 0, images: 0, documents: 1, successful: 0, failed: 1, characters: 0 }
+        };
+      } else {
+        return {
+          attachment,
+          record: {
+            attachment,
+            truncated: false,
+            error: "Unknown attachment kind."
+          } as IngestionRecord,
+          text: null,
+          warnings: [`Unknown attachment kind ${(attachment as { kind?: string }).kind}`],
+          stats: { links: 0, images: 0, documents: 0, successful: 0, failed: 1, characters: 0 }
+        };
+      }
+    })
+  );
+
+  // Aggregate results
+  for (const result of attachmentResults) {
+    records.push(result.record);
+    if (result.text) {
       textFragments.push(result.text);
-      records.push({
-        attachment,
-        text: result.text,
-        truncated: result.truncated,
-        wordCount: result.wordCount
-      });
-    } else if (attachment.kind === "document") {
-      processedDocuments += 1;
-      failed += 1;
-      warnings.push(`Document ingestion not yet implemented for ${attachment.url}`);
-      records.push({
-        attachment,
-        truncated: false,
-        error: "Document ingestion not yet implemented."
-      });
-    } else {
-      failed += 1;
-      warnings.push(`Unknown attachment kind ${(attachment as { kind?: string }).kind}`);
-      records.push({
-        attachment,
-        truncated: false,
-        error: "Unknown attachment kind."
-      });
     }
+    warnings.push(...result.warnings);
+    processedLinks += result.stats.links;
+    processedImages += result.stats.images;
+    processedDocuments += result.stats.documents;
+    successful += result.stats.successful;
+    failed += result.stats.failed;
+    totalCharacters += result.stats.characters;
   }
 
   const combinedText = textFragments.join(SEPARATOR);

@@ -7,26 +7,37 @@ import { adjustReliability, extractHostname, isBlacklisted, isLowTrust } from ".
 
 const RETRIEVERS: Retriever[] = [braveRetriever, serperRetriever, googleFactCheckRetriever];
 
+const EVIDENCE_RETRIEVAL_TIMEOUT_MS = 5_000; // 5 second timeout per retriever
+
 async function runWithRetry(
   retriever: Retriever,
   options: RetrieverOptions,
-  attempts = 2
+  attempts = 1 // Reduced from 2 to 1 for speed - fail fast
 ): Promise<EvidenceResult[]> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const results = await retriever.fetchEvidence(options);
+      // Add timeout wrapper to prevent slow retrievers from blocking
+      const timeoutPromise = new Promise<EvidenceResult[]>((_, reject) => {
+        setTimeout(() => reject(new Error(`Timeout after ${EVIDENCE_RETRIEVAL_TIMEOUT_MS}ms`)), EVIDENCE_RETRIEVAL_TIMEOUT_MS);
+      });
+      
+      const results = await Promise.race([
+        retriever.fetchEvidence(options),
+        timeoutPromise
+      ]);
+      
       if (attempt > 1) {
         console.info(`[retrievers] ${retriever.name} succeeded on retry ${attempt}.`);
       }
       return results;
     } catch (error) {
       lastError = error;
-      // eslint-disable-next-line no-console
-      console.error(
-        `[retrievers] ${retriever.name} attempt ${attempt} failed:`,
-        error instanceof Error ? error.message : error
-      );
+      // Only log timeout errors, not all failures (reduce noise)
+      if (error instanceof Error && error.message.includes("Timeout")) {
+        // eslint-disable-next-line no-console
+        console.warn(`[retrievers] ${retriever.name} timed out after ${EVIDENCE_RETRIEVAL_TIMEOUT_MS}ms`);
+      }
       if (attempt < attempts) {
         const backoff = 250 * attempt;
         await new Promise((resolve) => setTimeout(resolve, backoff));
@@ -34,7 +45,7 @@ async function runWithRetry(
     }
   }
 
-  if (lastError) {
+  if (lastError && !(lastError instanceof Error && lastError.message.includes("Timeout"))) {
     // eslint-disable-next-line no-console
     console.error(`[retrievers] ${retriever.name} exhausted retries.`, lastError);
   }
@@ -70,9 +81,17 @@ export async function retrieveEvidence(options: RetrieverOptions): Promise<Evide
   );
   */
 
-  const results = await Promise.all(activeRetrievers.map((retriever) => runWithRetry(retriever, options)));
+  // OPTIMIZATION: Use Promise.allSettled to prevent one slow retriever from blocking others
+  const results = await Promise.allSettled(
+    activeRetrievers.map((retriever) => runWithRetry(retriever, options))
+  );
+  
+  // Extract successful results, filter out failures
+  const successfulResults = results
+    .filter((result): result is PromiseFulfilledResult<EvidenceResult[]> => result.status === "fulfilled")
+    .map((result) => result.value);
 
-  const flattened = results.flat();
+  const flattened = successfulResults.flat();
 
   /*
   console.info(
