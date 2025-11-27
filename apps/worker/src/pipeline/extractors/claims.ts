@@ -6,7 +6,7 @@ import { parseJsonContent } from "../utils/openai.js";
 
 type ClaimWithoutSources = Omit<PipelineClaim, "sourceKeys">;
 
-const MODEL_NAME = "gpt-4.1-mini";
+const MODEL_NAME = "gpt-4o-mini";
 const MAX_CLAIMS = 3;
 
 const FALLBACK_VERDICT: PipelineClaim["verdict"] = "Opinion";

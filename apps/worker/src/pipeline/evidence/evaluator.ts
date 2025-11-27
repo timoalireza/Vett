@@ -3,7 +3,7 @@ import type { EvidenceResult } from "../retrievers/types.js";
 import { parseJsonContent } from "../utils/openai.js";
 import { recordEvidenceReliability } from "../retrievers/trust.js";
 
-const MODEL_NAME = "gpt-4.1-mini";
+const MODEL_NAME = "gpt-4o-mini";
 const MAX_EVIDENCE_PER_REQUEST = 3;
 
 const EVIDENCE_PROMPT = `

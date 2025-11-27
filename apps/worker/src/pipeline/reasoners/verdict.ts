@@ -2,7 +2,7 @@ import { openai } from "../../clients/openai.js";
 import type { PipelineClaim, PipelineSource } from "../types.js";
 import { parseJsonContent } from "../utils/openai.js";
 
-export const VERDICT_MODEL = "gpt-4.1-mini";
+export const VERDICT_MODEL = "gpt-4o-mini";
 
 const VERDICT_PROMPT = `
 You are a fact-checking adjudicator. Given claims and evaluated evidence, produce a grounded verdict.

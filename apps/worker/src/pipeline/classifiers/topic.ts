@@ -4,7 +4,7 @@ import { openai } from "../../clients/openai.js";
 import type { ClassificationMetadata } from "../types.js";
 import { parseJsonContent } from "../utils/openai.js";
 
-const MODEL_NAME = "gpt-4.1-mini";
+const MODEL_NAME = "gpt-4o-mini";
 
 const TOPIC_KEYWORDS: Record<string, RegExp[]> = {
   politics: [/election/i, /policy/i, /government/i, /senate/i],

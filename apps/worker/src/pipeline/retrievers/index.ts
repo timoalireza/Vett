@@ -61,22 +61,26 @@ export async function retrieveEvidence(options: RetrieverOptions): Promise<Evide
     return cached;
   }
 
+  /*
   console.info(
     `[retrievers] Running evidence search for topic="${options.topic}" claim="${options.claimText.slice(
       0,
       60
     )}..." using [${activeRetrievers.map((r) => r.name).join(", ")}]`
   );
+  */
 
   const results = await Promise.all(activeRetrievers.map((retriever) => runWithRetry(retriever, options)));
 
   const flattened = results.flat();
 
+  /*
   console.info(
     `[retrievers] Evidence results counts: ${activeRetrievers
       .map((retriever, index) => `${retriever.name}=${results[index]?.length ?? 0}`)
       .join(", ")}`
   );
+  */
 
   // Deduplicate by URL.
   const seen = new Set<string>();
@@ -139,11 +143,13 @@ export async function retrieveEvidence(options: RetrieverOptions): Promise<Evide
     cleaned.push(...items.slice(0, MAX_PER_HOST));
   }
 
+  /*
   console.info(
     `[retrievers] Evidence filtering: kept=${cleaned.length}/${
       stats.total
     } (missingHost=${stats.droppedMissingHost}, blacklist=${stats.droppedBlacklist}, lowTrust=${stats.droppedLowTrust})`
   );
+  */
 
   setCachedEvidence(options, cleaned);
 

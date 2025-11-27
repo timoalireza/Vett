@@ -276,11 +276,14 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     }
   }
   
-  const classification = await classifyTopicWithOpenAI({
-    ...payload.input,
-    text: analysisCorpus
-  });
-  const claimExtraction = await extractClaimsWithOpenAI(analysisCorpus);
+  // Run classification and extraction in parallel to save time
+  const [classification, claimExtraction] = await Promise.all([
+    classifyTopicWithOpenAI({
+      ...payload.input,
+      text: analysisCorpus
+    }),
+    extractClaimsWithOpenAI(analysisCorpus)
+  ]);
 
   const processedClaims = mergeAndFilterClaims(claimExtraction.claims);
 

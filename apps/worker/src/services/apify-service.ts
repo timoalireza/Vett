@@ -126,10 +126,10 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
       searchLimit: 1,
     };
 
-    console.log(`[Apify] calling apify/instagram-scraper with input:`, JSON.stringify(inputScraper));
+    // console.log(`[Apify] calling apify/instagram-scraper with input:`, JSON.stringify(inputScraper));
     const run = await apify.actor("apify/instagram-scraper").call(inputScraper);
 
-    console.log(`[Apify] Run finished: ${run.status}, datasetId: ${run.defaultDatasetId}`);
+    // console.log(`[Apify] Run finished: ${run.status}, datasetId: ${run.defaultDatasetId}`);
 
     // Fetch results from the dataset
     const { items } = await apify.dataset(run.defaultDatasetId).listItems();

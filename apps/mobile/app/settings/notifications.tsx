@@ -13,9 +13,7 @@ export default function NotificationsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [notifications, setNotifications] = useState({
-    analyses: true,
-    community: false,
-    marketing: false
+    analyses: true
   });
 
   return (
@@ -64,28 +62,6 @@ export default function NotificationsScreen() {
                 />
               }
             />
-            <View style={[styles.divider, { backgroundColor: theme.colors.borderLight }]} />
-            <Row
-              label="Community Updates"
-              description="News and updates from the Vett community"
-              value={
-                <Switch
-                  value={notifications.community}
-                  onValueChange={(val) => setNotifications((prev) => ({ ...prev, community: val }))}
-                />
-              }
-            />
-            <View style={[styles.divider, { backgroundColor: theme.colors.borderLight }]} />
-            <Row
-              label="Marketing"
-              description="Product updates and promotional content"
-              value={
-                <Switch
-                  value={notifications.marketing}
-                  onValueChange={(val) => setNotifications((prev) => ({ ...prev, marketing: val }))}
-                />
-              }
-            />
           </GlassCard>
         </ScrollView>
       </SafeAreaView>
@@ -117,7 +93,7 @@ function Row({ label, description, value }: { label: string; description?: strin
               {
                 color: theme.colors.textSecondary,
                 fontSize: theme.typography.caption,
-                marginTop: theme.spacing(0.5)
+                marginTop: theme.spacing(1)
               }
             ]}
           >
@@ -158,16 +134,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 20
   },
-  divider: {
-    height: 1,
-    marginVertical: 16,
-    marginLeft: 0
-  },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 4
+    paddingVertical: 16
   },
   rowLeft: {
     flex: 1,

@@ -6,7 +6,7 @@ import { extractInstagramContent } from "./extractors/instagram.js";
 import { extractThreadsContent } from "./extractors/threads.js";
 import { assessExtractionQuality } from "./quality.js";
 
-const FETCH_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 8_000;
 const MAX_CONTENT_LENGTH = 20_000; // characters kept from fetched article
 const MIN_WORDS_THRESHOLD = 12;
 
@@ -350,14 +350,14 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       }
     }
   } else if (platformInfo.platform === "instagram") {
-    console.log(`[LinkFetcher] Attempting Instagram extraction for: ${attachment.url}`);
+    // console.log(`[LinkFetcher] Attempting Instagram extraction for: ${attachment.url}`);
     // Apify is now prioritized within extractInstagramContent function
     const instagramResult = await extractInstagramContent(attachment.url, platformInfo.isReel ?? false);
     
     if (instagramResult?.text && instagramResult.text.trim().length > 0) {
       // Log extracted content for debugging
-      console.log(`[LinkFetcher] Instagram content extracted: ${instagramResult.text.substring(0, 300)}...`);
-      console.log(`[LinkFetcher] Instagram author: ${instagramResult.author || 'unknown'}`);
+      // console.log(`[LinkFetcher] Instagram content extracted: ${instagramResult.text.substring(0, 300)}...`);
+      // console.log(`[LinkFetcher] Instagram author: ${instagramResult.author || 'unknown'}`);
       const segments: string[] = [instagramResult.text];
       
       if (instagramResult.author) {
@@ -377,7 +377,7 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       const words = text.split(/\s+/).filter(Boolean);
       
       if (words.length > 0) {
-        console.log(`[LinkFetcher] Instagram extraction successful: ${words.length} words extracted`);
+        // console.log(`[LinkFetcher] Instagram extraction successful: ${words.length} words extracted`);
         
         // Assess quality for Instagram extraction
         const quality = assessExtractionQuality(
@@ -444,7 +444,7 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       }
     }
   } else if (platformInfo.platform === "facebook") {
-    console.log(`[LinkFetcher] Attempting Facebook extraction for: ${attachment.url}`);
+    // console.log(`[LinkFetcher] Attempting Facebook extraction for: ${attachment.url}`);
     const facebookResult = await extractFacebookContent(attachment.url);
     
     if (facebookResult?.text) {

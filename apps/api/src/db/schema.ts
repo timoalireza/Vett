@@ -53,6 +53,13 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 });
 
+// Legacy/Landing page table - preserving to prevent data loss
+export const waitlist = pgTable("waitlist", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+});
+
 export const analyses = pgTable("analyses", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
@@ -282,11 +289,3 @@ export const userUsage = pgTable("user_usage", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 });
-
-export const userUsageRelations = relations(userUsage, ({ one }) => ({
-  user: one(users, {
-    fields: [userUsage.userId],
-    references: [users.id]
-  })
-}));
-
