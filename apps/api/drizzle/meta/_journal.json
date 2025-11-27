@@ -29,6 +29,13 @@
       "when": 1764152168098,
       "tag": "0003_tense_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1764263899383,
+      "tag": "0004_odd_steel_serpent",
+      "breakpoints": true
     }
   ]
 }
