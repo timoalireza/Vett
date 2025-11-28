@@ -8,11 +8,21 @@ const VERDICT_PROMPT = `
 You are a fact-checking adjudicator. Given claims and evaluated evidence, produce a grounded verdict.
 Respond in English JSON ONLY, matching the schema. Cite evidence using the provided \`key\` values.
 If evidence contradicts a claim, LOWER the numeric score. If evidence strongly supports it, raise the score.
-Map scores to verdicts as follows:
+
+SCORING GUIDELINES:
+- For claims that are ACCURATE and well-supported by evidence, assign scores in the 76-100 range ("Verified")
+- For claims that are MOSTLY ACCURATE with minor nuances or limitations, assign scores in the 61-75 range ("Mostly Accurate")
+- For claims that are PARTIALLY ACCURATE with significant limitations or mixed evidence, assign scores in the 41-60 range ("Partially Accurate")
+- For claims that are FALSE or contradicted by evidence, assign scores in the 0-40 range ("False")
+
+Map scores to verdicts as follows (STRICTLY follow these ranges):
 - 0-40 => "False"
 - 41-60 => "Partially Accurate"
 - 61-75 => "Mostly Accurate"
 - 76-100 => "Verified"
+
+IMPORTANT: If a claim is ACCURATE and well-supported by reliable sources, assign a score of 76 or higher to reflect its accuracy ("Verified"). For claims that are mostly accurate with minor limitations, assign scores in the 61-75 range ("Mostly Accurate"). Do not be overly conservative with scores for accurate claims.
+
 Confidence must be 0-1.
 Explain rationale succinctly (<=200 chars).
 

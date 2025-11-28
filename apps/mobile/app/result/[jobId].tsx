@@ -25,15 +25,44 @@ import { chatWithVettAI } from "../../src/api/vettai";
 const stages = ["Extracting", "Classifying", "Verifying", "Scoring"];
 
 const FEEDBACK_STORAGE_KEY = "vett.ratedAnalyses";
-const MAX_CONTEXTUAL_LINES = 12; // Show 12 lines before "Read more" to avoid mid-sentence cuts
+const MAX_CONTEXTUAL_CHARS = 1000; // Show up to 1000 characters before "Read more"
+const MAX_CONTEXTUAL_LINES = 12; // Limit to 12 lines for visual consistency
 
 // Component for expandable contextual information card
 function ContextualInfoCard({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
-  // Increased threshold to show more content before truncating
-  // Using 500 chars as threshold for "Read more" button to ensure full sentences are visible
-  const CHAR_THRESHOLD = 500;
-  const shouldShowReadMore = text.length > CHAR_THRESHOLD;
+  const shouldShowReadMore = text.length > MAX_CONTEXTUAL_CHARS;
+  
+  // Truncate text at the last complete sentence before the limit
+  const getDisplayText = () => {
+    if (expanded || !shouldShowReadMore) {
+      return text;
+    }
+    
+    // Find the last sentence boundary (., !, ?) before MAX_CONTEXTUAL_CHARS
+    const truncated = text.substring(0, MAX_CONTEXTUAL_CHARS);
+    const lastSentenceEnd = Math.max(
+      truncated.lastIndexOf('.'),
+      truncated.lastIndexOf('!'),
+      truncated.lastIndexOf('?')
+    );
+    
+    // If we found a sentence boundary (lastSentenceEnd >= 0), use it to avoid mid-sentence cuts
+    // Only use it if it's reasonably close to the limit (within last 20% or at least 100 chars from start)
+    // This prevents truncating too early while ensuring we don't cut mid-sentence
+    if (lastSentenceEnd >= 0) {
+      const distanceFromLimit = MAX_CONTEXTUAL_CHARS - lastSentenceEnd;
+      const minDistance = Math.min(MAX_CONTEXTUAL_CHARS * 0.2, 200); // Within last 20% or 200 chars
+      
+      // Use sentence boundary if it's close to the limit, or if it's far enough from the start
+      if (distanceFromLimit <= minDistance || lastSentenceEnd >= 100) {
+        return text.substring(0, lastSentenceEnd + 1);
+      }
+    }
+    
+    // No suitable sentence boundary found, return truncated text
+    return truncated;
+  };
 
   return (
     <View style={styles.card}>
@@ -48,11 +77,11 @@ function ContextualInfoCard({ text }: { text: string }) {
           <Text style={styles.cardLabel}>
             CONTEXTUAL INFORMATION
           </Text>
-          <Text
+          <Text 
             style={styles.cardText}
             numberOfLines={expanded ? undefined : MAX_CONTEXTUAL_LINES}
           >
-            {text}
+            {getDisplayText()}
           </Text>
           {shouldShowReadMore && (
             <TouchableOpacity

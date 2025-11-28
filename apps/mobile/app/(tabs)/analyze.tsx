@@ -270,10 +270,12 @@ export default function AnalyzeScreen() {
         await deleteAnalysis(id);
         // Invalidate queries to refresh the list
         queryClient.invalidateQueries({ queryKey: ["analyses"] });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to delete analysis:", error);
-        // Show error toast or alert
-        Alert.alert("Error", "Failed to delete analysis. Please try again.");
+        // Extract error message, avoiding double "Error:" prefix
+        const errorMessage = error?.message || "Failed to delete analysis. Please try again.";
+        const cleanMessage = errorMessage.replace(/^Error:\s*/i, "").trim() || "Failed to delete analysis. Please try again.";
+        Alert.alert("Error", cleanMessage);
       }
     })();
   }, [queryClient]);

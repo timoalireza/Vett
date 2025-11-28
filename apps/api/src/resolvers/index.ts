@@ -362,13 +362,14 @@ export const resolvers: IResolvers<GraphQLContext> = {
         // Get or create user in database
         const dbUserId = await userService.getOrCreateUser(ctx.userId);
 
-        const success = await analysisService.deleteAnalysis(args.id, dbUserId);
+        // deleteAnalysis throws on error, returns true on success
+        await analysisService.deleteAnalysis(args.id, dbUserId);
 
         // Invalidate cache after deletion
         await cacheService.invalidateUserCache(dbUserId);
 
         return {
-          success
+          success: true
         };
       } catch (error: any) {
         console.error("[GraphQL] Error deleting analysis:", {
@@ -377,7 +378,10 @@ export const resolvers: IResolvers<GraphQLContext> = {
           error: error.message,
           stack: error.stack
         });
-        throw error;
+        
+        // Re-throw with a user-friendly message
+        const errorMessage = error.message || "Failed to delete analysis";
+        throw new Error(errorMessage);
       }
     }
   },

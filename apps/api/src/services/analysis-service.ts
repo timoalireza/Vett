@@ -675,26 +675,41 @@ class AnalysisService {
   }
 
   async deleteAnalysis(analysisId: string, userId: string): Promise<boolean> {
-    // First verify the analysis belongs to the user
-    const analysis = await db.query.analyses.findFirst({
-      where: eq(analyses.id, analysisId)
-    });
+    try {
+      // First verify the analysis belongs to the user
+      const analysis = await db.query.analyses.findFirst({
+        where: eq(analyses.id, analysisId)
+      });
 
-    if (!analysis) {
-      throw new Error("Analysis not found");
+      if (!analysis) {
+        throw new Error("Analysis not found");
+      }
+
+      // Check ownership - only allow deletion if:
+      // 1. Analysis belongs to the user (analysis.userId === userId)
+      // 2. Analysis is anonymous (analysis.userId === null) - allow deletion by anyone for anonymous analyses
+      if (analysis.userId !== null && analysis.userId !== userId) {
+        throw new Error("Unauthorized: You can only delete your own analyses");
+      }
+
+      // Delete the analysis - cascade delete will handle related records (claims, sources, etc.)
+      const result = await db.delete(analyses).where(eq(analyses.id, analysisId)).returning({ id: analyses.id });
+
+      if (result.length === 0) {
+        throw new Error("Failed to delete analysis. No rows were deleted.");
+      }
+
+      return true;
+    } catch (error: any) {
+      // Re-throw with clearer error message
+      // If it's already an Error object with a message, use it; otherwise wrap it
+      if (error instanceof Error && error.message) {
+        throw error;
+      }
+      // For non-Error objects or errors without messages, wrap with a clear message
+      const errorMessage = error?.message || String(error) || "Unknown error";
+      throw new Error(`Failed to delete analysis: ${errorMessage}`);
     }
-
-    // Check ownership - only allow deletion if:
-    // 1. Analysis belongs to the user (analysis.userId === userId)
-    // 2. Analysis is anonymous (analysis.userId === null) - allow deletion by anyone for anonymous analyses
-    if (analysis.userId !== null && analysis.userId !== userId) {
-      throw new Error("Unauthorized: You can only delete your own analyses");
-    }
-
-    // Delete the analysis - cascade delete will handle related records (claims, sources, etc.)
-    const result = await db.delete(analyses).where(eq(analyses.id, analysisId)).returning({ id: analyses.id });
-
-    return result.length > 0;
   }
 }
 
