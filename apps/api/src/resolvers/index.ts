@@ -37,18 +37,21 @@ export const resolvers: IResolvers<GraphQLContext> = {
       }
       
       // Authorization check: users can only access their own analyses
+      // Exception: Anonymous analyses (userId === null) can be accessed by anyone
+      const isAnonymous = analysis.userId === null;
+      
       if (context.userId) {
-        // Use DataLoader for user lookup (batches multiple user lookups)
+        // Authenticated user - check ownership first
         const user = await context.loaders.userByExternalId.load(context.userId);
         if (!user) {
-          // User not found - log for debugging but be permissive for anonymous analyses
+          // User not found - log for debugging but be permissive for anonymous analyses only
           console.warn("[GraphQL] User not found for externalId:", context.userId, "analysisId:", args.id);
-          // Allow access if analysis has no userId (anonymous analysis)
-          if (analysis.userId !== null) {
+          // Only allow access to anonymous analyses
+          if (!isAnonymous) {
             throw new Error("Unauthorized: You can only access your own analyses");
           }
-        } else if (analysis.userId !== null && analysis.userId !== user.id) {
-          // Analysis belongs to a different user - log for debugging
+        } else if (!isAnonymous && analysis.userId !== user.id) {
+          // Analysis belongs to a different user - always deny access regardless of status
           console.warn("[GraphQL] Authorization mismatch:", {
             analysisId: args.id,
             analysisUserId: analysis.userId,
@@ -57,12 +60,13 @@ export const resolvers: IResolvers<GraphQLContext> = {
           });
           throw new Error("Unauthorized: You can only access your own analyses");
         }
-        // If analysis.userId is null (anonymous) OR analysis.userId === user.id, allow access
+        // Allow access if: analysis is anonymous OR user owns the analysis
       } else {
-        // No authenticated user - only allow access to anonymous analyses (userId === null)
-        if (analysis.userId !== null) {
+        // No authenticated user - only allow access to anonymous analyses
+        if (!isAnonymous) {
           throw new Error("Unauthorized: Authentication required to access this analysis");
         }
+        // Allow access to anonymous analyses only
       }
       
       return analysis;
