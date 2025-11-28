@@ -12,7 +12,7 @@ import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { GlassChip } from "../../src/components/GlassChip";
 import { AnalysisCardVertical } from "../../src/components/AnalysisCardVertical";
-import { fetchAnalyses } from "../../src/api/analysis";
+import { fetchAnalyses, deleteAnalysis } from "../../src/api/analysis";
 
 const getTopicGradient = (topic: string): string[] => {
   const gradients: Record<string, string[]> = {
@@ -143,17 +143,20 @@ export default function CollectionsScreen() {
     // Note: The analyze screen will need to handle pre-filling the input
   }, [router]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      const { deleteAnalysis } = await import("@/src/api/analysis");
-      await deleteAnalysis(id);
-      // Invalidate queries to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["analyses"] });
-    } catch (error) {
-      console.error("Failed to delete analysis:", error);
-      // Show error toast or alert
-      Alert.alert("Error", "Failed to delete analysis. Please try again.");
-    }
+  const handleDelete = useCallback((id: string) => {
+    // Wrap async operation in synchronous callback
+    // The component expects a synchronous function, so we handle the promise here
+    (async () => {
+      try {
+        await deleteAnalysis(id);
+        // Invalidate queries to refresh the list
+        queryClient.invalidateQueries({ queryKey: ["analyses"] });
+      } catch (error) {
+        console.error("Failed to delete analysis:", error);
+        // Show error toast or alert
+        Alert.alert("Error", "Failed to delete analysis. Please try again.");
+      }
+    })();
   }, [queryClient]);
 
   const handleShare = useCallback((id: string, title: string, score: number) => {
