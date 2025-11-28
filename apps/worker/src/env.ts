@@ -91,7 +91,9 @@ const envSchema = z.object({
   // Unsplash API for image search
   UNSPLASH_ACCESS_KEY: z.string().optional(),
   // Apify API Token for social media scraping
-  APIFY_API_TOKEN: z.string().optional()
+  APIFY_API_TOKEN: z.string().optional(),
+  // SocialKit API for TikTok and YouTube Shorts transcription extraction
+  SOCIALKIT_API_KEY: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);

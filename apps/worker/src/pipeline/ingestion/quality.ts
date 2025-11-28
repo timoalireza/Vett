@@ -29,7 +29,7 @@ const MIN_INFORMATION_DENSITY = 0.3; // At least 30% meaningful content
 export function assessExtractionQuality(
   text: string,
   wordCount: number,
-  platform: "twitter" | "x" | "instagram" | "threads" | "facebook" | "unknown",
+  platform: "twitter" | "x" | "instagram" | "threads" | "facebook" | "tiktok" | "youtube" | "unknown",
   hasAuthor: boolean,
   hasMedia: boolean,
   truncated: boolean
@@ -92,7 +92,7 @@ export function assessExtractionQuality(
   }
 
   // Missing metadata
-  if (!hasAuthor && (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads" || platform === "facebook")) {
+  if (!hasAuthor && (platform === "twitter" || platform === "x" || platform === "instagram" || platform === "threads" || platform === "facebook" || platform === "tiktok" || platform === "youtube")) {
     score -= 0.1;
     reasons.push("Missing author information");
   }
@@ -101,6 +101,13 @@ export function assessExtractionQuality(
   if (platform === "instagram" && !hasMedia) {
     score -= 0.05;
     reasons.push("Instagram post missing media reference");
+  }
+  
+  // Video platforms (TikTok, YouTube Shorts) don't need media flag since they're inherently video
+  // Transcription quality is more important than media presence
+  if ((platform === "tiktok" || platform === "youtube") && wordCount < MIN_WORDS_FAIR) {
+    score -= 0.15;
+    reasons.push("Video transcription is very short - may be incomplete");
   }
 
   // Ensure score is between 0 and 1

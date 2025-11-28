@@ -2,7 +2,7 @@
  * Platform detection and identification utilities for social media links
  */
 
-export type SocialPlatform = "twitter" | "x" | "instagram" | "threads" | "facebook" | "unknown";
+export type SocialPlatform = "twitter" | "x" | "instagram" | "threads" | "facebook" | "tiktok" | "youtube" | "unknown";
 
 export interface PlatformInfo {
   platform: SocialPlatform;
@@ -84,6 +84,40 @@ export function detectPlatform(url: string): PlatformInfo {
         platform: "facebook",
         isPost: isPost
       };
+    }
+
+    // TikTok
+    if (hostname.includes("tiktok.com") || hostname.includes("vm.tiktok.com")) {
+      // Try to extract video ID from pathname first (e.g., /@username/video/1234567890)
+      const pathMatch = pathname.match(/\/video\/(\d+)/);
+      // Fallback to query parameter (e.g., ?video_id=1234567890)
+      const queryVideoId = urlObj.searchParams.get("video_id");
+      
+      const videoId = pathMatch?.[1] || queryVideoId || undefined;
+      
+      return {
+        platform: "tiktok",
+        isPost: true,
+        postId: videoId,
+        username: pathname.split("/")[1] || undefined
+      };
+    }
+
+    // YouTube Shorts
+    if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
+      const shortsMatch = pathname.includes("/shorts/");
+      const videoId = pathname.match(/\/shorts\/([^\/\?]+)/)?.[1] || 
+                     urlObj.searchParams.get("v") ||
+                     pathname.match(/\/([a-zA-Z0-9_-]{11})/)?.[1];
+      
+      if (shortsMatch || (videoId && videoId.length === 11)) {
+        return {
+          platform: "youtube",
+          isPost: true,
+          postId: videoId,
+          isReel: shortsMatch // Treat shorts as reels for consistency
+        };
+      }
     }
 
     return { platform: "unknown" };

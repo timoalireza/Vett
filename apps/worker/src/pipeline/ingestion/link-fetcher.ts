@@ -6,6 +6,11 @@ import { extractInstagramContent } from "./extractors/instagram.js";
 import { extractThreadsContent } from "./extractors/threads.js";
 import { extractFacebookContent } from "./extractors/facebook.js";
 import { extractFacebookContent } from "./extractors/facebook.js";
+import {
+  extractTikTokTranscription,
+  extractYouTubeShortsTranscription,
+  formatTranscriptionForIngestion
+} from "./extractors/socialkit.js";
 import { assessExtractionQuality } from "./quality.js";
 
 const FETCH_TIMEOUT_MS = 8_000;
@@ -482,6 +487,70 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       }
     }
     // Fallback to generic extraction if Facebook specific fails
+  } else if (platformInfo.platform === "tiktok") {
+    // Extract transcription from TikTok using SocialKit
+    const tiktokResult = await extractTikTokTranscription(attachment.url);
+    
+    if (tiktokResult?.transcription?.transcript) {
+      const formattedText = formatTranscriptionForIngestion(tiktokResult.transcription, tiktokResult.videoInfo);
+      const { text, truncated } = truncateContent(formattedText);
+      const words = text.split(/\s+/).filter(Boolean);
+      
+      if (words.length > 0) {
+        // Assess quality for TikTok transcription
+        const quality = assessExtractionQuality(
+          text,
+          words.length,
+          "tiktok",
+          Boolean(tiktokResult.videoInfo?.author),
+          false, // Videos don't have static images
+          truncated
+        );
+        
+        return {
+          text,
+          truncated,
+          wordCount: words.length,
+          warnings: undefined,
+          quality
+        };
+      }
+    }
+    
+    // TikTok transcription failed, fall through to generic extraction
+    console.warn(`[LinkFetcher] TikTok transcription extraction failed for ${attachment.url}, falling back to generic HTML scraper`);
+  } else if (platformInfo.platform === "youtube" && platformInfo.isReel) {
+    // Extract transcription from YouTube Shorts using SocialKit
+    const youtubeResult = await extractYouTubeShortsTranscription(attachment.url);
+    
+    if (youtubeResult?.transcription?.transcript) {
+      const formattedText = formatTranscriptionForIngestion(youtubeResult.transcription, youtubeResult.videoInfo);
+      const { text, truncated } = truncateContent(formattedText);
+      const words = text.split(/\s+/).filter(Boolean);
+      
+      if (words.length > 0) {
+        // Assess quality for YouTube Shorts transcription
+        const quality = assessExtractionQuality(
+          text,
+          words.length,
+          "youtube",
+          Boolean(youtubeResult.videoInfo?.author),
+          false, // Videos don't have static images
+          truncated
+        );
+        
+        return {
+          text,
+          truncated,
+          wordCount: words.length,
+          warnings: undefined,
+          quality
+        };
+      }
+    }
+    
+    // YouTube Shorts transcription failed, fall through to generic extraction
+    console.warn(`[LinkFetcher] YouTube Shorts transcription extraction failed for ${attachment.url}, falling back to generic HTML scraper`);
   }
 
   // Fall back to generic extraction for non-social media or if platform-specific extraction failed
