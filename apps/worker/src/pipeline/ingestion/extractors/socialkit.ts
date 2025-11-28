@@ -52,28 +52,75 @@ export async function extractTikTokTranscription(
     }
 
     const data = await response.json();
+    
+    // Log full response for debugging (truncated for security)
+    console.log("[SocialKit] TikTok API response keys:", Object.keys(data));
+    if (data.transcript) {
+      console.log(`[SocialKit] Transcript length: ${data.transcript.length} chars`);
+    } else if (data.text) {
+      console.log(`[SocialKit] Text length: ${data.text.length} chars`);
+    } else if (data.segments && Array.isArray(data.segments)) {
+      console.log(`[SocialKit] Segments count: ${data.segments.length}`);
+      if (data.segments.length > 0) {
+        console.log(`[SocialKit] First segment sample:`, JSON.stringify(data.segments[0]).substring(0, 200));
+      }
+    } else {
+      console.warn("[SocialKit] No transcript/text/segments found in response. Full response structure:", JSON.stringify(data).substring(0, 500));
+    }
 
     // Parse SocialKit response format
-    // Adjust based on actual API response structure
+    // Try multiple possible response structures
+    let transcriptText = "";
+    
+    // Check for transcript in various possible fields
+    if (data.transcript && typeof data.transcript === "string") {
+      transcriptText = data.transcript;
+    } else if (data.text && typeof data.text === "string") {
+      transcriptText = data.text;
+    } else if (data.data?.transcript) {
+      transcriptText = data.data.transcript;
+    } else if (data.result?.transcript) {
+      transcriptText = data.result.transcript;
+    } else if (Array.isArray(data.segments) && data.segments.length > 0) {
+      // Build transcript from segments if no direct transcript field
+      transcriptText = data.segments
+        .map((seg: any) => seg.text || seg.transcript || "")
+        .filter(Boolean)
+        .join(" ");
+    } else if (Array.isArray(data.transcript_segments) && data.transcript_segments.length > 0) {
+      transcriptText = data.transcript_segments
+        .map((seg: any) => seg.text || seg.transcript || "")
+        .filter(Boolean)
+        .join(" ");
+    }
+
     const transcription: SocialKitTranscriptionResult = {
-      transcript: data.transcript || data.text || "",
-      language: data.language,
-      duration: data.duration,
-      segments: data.segments || data.transcript_segments
+      transcript: transcriptText,
+      language: data.language || data.data?.language,
+      duration: data.duration || data.data?.duration,
+      segments: data.segments || data.transcript_segments || data.data?.segments
     };
 
     const videoInfo: SocialKitVideoInfo = {
-      title: data.title,
-      author: data.author || data.username,
-      description: data.description,
-      views: data.views,
-      likes: data.likes
+      title: data.title || data.data?.title,
+      author: data.author || data.username || data.data?.author || data.data?.username,
+      description: data.description || data.data?.description,
+      views: data.views || data.data?.views,
+      likes: data.likes || data.data?.likes
     };
 
     if (!transcription.transcript || transcription.transcript.trim().length === 0) {
-      console.warn("[SocialKit] Empty transcript returned for TikTok video");
+      console.warn("[SocialKit] Empty transcript returned for TikTok video. Response structure:", {
+        hasTranscript: !!data.transcript,
+        hasText: !!data.text,
+        hasSegments: !!data.segments,
+        hasData: !!data.data,
+        responseKeys: Object.keys(data)
+      });
       return null;
     }
+    
+    console.log(`[SocialKit] Successfully extracted TikTok transcription: ${transcription.transcript.length} chars, ${transcription.transcript.split(/\s+/).length} words`);
 
     return { transcription, videoInfo };
   } catch (error) {
@@ -115,27 +162,67 @@ export async function extractYouTubeShortsTranscription(
     }
 
     const data = await response.json();
+    
+    // Log full response for debugging
+    console.log("[SocialKit] YouTube API response keys:", Object.keys(data));
+    if (data.transcript) {
+      console.log(`[SocialKit] Transcript length: ${data.transcript.length} chars`);
+    } else if (data.text) {
+      console.log(`[SocialKit] Text length: ${data.text.length} chars`);
+    } else if (data.segments && Array.isArray(data.segments)) {
+      console.log(`[SocialKit] Segments count: ${data.segments.length}`);
+    }
 
-    // Parse SocialKit response format
+    // Parse SocialKit response format - try multiple possible structures
+    let transcriptText = "";
+    
+    if (data.transcript && typeof data.transcript === "string") {
+      transcriptText = data.transcript;
+    } else if (data.text && typeof data.text === "string") {
+      transcriptText = data.text;
+    } else if (data.data?.transcript) {
+      transcriptText = data.data.transcript;
+    } else if (data.result?.transcript) {
+      transcriptText = data.result.transcript;
+    } else if (Array.isArray(data.segments) && data.segments.length > 0) {
+      transcriptText = data.segments
+        .map((seg: any) => seg.text || seg.transcript || "")
+        .filter(Boolean)
+        .join(" ");
+    } else if (Array.isArray(data.transcript_segments) && data.transcript_segments.length > 0) {
+      transcriptText = data.transcript_segments
+        .map((seg: any) => seg.text || seg.transcript || "")
+        .filter(Boolean)
+        .join(" ");
+    }
+
     const transcription: SocialKitTranscriptionResult = {
-      transcript: data.transcript || data.text || "",
-      language: data.language,
-      duration: data.duration,
-      segments: data.segments || data.transcript_segments
+      transcript: transcriptText,
+      language: data.language || data.data?.language,
+      duration: data.duration || data.data?.duration,
+      segments: data.segments || data.transcript_segments || data.data?.segments
     };
 
     const videoInfo: SocialKitVideoInfo = {
-      title: data.title,
-      author: data.author || data.channel_name,
-      description: data.description,
-      views: data.views,
-      likes: data.likes
+      title: data.title || data.data?.title,
+      author: data.author || data.channel_name || data.data?.author || data.data?.channel_name,
+      description: data.description || data.data?.description,
+      views: data.views || data.data?.views,
+      likes: data.likes || data.data?.likes
     };
 
     if (!transcription.transcript || transcription.transcript.trim().length === 0) {
-      console.warn("[SocialKit] Empty transcript returned for YouTube Shorts video");
+      console.warn("[SocialKit] Empty transcript returned for YouTube Shorts video. Response structure:", {
+        hasTranscript: !!data.transcript,
+        hasText: !!data.text,
+        hasSegments: !!data.segments,
+        hasData: !!data.data,
+        responseKeys: Object.keys(data)
+      });
       return null;
     }
+    
+    console.log(`[SocialKit] Successfully extracted YouTube Shorts transcription: ${transcription.transcript.length} chars, ${transcription.transcript.split(/\s+/).length} words`);
 
     return { transcription, videoInfo };
   } catch (error) {
@@ -164,14 +251,26 @@ export function formatTranscriptionForIngestion(
     segments.push(`Description: ${videoInfo.description}`);
   }
 
-  // Add transcript
+  // Add transcript - prioritize segments if available, fallback to full transcript
   if (transcription.segments && transcription.segments.length > 0) {
     // Use segmented transcript if available (more detailed)
-    const segmentTexts = transcription.segments.map((seg) => seg.text).join(" ");
-    segments.push(`Transcript: ${segmentTexts}`);
-  } else {
-    // Use full transcript
+    const segmentTexts = transcription.segments
+      .map((seg: any) => seg.text || seg.transcript || "")
+      .filter(Boolean)
+      .join(" ");
+    if (segmentTexts) {
+      segments.push(`Transcript: ${segmentTexts}`);
+    }
+  }
+  
+  // Always add full transcript if available (even if we also have segments, as it might be more complete)
+  if (transcription.transcript && transcription.transcript.trim().length > 0) {
     segments.push(`Transcript: ${transcription.transcript}`);
+  }
+  
+  // If no transcript at all, add a note (though this shouldn't happen if validation worked)
+  if (segments.length === 0 || (!transcription.transcript && (!transcription.segments || transcription.segments.length === 0))) {
+    segments.push("Transcript: [No transcription available for this video]");
   }
 
   return segments.join("\n\n");
