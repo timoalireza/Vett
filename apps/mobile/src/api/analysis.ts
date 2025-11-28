@@ -224,3 +224,19 @@ export async function fetchFeedback(analysisId: string): Promise<FeedbackRespons
   return result.feedback;
 }
 
+const DELETE_ANALYSIS_MUTATION = `
+  mutation DeleteAnalysis($id: ID!) {
+    deleteAnalysis(id: $id) {
+      success
+    }
+  }
+`;
+
+export async function deleteAnalysis(id: string): Promise<boolean> {
+  const result = await graphqlRequest<{ deleteAnalysis: { success: boolean } }>(
+    DELETE_ANALYSIS_MUTATION,
+    { id }
+  );
+  return result.deleteAnalysis.success;
+}
+

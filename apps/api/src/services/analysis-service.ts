@@ -673,6 +673,29 @@ class AnalysisService {
       totalCount: undefined // Could add total count if needed (expensive for large datasets)
     };
   }
+
+  async deleteAnalysis(analysisId: string, userId: string): Promise<boolean> {
+    // First verify the analysis belongs to the user
+    const analysis = await db.query.analyses.findFirst({
+      where: eq(analyses.id, analysisId)
+    });
+
+    if (!analysis) {
+      throw new Error("Analysis not found");
+    }
+
+    // Check ownership - only allow deletion if:
+    // 1. Analysis belongs to the user (analysis.userId === userId)
+    // 2. Analysis is anonymous (analysis.userId === null) - allow deletion by anyone for anonymous analyses
+    if (analysis.userId !== null && analysis.userId !== userId) {
+      throw new Error("Unauthorized: You can only delete your own analyses");
+    }
+
+    // Delete the analysis - cascade delete will handle related records (claims, sources, etc.)
+    const result = await db.delete(analyses).where(eq(analyses.id, analysisId)).returning({ id: analyses.id });
+
+    return result.length > 0;
+  }
 }
 
 export const analysisService = new AnalysisService();

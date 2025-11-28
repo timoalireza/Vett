@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { ScrollView, Text, TouchableOpacity, View, StyleSheet, Platform, FlatList, Modal } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View, StyleSheet, Platform, FlatList, Modal, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -143,10 +143,17 @@ export default function CollectionsScreen() {
     // Note: The analyze screen will need to handle pre-filling the input
   }, [router]);
 
-  const handleDelete = useCallback((id: string) => {
-    // Invalidate queries to refresh the list
-    queryClient.invalidateQueries({ queryKey: ["analyses"] });
-    // TODO: Add delete mutation when available
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      const { deleteAnalysis } = await import("@/src/api/analysis");
+      await deleteAnalysis(id);
+      // Invalidate queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["analyses"] });
+    } catch (error) {
+      console.error("Failed to delete analysis:", error);
+      // Show error toast or alert
+      Alert.alert("Error", "Failed to delete analysis. Please try again.");
+    }
   }, [queryClient]);
 
   const handleShare = useCallback((id: string, title: string, score: number) => {

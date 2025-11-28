@@ -262,10 +262,17 @@ export default function AnalyzeScreen() {
     setSheetVisible(true);
   }, []);
 
-  const handleDelete = useCallback((id: string) => {
-    // Invalidate queries to refresh the list
-    queryClient.invalidateQueries({ queryKey: ["analyses"] });
-    // TODO: Add delete mutation when available
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      const { deleteAnalysis } = await import("@/src/api/analysis");
+      await deleteAnalysis(id);
+      // Invalidate queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["analyses"] });
+    } catch (error) {
+      console.error("Failed to delete analysis:", error);
+      // Show error toast or alert
+      Alert.alert("Error", "Failed to delete analysis. Please try again.");
+    }
   }, [queryClient]);
 
   const handleShare = useCallback((id: string, title: string, score: number) => {

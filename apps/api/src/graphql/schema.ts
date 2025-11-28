@@ -281,10 +281,15 @@ export const schema = `
     response: String!
   }
 
+  type DeleteAnalysisPayload {
+    success: Boolean!
+  }
+
   type Mutation {
     submitAnalysis(input: SubmitAnalysisInput!): SubmitAnalysisPayload!
     submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
     chatWithVettAI(input: VettAIChatInput!): VettAIChatPayload!
+    deleteAnalysis(id: ID!): DeleteAnalysisPayload!
   }
 `;
 

@@ -351,6 +351,34 @@ export const resolvers: IResolvers<GraphQLContext> = {
         });
         throw error;
       }
+    },
+    deleteAnalysis: async (_parent, args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        // Get or create user in database
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+
+        const success = await analysisService.deleteAnalysis(args.id, dbUserId);
+
+        // Invalidate cache after deletion
+        await cacheService.invalidateUserCache(dbUserId);
+
+        return {
+          success
+        };
+      } catch (error: any) {
+        console.error("[GraphQL] Error deleting analysis:", {
+          userId: ctx.userId,
+          analysisId: args.id,
+          error: error.message,
+          stack: error.stack
+        });
+        throw error;
+      }
     }
   },
   IngestionQuality: {
