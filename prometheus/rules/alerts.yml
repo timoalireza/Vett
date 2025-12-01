@@ -1,0 +1,102 @@
+groups:
+  - name: vett_api_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          rate(vett_requests_errors_total[5m]) / rate(vett_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # Slow response time
+      - alert: SlowResponseTime
+        expr: |
+          vett_response_time_p95 > 2000
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Slow response time detected"
+          description: "p95 response time is {{ $value }}ms (threshold: 2000ms)"
+
+      # High queue depth
+      - alert: HighQueueDepth
+        expr: |
+          vett_queue_waiting > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "High queue depth detected"
+          description: "Queue has {{ $value }} waiting jobs (threshold: 100)"
+
+      # Analysis failures
+      - alert: HighAnalysisFailureRate
+        expr: |
+          rate(vett_analysis_failed_total[10m]) / rate(vett_analysis_submitted_total[10m]) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "High analysis failure rate"
+          description: "Analysis failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (vett_memory_heap_used_bytes / vett_memory_heap_total_bytes) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 80%)"
+
+      # Rate limit hits
+      - alert: HighRateLimitHits
+        expr: |
+          rate(vett_rate_limit_hits_total[1h]) > 50
+        for: 1h
+        labels:
+          severity: info
+          service: api
+        annotations:
+          summary: "High rate limit hits"
+          description: "Rate limit hits: {{ $value }} per hour (threshold: 50)"
+
+      # API down
+      - alert: APIDown
+        expr: |
+          up{job="vett-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API is down"
+          description: "Vett API is not responding"
+
+      # Worker down
+      - alert: WorkerDown
+        expr: |
+          up{job="vett-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: worker
+        annotations:
+          summary: "Worker is down"
+          description: "Vett Worker is not responding"
+
+
+

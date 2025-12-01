@@ -35,7 +35,15 @@ async function getRateLimitForUser(userId: string | undefined, logger?: any): Pr
   try {
     const dbUserId = await userService.getOrCreateUser(userId);
     const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
-    return RATE_LIMITS_BY_TIER[subscription.plan].global;
+    // Fallback to FREE tier if plan is not recognized
+    const planLimits = RATE_LIMITS_BY_TIER[subscription.plan as keyof typeof RATE_LIMITS_BY_TIER];
+    if (!planLimits) {
+      if (logger) {
+        logger.warn({ plan: subscription.plan, userId }, "Unknown subscription plan, using FREE tier limits");
+      }
+      return RATE_LIMITS_BY_TIER.FREE.global;
+    }
+    return planLimits.global;
   } catch (error) {
     // If subscription lookup fails, use FREE tier limits
     if (logger) {
@@ -53,7 +61,12 @@ async function getMutationLimitForUser(userId: string | undefined): Promise<numb
   try {
     const dbUserId = await userService.getOrCreateUser(userId);
     const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
-    return RATE_LIMITS_BY_TIER[subscription.plan].mutation;
+    // Fallback to FREE tier if plan is not recognized
+    const planLimits = RATE_LIMITS_BY_TIER[subscription.plan as keyof typeof RATE_LIMITS_BY_TIER];
+    if (!planLimits) {
+      return RATE_LIMITS_BY_TIER.FREE.mutation;
+    }
+    return planLimits.mutation;
   } catch (error) {
     return RATE_LIMITS_BY_TIER.FREE.mutation;
   }
@@ -67,7 +80,12 @@ async function getUploadLimitForUser(userId: string | undefined): Promise<number
   try {
     const dbUserId = await userService.getOrCreateUser(userId);
     const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
-    return RATE_LIMITS_BY_TIER[subscription.plan].upload;
+    // Fallback to FREE tier if plan is not recognized
+    const planLimits = RATE_LIMITS_BY_TIER[subscription.plan as keyof typeof RATE_LIMITS_BY_TIER];
+    if (!planLimits) {
+      return RATE_LIMITS_BY_TIER.FREE.upload;
+    }
+    return planLimits.upload;
   } catch (error) {
     return RATE_LIMITS_BY_TIER.FREE.upload;
   }

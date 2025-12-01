@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, pgEnum, uuid, text, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, timestamp, integer, numeric, boolean, uniqueIndex, sql } from "drizzle-orm/pg-core";
 
 export const analysisStatusEnum = pgEnum("analysis_status", [
   "QUEUED",
@@ -44,6 +44,10 @@ export const billingCycleEnum = pgEnum("billing_cycle", [
   "ANNUAL"
 ]);
 
+export const socialPlatformEnum = pgEnum("social_platform", [
+  "INSTAGRAM"
+]);
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   externalId: text("external_id").notNull().unique(), // Clerk/Firebase ID
@@ -63,6 +67,7 @@ export const waitlist = pgTable("waitlist", {
 export const analyses = pgTable("analyses", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  instagramUserId: text("instagram_user_id"), // Instagram user ID for analyses created via DM
   topic: text("topic").notNull(),
   inputType: text("input_type").notNull(), // e.g., text, image, video
   status: analysisStatusEnum("status").default("QUEUED").notNull(),
@@ -291,3 +296,55 @@ export const userUsage = pgTable("user_usage", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 });
+
+// Instagram users table - stores Instagram user IDs and metadata
+export const instagramUsers = pgTable("instagram_users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  instagramUserId: text("instagram_user_id").notNull().unique(), // Instagram user ID from Meta API
+  username: text("username"), // Instagram username (optional, may not always be available)
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+});
+
+// Social accounts table - links Instagram accounts to app users
+export const socialAccounts = pgTable("social_accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  platform: socialPlatformEnum("platform").notNull(), // Currently only INSTAGRAM
+  platformUserId: text("platform_user_id").notNull(), // Instagram user ID
+  verificationCode: text("verification_code"), // Temporary code for linking
+  verificationCodeExpiresAt: timestamp("verification_code_expires_at", { withTimezone: true }), // Expiration for verification code
+  linkedAt: timestamp("linked_at", { withTimezone: true }), // When account was linked
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  // Unique constraint: one social account per user per platform
+  // Prevents duplicate linked accounts for the same platform
+  userIdPlatformUnique: uniqueIndex("social_accounts_user_id_platform_unique").on(table.userId, table.platform)
+}));
+
+// Instagram DM usage table - tracks analysis usage per Instagram user
+export const instagramDmUsage = pgTable("instagram_dm_usage", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  instagramUserId: text("instagram_user_id").notNull(), // Instagram user ID (not FK to allow orphaned records)
+  analysesCount: integer("analyses_count").default(0).notNull(), // Count for current period
+  periodStart: timestamp("period_start", { withTimezone: true }).notNull(), // Start of current period
+  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(), // End of current period
+  lastResetAt: timestamp("last_reset_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+});
+
+// Relations
+// Note: instagramUsers and socialAccounts are not directly related via FK
+// They share the same Instagram user ID value (platformUserId) but use it for different purposes
+// Query socialAccounts by platformUserId directly when needed
+
+export const socialAccountRelations = relations(socialAccounts, ({ one }) => ({
+  user: one(users, {
+    fields: [socialAccounts.userId],
+    references: [users.id]
+  })
+}));

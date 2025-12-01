@@ -130,7 +130,11 @@ const envSchema = z.object({
   RATE_LIMIT_ENABLED: z
     .string()
     .optional()
-    .transform((value) => value === "true" || value === "1")
+    .transform((value) => {
+      // If value is undefined, return undefined to allow default to apply
+      if (value === undefined) return undefined;
+      return value === "true" || value === "1";
+    })
     .pipe(z.boolean().default(true)),
   RATE_LIMIT_GLOBAL_MAX: z
     .string()
@@ -155,7 +159,16 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => (value ? Number(value) : undefined))
-    .pipe(z.number().int().positive().default(20)) // 20 uploads per window
+    .pipe(z.number().int().positive().default(20)), // 20 uploads per window
+  // Instagram API configuration
+  INSTAGRAM_APP_ID: z.string().optional(),
+  INSTAGRAM_APP_SECRET: z.string().optional(),
+  INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  INSTAGRAM_PAGE_ACCESS_TOKEN: z.string().optional(),
+  INSTAGRAM_PAGE_ID: z.string().optional(),
+  // Base URLs for production
+  APP_BASE_URL: z.string().url().optional().default("https://app.vett.xyz"),
+  API_BASE_URL: z.string().url().optional().default("https://api.vett.xyz")
 });
 
 // Debug: Log available environment variables (without sensitive values)

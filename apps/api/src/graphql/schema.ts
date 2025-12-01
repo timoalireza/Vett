@@ -239,19 +239,6 @@ export const schema = `
     totalCount: Int
   }
 
-  type Query {
-    health: HealthCheck!
-    analysis(id: ID!): AnalysisSummary
-    analyses(
-      first: Int
-      after: String
-      last: Int
-      before: String
-    ): AnalysisConnection!
-    subscription: SubscriptionInfo!
-    usage: UsageInfo!
-    feedback(analysisId: ID!): Feedback
-  }
 
   type Feedback {
     id: ID!
@@ -285,11 +272,55 @@ export const schema = `
     success: Boolean!
   }
 
+  type SocialAccount {
+    id: ID!
+    platform: String!
+    platformUserId: String!
+    linkedAt: String
+    createdAt: String!
+  }
+
+  type GenerateInstagramVerificationCodePayload {
+    success: Boolean!
+    verificationCode: String!
+    error: String
+  }
+
+  type LinkInstagramAccountPayload {
+    success: Boolean!
+    verificationCode: String!
+    error: String
+  }
+
+  type UnlinkInstagramAccountPayload {
+    success: Boolean!
+    error: String
+  }
+
+  type Query {
+    health: HealthCheck!
+    analysis(id: ID!): AnalysisSummary
+    analyses(
+      first: Int
+      after: String
+      last: Int
+      before: String
+    ): AnalysisConnection!
+    subscription: SubscriptionInfo!
+    usage: UsageInfo!
+    feedback(analysisId: ID!): Feedback
+    instagramAccount: SocialAccount
+    linkedSocialAccounts: [SocialAccount!]!
+  }
+
   type Mutation {
     submitAnalysis(input: SubmitAnalysisInput!): SubmitAnalysisPayload!
     submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
     chatWithVettAI(input: VettAIChatInput!): VettAIChatPayload!
     deleteAnalysis(id: ID!): DeleteAnalysisPayload!
+    generateInstagramVerificationCode: GenerateInstagramVerificationCodePayload!
+    linkInstagramAccount(verificationCode: String!): LinkInstagramAccountPayload!
+    unlinkInstagramAccount: UnlinkInstagramAccountPayload!
   }
 `;
 

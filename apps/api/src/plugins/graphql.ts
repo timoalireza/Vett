@@ -8,6 +8,7 @@ import { cacheService } from "../services/cache-service.js";
 import { createDataLoaders } from "../loaders/index.js";
 import { subscriptionService } from "../services/subscription-service.js";
 import { userService } from "../services/user-service.js";
+import { trackGraphQLQuery, trackGraphQLMutation, trackGraphQLError } from "./metrics.js";
 
 // Simple in-memory store for mutation rate limiting
 // In production, this should use Redis for distributed rate limiting
@@ -21,6 +22,37 @@ const MUTATION_RATE_LIMITS = {
 };
 
 const MUTATION_RATE_WINDOW = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+/**
+ * Detect if a GraphQL query is a mutation, handling comments and whitespace correctly.
+ * GraphQL supports:
+ * - Single-line comments: # comment
+ * - Block comments: """block comment""" or '''block comment'''
+ * 
+ * This function removes comments and checks if the first non-comment token is "mutation".
+ */
+function isMutation(query: string): boolean {
+  if (!query) return false;
+  
+  let cleaned = query;
+  
+  // Remove single-line comments (# comment)
+  // Matches # followed by any characters except newline/carriage return
+  cleaned = cleaned.replace(/#[^\n\r]*/g, '');
+  
+  // Remove block comments ("""...""" or '''...''')
+  // Use non-greedy matching to handle multiple block comments
+  // The 's' flag makes . match newlines
+  // Note: GraphQL block comments cannot contain the delimiter inside, so this is safe
+  cleaned = cleaned.replace(/""".*?"""/gs, ''); // """..."""
+  cleaned = cleaned.replace(/'''.*?'''/gs, ''); // '''...'''
+  
+  // Remove all whitespace (spaces, tabs, newlines, carriage returns)
+  cleaned = cleaned.replace(/\s+/g, '');
+  
+  // Check if it starts with "mutation"
+  return cleaned.startsWith('mutation');
+}
 
 async function checkMutationRateLimit(request: FastifyRequest): Promise<{ allowed: boolean; retryAfter?: number }> {
   if (!env.RATE_LIMIT_ENABLED) {
@@ -38,7 +70,8 @@ async function checkMutationRateLimit(request: FastifyRequest): Promise<{ allowe
     try {
       const dbUserId = await userService.getOrCreateUser(userId);
       const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
-      limit = MUTATION_RATE_LIMITS[subscription.plan];
+      // Fallback to FREE tier if plan is not recognized
+      limit = MUTATION_RATE_LIMITS[subscription.plan as keyof typeof MUTATION_RATE_LIMITS] ?? MUTATION_RATE_LIMITS.FREE;
     } catch (error) {
       limit = MUTATION_RATE_LIMITS.FREE;
     }
@@ -80,10 +113,21 @@ export async function registerGraphql(app: FastifyInstance) {
   // Per user request to remove all query depth limits
 
   // Add hook to rate limit GraphQL mutations
-  app.addHook("onRequest", async (request: FastifyRequest, reply) => {
+  // Use preHandler - body is parsed at this stage (after preValidation where body parsing occurs)
+  app.addHook("preHandler", async (request: FastifyRequest, reply) => {
     if (request.url === "/graphql" && request.method === "POST") {
+      // If body is not parsed, skip mutation-specific rate limiting
+      // We can't determine if it's a mutation without parsing the body
+      // General rate limiting (from rate-limit plugin) will still apply
+      if (!request.body) {
+        // Allow request to proceed - Mercurius will handle parsing errors
+        // General rate limiting plugin will still enforce limits
+        return;
+      }
+
+      // Only apply mutation-specific rate limiting when we can confirm it's a mutation
       const body = request.body as { query?: string } | undefined;
-      if (body?.query && body.query.trim().startsWith("mutation")) {
+      if (body?.query && isMutation(body.query)) {
         const rateLimitCheck = await checkMutationRateLimit(request);
         if (!rateLimitCheck.allowed) {
           return reply.code(429).send({
@@ -118,11 +162,12 @@ export async function registerGraphql(app: FastifyInstance) {
     // Custom cache function for GraphQL queries
     cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
       // Skip caching for mutations
-      if (query.trim().startsWith("mutation")) {
-        trackGraphQLMutation();
+      // Note: Mutation tracking is handled in resolvers to avoid double-counting
+      if (isMutation(query)) {
         return null;
       }
       
+      // Track queries regardless of caching status
       trackGraphQLQuery();
       
       // Get cached result
@@ -139,7 +184,14 @@ export async function registerGraphql(app: FastifyInstance) {
       // Return null to proceed with normal execution
       // The result will be cached in the onResponse hook
       return null;
-    } : false,
+    } : async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
+      // When caching is disabled, still track queries for metrics
+      // Skip tracking for mutations (handled in resolvers)
+      if (!isMutation(query)) {
+        trackGraphQLQuery();
+      }
+      return null; // Always proceed with normal execution when caching is disabled
+    },
     // Custom error formatter for better error messages
     errorFormatter: (execution, _context) => {
       // Track GraphQL errors
@@ -250,7 +302,8 @@ export async function registerGraphql(app: FastifyInstance) {
         typeof request.body === "object"
       ) {
         const body = request.body as { query?: string; variables?: Record<string, unknown> };
-        if (body.query && !body.query.trim().startsWith("mutation")) {
+        // Use isMutation() for consistent mutation detection (handles comments correctly)
+        if (body.query && !isMutation(body.query)) {
           try {
             // Get the response payload
             const response = reply.getPayload();

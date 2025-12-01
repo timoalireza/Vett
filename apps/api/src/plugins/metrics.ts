@@ -193,7 +193,179 @@ export default fp(async (fastify: FastifyInstance) => {
     clearInterval(queueMetricsInterval);
   });
 
-  // Metrics endpoint
+  // Prometheus metrics endpoint (Prometheus format)
+  fastify.get("/metrics/prometheus", async (_request, reply) => {
+    const avgResponseTime = metrics.responseTime.count > 0
+      ? metrics.responseTime.sum / metrics.responseTime.count
+      : 0;
+
+    const analysisSuccessRate = metrics.analysis.submitted > 0
+      ? (metrics.analysis.completed / metrics.analysis.submitted) * 100
+      : 0;
+
+    const avgAnalysisTime = metrics.analysis.timeCount > 0
+      ? metrics.analysis.totalTime / metrics.analysis.timeCount
+      : 0;
+
+    const errorRate = metrics.requests.total > 0
+      ? (metrics.requests.errors / metrics.requests.total) * 100
+      : 0;
+
+    const graphqlErrorRate = (metrics.graphql.queries + metrics.graphql.mutations) > 0
+      ? (metrics.graphql.errors / (metrics.graphql.queries + metrics.graphql.mutations)) * 100
+      : 0;
+
+    const dbErrorRate = metrics.database.queries > 0
+      ? (metrics.database.errors / metrics.database.queries) * 100
+      : 0;
+
+    // Convert to Prometheus format
+    const prometheusMetrics = [
+      `# HELP vett_requests_total Total number of HTTP requests`,
+      `# TYPE vett_requests_total counter`,
+      `vett_requests_total ${metrics.requests.total}`,
+      ``,
+      `# HELP vett_requests_errors_total Total number of HTTP errors`,
+      `# TYPE vett_requests_errors_total counter`,
+      `vett_requests_errors_total ${metrics.requests.errors}`,
+      ``,
+      `# HELP vett_requests_error_rate Error rate percentage`,
+      `# TYPE vett_requests_error_rate gauge`,
+      `vett_requests_error_rate ${errorRate}`,
+      ``,
+      `# HELP vett_response_time_seconds Response time in seconds`,
+      `# TYPE vett_response_time_seconds summary`,
+      `vett_response_time_seconds{quantile="0.5"} ${(calculatePercentile(50) / 1000).toFixed(3)}`,
+      `vett_response_time_seconds{quantile="0.95"} ${(calculatePercentile(95) / 1000).toFixed(3)}`,
+      `vett_response_time_seconds{quantile="0.99"} ${(calculatePercentile(99) / 1000).toFixed(3)}`,
+      `vett_response_time_seconds_sum ${(metrics.responseTime.sum / 1000).toFixed(3)}`,
+      `vett_response_time_seconds_count ${metrics.responseTime.count}`,
+      `vett_response_time_seconds_avg ${(avgResponseTime / 1000).toFixed(3)}`,
+      `vett_response_time_seconds_min ${(metrics.responseTime.min === Infinity ? 0 : metrics.responseTime.min) / 1000}`,
+      `vett_response_time_seconds_max ${metrics.responseTime.max / 1000}`,
+      ``,
+      `# HELP vett_graphql_queries_total Total number of GraphQL queries`,
+      `# TYPE vett_graphql_queries_total counter`,
+      `vett_graphql_queries_total ${metrics.graphql.queries}`,
+      ``,
+      `# HELP vett_graphql_mutations_total Total number of GraphQL mutations`,
+      `# TYPE vett_graphql_mutations_total counter`,
+      `vett_graphql_mutations_total ${metrics.graphql.mutations}`,
+      ``,
+      `# HELP vett_graphql_errors_total Total number of GraphQL errors`,
+      `# TYPE vett_graphql_errors_total counter`,
+      `vett_graphql_errors_total ${metrics.graphql.errors}`,
+      ``,
+      `# HELP vett_graphql_error_rate GraphQL error rate percentage`,
+      `# TYPE vett_graphql_error_rate gauge`,
+      `vett_graphql_error_rate ${graphqlErrorRate}`,
+      ``,
+      `# HELP vett_database_queries_total Total number of database queries`,
+      `# TYPE vett_database_queries_total counter`,
+      `vett_database_queries_total ${metrics.database.queries}`,
+      ``,
+      `# HELP vett_database_errors_total Total number of database errors`,
+      `# TYPE vett_database_errors_total counter`,
+      `vett_database_errors_total ${metrics.database.errors}`,
+      ``,
+      `# HELP vett_database_error_rate Database error rate percentage`,
+      `# TYPE vett_database_error_rate gauge`,
+      `vett_database_error_rate ${dbErrorRate}`,
+      ``,
+      `# HELP vett_analysis_submitted_total Total number of analyses submitted`,
+      `# TYPE vett_analysis_submitted_total counter`,
+      `vett_analysis_submitted_total ${metrics.analysis.submitted}`,
+      ``,
+      `# HELP vett_analysis_completed_total Total number of analyses completed`,
+      `# TYPE vett_analysis_completed_total counter`,
+      `vett_analysis_completed_total ${metrics.analysis.completed}`,
+      ``,
+      `# HELP vett_analysis_failed_total Total number of analyses failed`,
+      `# TYPE vett_analysis_failed_total counter`,
+      `vett_analysis_failed_total ${metrics.analysis.failed}`,
+      ``,
+      `# HELP vett_analysis_in_progress Current number of analyses in progress`,
+      `# TYPE vett_analysis_in_progress gauge`,
+      `vett_analysis_in_progress ${metrics.analysis.inProgress}`,
+      ``,
+      `# HELP vett_analysis_success_rate Analysis success rate percentage`,
+      `# TYPE vett_analysis_success_rate gauge`,
+      `vett_analysis_success_rate ${analysisSuccessRate}`,
+      ``,
+      `# HELP vett_analysis_duration_seconds Analysis processing duration in seconds`,
+      `# TYPE vett_analysis_duration_seconds summary`,
+      `vett_analysis_duration_seconds_sum ${(metrics.analysis.totalTime / 1000).toFixed(3)}`,
+      `vett_analysis_duration_seconds_count ${metrics.analysis.timeCount}`,
+      `vett_analysis_duration_seconds_avg ${(avgAnalysisTime / 1000).toFixed(3)}`,
+      ``,
+      `# HELP vett_rate_limit_hits_total Total number of rate limit hits`,
+      `# TYPE vett_rate_limit_hits_total counter`,
+      `vett_rate_limit_hits_total ${metrics.rateLimits.hits}`,
+      ``,
+      `# HELP vett_queue_waiting Current number of jobs waiting in queue`,
+      `# TYPE vett_queue_waiting gauge`,
+      `vett_queue_waiting ${metrics.queue.waiting}`,
+      ``,
+      `# HELP vett_queue_active Current number of active jobs`,
+      `# TYPE vett_queue_active gauge`,
+      `vett_queue_active ${metrics.queue.active}`,
+      ``,
+      `# HELP vett_queue_completed_total Total number of completed jobs`,
+      `# TYPE vett_queue_completed_total counter`,
+      `vett_queue_completed_total ${metrics.queue.completed}`,
+      ``,
+      `# HELP vett_queue_failed_total Total number of failed jobs`,
+      `# TYPE vett_queue_failed_total counter`,
+      `vett_queue_failed_total ${metrics.queue.failed}`,
+      ``,
+      `# HELP vett_queue_delayed Current number of delayed jobs`,
+      `# TYPE vett_queue_delayed gauge`,
+      `vett_queue_delayed ${metrics.queue.delayed}`,
+      ``,
+      `# HELP vett_costs_openai_tokens_total Total OpenAI tokens consumed`,
+      `# TYPE vett_costs_openai_tokens_total counter`,
+      `vett_costs_openai_tokens_total ${metrics.costs.openaiTokens}`,
+      ``,
+      `# HELP vett_costs_openai_requests_total Total OpenAI API requests`,
+      `# TYPE vett_costs_openai_requests_total counter`,
+      `vett_costs_openai_requests_total ${metrics.costs.openaiRequests}`,
+      ``,
+      `# HELP vett_costs_estimated_usd Estimated cost in USD`,
+      `# TYPE vett_costs_estimated_usd gauge`,
+      `vett_costs_estimated_usd ${metrics.costs.estimatedCost.toFixed(4)}`,
+      ``,
+      `# HELP vett_costs_per_analysis_usd Average cost per analysis in USD`,
+      `# TYPE vett_costs_per_analysis_usd gauge`,
+      `vett_costs_per_analysis_usd ${metrics.analysis.completed > 0 ? (metrics.costs.estimatedCost / metrics.analysis.completed).toFixed(4) : 0}`,
+      ``,
+      `# HELP vett_memory_heap_used_bytes Memory used by JavaScript heap in bytes`,
+      `# TYPE vett_memory_heap_used_bytes gauge`,
+      `vett_memory_heap_used_bytes ${process.memoryUsage().heapUsed}`,
+      ``,
+      `# HELP vett_memory_heap_total_bytes Total heap size allocated in bytes`,
+      `# TYPE vett_memory_heap_total_bytes gauge`,
+      `vett_memory_heap_total_bytes ${process.memoryUsage().heapTotal}`,
+      ``,
+      `# HELP vett_memory_rss_bytes Resident Set Size in bytes`,
+      `# TYPE vett_memory_rss_bytes gauge`,
+      `vett_memory_rss_bytes ${process.memoryUsage().rss}`,
+      ``,
+      `# HELP vett_memory_external_bytes External memory in bytes`,
+      `# TYPE vett_memory_external_bytes gauge`,
+      `vett_memory_external_bytes ${process.memoryUsage().external}`,
+      ``,
+      `# HELP vett_uptime_seconds Server uptime in seconds`,
+      `# TYPE vett_uptime_seconds gauge`,
+      `vett_uptime_seconds ${process.uptime()}`,
+      ``
+    ].join('\n');
+
+    return reply
+      .type('text/plain; version=0.0.4')
+      .send(prometheusMetrics);
+  });
+
+  // Metrics endpoint (JSON format)
   fastify.get("/metrics", async () => {
     const avgResponseTime = metrics.responseTime.count > 0
       ? metrics.responseTime.sum / metrics.responseTime.count

@@ -1,0 +1,68 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'vett-production'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - '/etc/prometheus/rules/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Vett API metrics
+  - job_name: 'vett-api'
+    scrape_interval: 30s
+    metrics_path: '/metrics/prometheus'
+    static_configs:
+      - targets: ['api:4000']
+        labels:
+          service: 'api'
+          environment: 'production'
+    # Optional: Add authentication if needed
+    # basic_auth:
+    #   username: 'prometheus'
+    #   password: 'your-password'
+
+  # Vett Worker metrics (if exposed)
+  - job_name: 'vett-worker'
+    scrape_interval: 30s
+    metrics_path: '/metrics/prometheus'
+    static_configs:
+      - targets: ['worker:3001']
+        labels:
+          service: 'worker'
+          environment: 'production'
+
+  # Node exporter for system metrics (optional)
+  - job_name: 'node-exporter'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node'
+          environment: 'production'
+
+  # Redis exporter (optional)
+  - job_name: 'redis'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          environment: 'production'
+
+
+

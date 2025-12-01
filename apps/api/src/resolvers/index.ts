@@ -6,6 +6,7 @@ import { subscriptionService } from "../services/subscription-service.js";
 import { cacheService } from "../services/cache-service.js";
 import { feedbackService } from "../services/feedback-service.js";
 import { vettAIService } from "../services/vettai-service.js";
+import { socialLinkingService } from "../services/social-linking-service.js";
 import type { DataLoaderContext } from "../loaders/index.js";
 import type { PaginationArgs } from "../utils/pagination.js";
 import { trackGraphQLMutation, trackGraphQLError } from "../plugins/metrics.js";
@@ -214,6 +215,55 @@ export const resolvers: IResolvers<GraphQLContext> = {
         });
         return null;
       }
+    },
+    instagramAccount: async (_parent, _args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        return null;
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+        const accounts = await socialLinkingService.getLinkedSocialAccounts(dbUserId);
+        const instagramAccount = accounts.find((acc) => acc.platform === "INSTAGRAM");
+
+        if (!instagramAccount) {
+          return null;
+        }
+
+        return {
+          id: instagramAccount.id,
+          platform: instagramAccount.platform,
+          platformUserId: instagramAccount.platformUserId,
+          linkedAt: instagramAccount.linkedAt?.toISOString() || null,
+          createdAt: instagramAccount.createdAt.toISOString()
+        };
+      } catch (error: any) {
+        console.error("[GraphQL] Error fetching Instagram account:", error);
+        return null;
+      }
+    },
+    linkedSocialAccounts: async (_parent, _args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        return [];
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+        const accounts = await socialLinkingService.getLinkedSocialAccounts(dbUserId);
+
+        return accounts.map((acc) => ({
+          id: acc.id,
+          platform: acc.platform,
+          platformUserId: acc.platformUserId,
+          linkedAt: acc.linkedAt?.toISOString() || null,
+          createdAt: acc.createdAt.toISOString()
+        }));
+      } catch (error: any) {
+        console.error("[GraphQL] Error fetching linked social accounts:", error);
+        return [];
+      }
     }
   },
   Mutation: {
@@ -243,7 +293,8 @@ export const resolvers: IResolvers<GraphQLContext> = {
           }
 
           console.log("[GraphQL] Enqueueing analysis...");
-          const analysisId = await analysisService.enqueueAnalysis(args.input, userId);
+          // Instagram user ID is undefined for app-submitted analyses (only set for DM-submitted)
+          const analysisId = await analysisService.enqueueAnalysis(args.input, userId, undefined);
           console.log("[GraphQL] ✅ Analysis enqueued:", analysisId);
         
         // Increment usage if user is authenticated
@@ -281,6 +332,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
       }
     },
     submitFeedback: async (_parent, args, context) => {
+      trackGraphQLMutation("submitFeedback");
       const ctx = context as GraphQLContext;
       if (!ctx.userId) {
         throw new Error("Authentication required");
@@ -318,6 +370,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
       }
     },
     chatWithVettAI: async (_parent, args, context) => {
+      trackGraphQLMutation("chatWithVettAI");
       const ctx = context as GraphQLContext;
       if (!ctx.userId) {
         throw new Error("Authentication required");
@@ -360,6 +413,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
       }
     },
     deleteAnalysis: async (_parent, args, context) => {
+      trackGraphQLMutation("deleteAnalysis");
       const ctx = context as GraphQLContext;
       if (!ctx.userId) {
         throw new Error("Authentication required");
@@ -382,13 +436,156 @@ export const resolvers: IResolvers<GraphQLContext> = {
         console.error("[GraphQL] Error deleting analysis:", {
           userId: ctx.userId,
           analysisId: args.id,
-          error: error.message,
-          stack: error.stack
+          error: error.message
         });
+        throw error;
+      }
+    },
+    generateInstagramVerificationCode: async (_parent, _args, context) => {
+      trackGraphQLMutation("generateInstagramVerificationCode");
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
         
-        // Re-throw with a user-friendly message
-        const errorMessage = error.message || "Failed to delete analysis";
-        throw new Error(errorMessage);
+        // Check if user has PRO plan
+        const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
+        if (subscription.plan !== "PRO") {
+          return {
+            success: false,
+            verificationCode: "",
+            error: "Pro plan required to link Instagram account"
+          };
+        }
+
+        // Generate verification code (without Instagram user ID - will be set when user sends code to bot)
+        const code = await socialLinkingService.generateVerificationCode(dbUserId);
+
+        return {
+          success: true,
+          verificationCode: code,
+          error: null
+        };
+      } catch (error: any) {
+        trackGraphQLError();
+        console.error("[GraphQL] Error generating Instagram verification code:", error);
+        return {
+          success: false,
+          verificationCode: "",
+          error: error.message || "Failed to generate verification code"
+        };
+      }
+    },
+    linkInstagramAccount: async (_parent, args, context) => {
+      trackGraphQLMutation("linkInstagramAccount");
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+
+        // Find social account with matching verification code for this user
+        // Use findAccountByVerificationCode to find accounts regardless of linkedAt status
+        const accountWithCode = await socialLinkingService.findAccountByVerificationCode(
+          dbUserId,
+          args.verificationCode,
+          "INSTAGRAM"
+        );
+
+        if (!accountWithCode) {
+          return {
+            success: false,
+            verificationCode: "",
+            error: "Invalid verification code. Make sure you've sent this code to @vettapp on Instagram first."
+          };
+        }
+
+        // Verify code hasn't expired
+        if (
+          accountWithCode.verificationCodeExpiresAt &&
+          accountWithCode.verificationCodeExpiresAt < new Date()
+        ) {
+          return {
+            success: false,
+            verificationCode: "",
+            error: "Verification code expired. Please generate a new code."
+          };
+        }
+
+        // Check if already linked
+        if (accountWithCode.linkedAt) {
+          return {
+            success: true,
+            verificationCode: args.verificationCode,
+            error: null
+          };
+        }
+
+        // Account linking is handled by the Instagram bot when user sends the code
+        // The code is valid, but linking hasn't completed yet
+        // Return pending status so user knows to wait for the bot to process
+        return {
+          success: false,
+          verificationCode: args.verificationCode,
+          error: "Verification code accepted, but account linking is pending. Please wait a moment and try again, or make sure you've sent the code to @vettapp on Instagram."
+        };
+      } catch (error: any) {
+        trackGraphQLError();
+        console.error("[GraphQL] Error linking Instagram account:", error);
+        return {
+          success: false,
+          verificationCode: "",
+          error: error.message || "Failed to link account"
+        };
+      }
+    },
+    unlinkInstagramAccount: async (_parent, _args, context) => {
+      trackGraphQLMutation("unlinkInstagramAccount");
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+        const accounts = await socialLinkingService.getLinkedSocialAccounts(dbUserId);
+        const instagramAccount = accounts.find((acc) => acc.platform === "INSTAGRAM");
+
+        if (!instagramAccount) {
+          return {
+            success: false,
+            error: "Instagram account not linked"
+          };
+        }
+
+        const result = await socialLinkingService.unlinkInstagramAccount(
+          instagramAccount.platformUserId,
+          dbUserId
+        );
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || "Failed to unlink account"
+          };
+        }
+
+        return {
+          success: true,
+          error: null
+        };
+      } catch (error: any) {
+        trackGraphQLError();
+        console.error("[GraphQL] Error unlinking Instagram account:", error);
+        return {
+          success: false,
+          error: error.message || "Failed to unlink account"
+        };
       }
     }
   },

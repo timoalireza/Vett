@@ -155,6 +155,7 @@ import metricsPlugin from "./plugins/metrics.js";
 import { registerGraphql } from "./plugins/graphql.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerRevenueCatWebhook } from "./routes/revenuecat-webhook.js";
+import { registerInstagramWebhook } from "./routes/instagram-webhook.js";
 import uploadsPlugin from "./plugins/uploads.js";
 import { queues } from "./queues/index.js";
 import { cacheService } from "./services/cache-service.js";
@@ -312,6 +313,7 @@ async function buildServer() {
   await registerGraphql(app);
   await registerHealthRoutes(app);
   await registerRevenueCatWebhook(app);
+await registerInstagramWebhook(app);
 
   // Initialize cache service
   await cacheService.initialize();

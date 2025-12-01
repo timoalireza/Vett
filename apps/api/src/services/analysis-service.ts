@@ -16,6 +16,7 @@ import { subscriptionService } from "./subscription-service.js";
 import { userService } from "./user-service.js";
 import type { PaginationArgs, PaginatedResult } from "../utils/pagination.js";
 import { validatePaginationArgs, createPageInfo, createCursor } from "../utils/pagination.js";
+import { trackAnalysisSubmitted } from "../plugins/metrics.js";
 
 type SubmitAnalysisInput = AnalysisJobInput;
 
@@ -138,7 +139,7 @@ export interface ReasonerMeta {
 }
 
 class AnalysisService {
-  async enqueueAnalysis(_input: SubmitAnalysisInput, userId?: string): Promise<string> {
+  async enqueueAnalysis(_input: SubmitAnalysisInput, userId?: string, instagramUserId?: string): Promise<string> {
     console.log("[AnalysisService] enqueueAnalysis called", { 
       hasInput: !!_input,
       inputType: _input?.mediaType,
@@ -171,6 +172,7 @@ class AnalysisService {
         .insert(analyses)
         .values({
           userId: userId ?? null,
+          instagramUserId: instagramUserId ?? null,
           topic: normalizedInput.topicHint ?? "unknown",
           inputType: normalizedInput.mediaType,
           status: "QUEUED",
