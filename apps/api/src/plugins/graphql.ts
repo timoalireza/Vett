@@ -112,7 +112,7 @@ export async function registerGraphql(app: FastifyInstance) {
   // Security validation rules completely disabled - no depth or complexity limits
   // Per user request to remove all query depth limits
 
-  // Add hook to rate limit GraphQL mutations
+  // Add hook to rate limit GraphQL mutations and track queries when caching is disabled
   // Use preHandler - body is parsed at this stage (after preValidation where body parsing occurs)
   app.addHook("preHandler", async (request: FastifyRequest, reply) => {
     if (request.url === "/graphql" && request.method === "POST") {
@@ -125,8 +125,15 @@ export async function registerGraphql(app: FastifyInstance) {
         return;
       }
 
-      // Only apply mutation-specific rate limiting when we can confirm it's a mutation
       const body = request.body as { query?: string } | undefined;
+      
+      // Track queries for metrics when caching is disabled
+      // (When caching is enabled, tracking happens in the cache function)
+      if (!cacheService.isEnabled() && body?.query && !isMutation(body.query)) {
+        trackGraphQLQuery();
+      }
+
+      // Only apply mutation-specific rate limiting when we can confirm it's a mutation
       if (body?.query && isMutation(body.query)) {
         const rateLimitCheck = await checkMutationRateLimit(request);
         if (!rateLimitCheck.allowed) {
@@ -160,6 +167,8 @@ export async function registerGraphql(app: FastifyInstance) {
     // they must be coming from a custom validation rule or cached response
     validationRules: [],
     // Custom cache function for GraphQL queries
+    // When caching is disabled, pass false to Mercurius (not a function)
+    // Mercurius validates cache option and expects either false or a valid cache config/function
     cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
       // Skip caching for mutations
       // Note: Mutation tracking is handled in resolvers to avoid double-counting
@@ -184,14 +193,7 @@ export async function registerGraphql(app: FastifyInstance) {
       // Return null to proceed with normal execution
       // The result will be cached in the onResponse hook
       return null;
-    } : async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
-      // When caching is disabled, still track queries for metrics
-      // Skip tracking for mutations (handled in resolvers)
-      if (!isMutation(query)) {
-        trackGraphQLQuery();
-      }
-      return null; // Always proceed with normal execution when caching is disabled
-    },
+    } : false,
     // Custom error formatter for better error messages
     errorFormatter: (execution, _context) => {
       // Track GraphQL errors
