@@ -6,10 +6,95 @@ import { schema } from "../graphql/schema.js";
 import { resolvers } from "../resolvers/index.js";
 import { cacheService } from "../services/cache-service.js";
 import { createDataLoaders } from "../loaders/index.js";
+import { subscriptionService } from "../services/subscription-service.js";
+import { userService } from "../services/user-service.js";
+
+// Simple in-memory store for mutation rate limiting
+// In production, this should use Redis for distributed rate limiting
+const mutationRateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+// Rate limit configuration based on subscription tier
+const MUTATION_RATE_LIMITS = {
+  FREE: 30, // 30 mutations per window
+  PLUS: 100, // 100 mutations per window
+  PRO: 500 // 500 mutations per window
+};
+
+const MUTATION_RATE_WINDOW = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+async function checkMutationRateLimit(request: FastifyRequest): Promise<{ allowed: boolean; retryAfter?: number }> {
+  if (!env.RATE_LIMIT_ENABLED) {
+    return { allowed: true };
+  }
+
+  const userId = (request as any).userId;
+  const key = userId ? `mutation:user:${userId}` : `mutation:ip:${request.ip || request.socket.remoteAddress || "unknown"}`;
+  
+  // Get rate limit for user
+  let limit: number;
+  if (!userId) {
+    limit = Math.floor(env.RATE_LIMIT_MUTATION_MAX / 2); // Half limit for anonymous
+  } else {
+    try {
+      const dbUserId = await userService.getOrCreateUser(userId);
+      const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
+      limit = MUTATION_RATE_LIMITS[subscription.plan];
+    } catch (error) {
+      limit = MUTATION_RATE_LIMITS.FREE;
+    }
+  }
+
+  const now = Date.now();
+  const record = mutationRateLimitStore.get(key);
+
+  // Clean up expired records periodically
+  if (Math.random() < 0.01) { // 1% chance to clean up
+    for (const [k, v] of mutationRateLimitStore.entries()) {
+      if (v.resetAt < now) {
+        mutationRateLimitStore.delete(k);
+      }
+    }
+  }
+
+  if (!record || record.resetAt < now) {
+    // Create new record
+    mutationRateLimitStore.set(key, {
+      count: 1,
+      resetAt: now + MUTATION_RATE_WINDOW
+    });
+    return { allowed: true };
+  }
+
+  if (record.count >= limit) {
+    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+    return { allowed: false, retryAfter };
+  }
+
+  // Increment count
+  record.count++;
+  return { allowed: true };
+}
 
 export async function registerGraphql(app: FastifyInstance) {
   // Security validation rules completely disabled - no depth or complexity limits
   // Per user request to remove all query depth limits
+
+  // Add hook to rate limit GraphQL mutations
+  app.addHook("onRequest", async (request: FastifyRequest, reply) => {
+    if (request.url === "/graphql" && request.method === "POST") {
+      const body = request.body as { query?: string } | undefined;
+      if (body?.query && body.query.trim().startsWith("mutation")) {
+        const rateLimitCheck = await checkMutationRateLimit(request);
+        if (!rateLimitCheck.allowed) {
+          return reply.code(429).send({
+            error: "Too Many Requests",
+            message: `Mutation rate limit exceeded. Please try again in ${rateLimitCheck.retryAfter} seconds.`,
+            retryAfter: rateLimitCheck.retryAfter
+          });
+        }
+      }
+    }
+  });
 
   await app.register(mercurius, {
     schema,
@@ -34,8 +119,11 @@ export async function registerGraphql(app: FastifyInstance) {
     cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
       // Skip caching for mutations
       if (query.trim().startsWith("mutation")) {
+        trackGraphQLMutation();
         return null;
       }
+      
+      trackGraphQLQuery();
       
       // Get cached result
       const cached = await cacheService.getCachedGraphQLQuery(
@@ -54,6 +142,11 @@ export async function registerGraphql(app: FastifyInstance) {
     } : false,
     // Custom error formatter for better error messages
     errorFormatter: (execution, _context) => {
+      // Track GraphQL errors
+      if (execution.errors && execution.errors.length > 0) {
+        trackGraphQLError();
+      }
+      
       const errors = execution.errors.map((error) => {
         // Enhance security-related errors
         if (error.extensions?.code === "QUERY_DEPTH_EXCEEDED") {

@@ -262,6 +262,9 @@ class AnalysisService {
       // Log successful enqueue (for debugging)
       console.log(`[AnalysisService] ✅ Analysis ${id} enqueued as job ${job.id}`);
       // Note: logger not available in this service, using console.log instead
+      
+      // Track metrics
+      trackAnalysisSubmitted();
     } catch (error) {
       // Log the actual error for debugging (even in production)
       console.error("[AnalysisService] Failed to enqueue analysis:", {

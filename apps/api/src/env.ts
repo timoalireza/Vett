@@ -125,7 +125,37 @@ const envSchema = z.object({
     .pipe(z.number().min(0).max(1).optional()),
   // RevenueCat configuration
   REVENUECAT_API_KEY: z.string().optional(),
-  REVENUECAT_WEBHOOK_SECRET: z.string().optional()
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+  // Rate limiting configuration
+  RATE_LIMIT_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true" || value === "1")
+    .pipe(z.boolean().default(true)),
+  RATE_LIMIT_GLOBAL_MAX: z
+    .string()
+    .optional()
+    .transform((value) => (value ? Number(value) : undefined))
+    .pipe(z.number().int().positive().default(1000)), // 1000 requests per window
+  RATE_LIMIT_GLOBAL_WINDOW: z
+    .string()
+    .optional()
+    .default("15 minutes"), // 15 minute window
+  RATE_LIMIT_ANONYMOUS_MAX: z
+    .string()
+    .optional()
+    .transform((value) => (value ? Number(value) : undefined))
+    .pipe(z.number().int().positive().default(100)), // 100 requests per window for anonymous
+  RATE_LIMIT_MUTATION_MAX: z
+    .string()
+    .optional()
+    .transform((value) => (value ? Number(value) : undefined))
+    .pipe(z.number().int().positive().default(50)), // 50 mutations per window
+  RATE_LIMIT_UPLOAD_MAX: z
+    .string()
+    .optional()
+    .transform((value) => (value ? Number(value) : undefined))
+    .pipe(z.number().int().positive().default(20)) // 20 uploads per window
 });
 
 // Debug: Log available environment variables (without sensitive values)

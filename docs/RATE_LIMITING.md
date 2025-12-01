@@ -1,102 +1,150 @@
 # Rate Limiting Implementation
 
-## ✅ Completed
+## Overview
 
-Rate limiting has been implemented with the following configuration:
-
-### Global Rate Limits
-
-- **All Routes**: 100 requests per 15 minutes per IP/user
-- **File Uploads**: 5 requests per minute per IP/user
-- **Health Endpoints**: 10 requests per minute per IP
-
-### Features
-
-1. **User-Based Rate Limiting**
-   - Authenticated users are rate-limited by user ID
-   - Unauthenticated users are rate-limited by IP address
-
-2. **Redis Support**
-   - In production, uses Redis for distributed rate limiting
-   - Falls back to in-memory store if Redis unavailable
-   - Works across multiple server instances
-
-3. **Rate Limit Headers**
-   - `x-ratelimit-limit`: Maximum requests allowed
-   - `x-ratelimit-remaining`: Remaining requests in window
-   - `x-ratelimit-reset`: Time when limit resets
-   - `retry-after`: Seconds until retry is allowed
-
-4. **Error Responses**
-   - Returns 429 Too Many Requests when limit exceeded
-   - Includes helpful error message and retry information
+Rate limiting has been implemented to prevent API abuse, control costs, and ensure fair usage across all users. The system uses tier-based rate limits that scale with subscription plans.
 
 ## Configuration
 
-Rate limits are configured in `apps/api/src/plugins/rate-limit.ts`:
+Rate limiting can be configured via environment variables:
 
-```typescript
-// Global: 100 requests per 15 minutes
-max: 100
-timeWindow: "15 minutes"
+```bash
+# Enable/disable rate limiting (default: true)
+RATE_LIMIT_ENABLED=true
 
-// Uploads: 5 requests per minute
-max: 5
-timeWindow: "1 minute"
+# Global rate limit for authenticated users (default: 1000 requests per window)
+RATE_LIMIT_GLOBAL_MAX=1000
 
-// Health: 10 requests per minute
-max: 10
-timeWindow: "1 minute"
+# Rate limit window (default: "15 minutes")
+RATE_LIMIT_GLOBAL_WINDOW=15 minutes
+
+# Rate limit for anonymous/unauthenticated users (default: 100 requests per window)
+RATE_LIMIT_ANONYMOUS_MAX=100
+
+# Rate limit for GraphQL mutations (default: 50 mutations per window)
+RATE_LIMIT_MUTATION_MAX=50
+
+# Rate limit for file uploads (default: 20 uploads per window)
+RATE_LIMIT_UPLOAD_MAX=20
 ```
+
+## Rate Limits by Subscription Tier
+
+### FREE Tier
+- **Global Requests**: 200 per 15 minutes
+- **Mutations**: 30 per 15 minutes
+- **Uploads**: 10 per 15 minutes
+
+### PLUS Tier
+- **Global Requests**: 1,000 per 15 minutes
+- **Mutations**: 100 per 15 minutes
+- **Uploads**: 50 per 15 minutes
+
+### PRO Tier
+- **Global Requests**: 5,000 per 15 minutes
+- **Mutations**: 500 per 15 minutes
+- **Uploads**: 200 per 15 minutes
+
+### Anonymous/Unauthenticated
+- **Global Requests**: 100 per 15 minutes (configurable via `RATE_LIMIT_ANONYMOUS_MAX`)
+- **Mutations**: 25 per 15 minutes (half of `RATE_LIMIT_MUTATION_MAX`)
+- **Uploads**: 10 per 15 minutes (half of `RATE_LIMIT_UPLOAD_MAX`)
+
+## Implementation Details
+
+### Global Rate Limiting
+- Applied to all routes via `@fastify/rate-limit`
+- Uses Redis for distributed rate limiting in production
+- Falls back to in-memory store if Redis is unavailable
+- Rate limits are per-user (authenticated) or per-IP (anonymous)
+
+### GraphQL Mutation Rate Limiting
+- Separate, stricter limits for mutations (`submitAnalysis`, `deleteAnalysis`, etc.)
+- Implemented via custom hook in GraphQL plugin
+- Uses in-memory store (can be upgraded to Redis for distributed limiting)
+- Applied before mutation execution
+
+### Upload Rate Limiting
+- Separate limits for file upload endpoints
+- Stricter than global limits to prevent abuse
+- Per-user or per-IP based on authentication
+
+### Health Endpoint Rate Limiting
+- More lenient limits (60 requests per minute)
+- Prevents health check abuse while allowing monitoring
+
+## Rate Limit Headers
+
+All rate-limited responses include the following headers:
+
+- `x-ratelimit-limit`: Maximum number of requests allowed in the window
+- `x-ratelimit-remaining`: Number of requests remaining in the current window
+- `x-ratelimit-reset`: Unix timestamp when the rate limit resets
+- `retry-after`: Number of seconds to wait before retrying (when rate limited)
+
+## Error Response
+
+When rate limited, the API returns:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Maximum X requests per 15 minutes.",
+  "retryAfter": 123
+}
+```
+
+HTTP Status Code: `429 Too Many Requests`
+
+## Redis Configuration
+
+In production, rate limiting uses Redis for distributed rate limiting across multiple server instances. The Redis client is configured with:
+- Unlimited retries (`maxRetriesPerRequest: null`)
+- Automatic fallback to in-memory store on Redis failure
+- Graceful degradation to ensure service availability
+
+## Monitoring
+
+Rate limiting metrics should be monitored:
+- Rate limit hit frequency
+- Distribution of rate limits by tier
+- Peak usage patterns
+- Redis connection health for distributed limiting
+
+## Future Enhancements
+
+1. **Redis-based mutation rate limiting**: Currently uses in-memory store
+2. **Dynamic rate limit adjustment**: Adjust limits based on system load
+3. **Rate limit exemptions**: Allow certain operations to bypass limits
+4. **Rate limit analytics**: Dashboard showing rate limit usage by user/tier
 
 ## Testing
 
-### Test Rate Limiting
+To test rate limiting:
 
 ```bash
-# Make 101 requests quickly
-for i in {1..101}; do
-  curl http://localhost:4000/health
+# Test global rate limit
+for i in {1..150}; do
+  curl -H "Authorization: Bearer $TOKEN" https://api.vett.app/graphql \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"query": "{ health { status } }"}'
 done
 
-# Should see 429 error on 101st request
+# Test mutation rate limit
+for i in {1..60}; do
+  curl -H "Authorization: Bearer $TOKEN" https://api.vett.app/graphql \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"query": "mutation { submitAnalysis(input: { ... }) { analysisId } }"}'
+done
 ```
 
-### Check Rate Limit Headers
+## Production Checklist
 
-```bash
-curl -i http://localhost:4000/health
-
-# Response headers:
-# x-ratelimit-limit: 100
-# x-ratelimit-remaining: 99
-# x-ratelimit-reset: 1234567890
-```
-
-## Production Considerations
-
-1. **Redis Required**: For production with multiple instances, Redis is required for distributed rate limiting
-2. **Adjust Limits**: Review and adjust limits based on your traffic patterns
-3. **Monitor**: Track rate limit hits to identify abuse or adjust limits
-
-## Customization
-
-To adjust rate limits, edit `apps/api/src/plugins/rate-limit.ts`:
-
-```typescript
-// Change global limit
-max: 200, // Increase to 200 requests
-timeWindow: "15 minutes"
-
-// Change upload limit
-max: 10, // Increase to 10 uploads per minute
-timeWindow: "1 minute"
-```
-
-## Next Steps
-
-- [ ] Monitor rate limit hits in production
-- [ ] Adjust limits based on actual usage
-- [ ] Consider per-endpoint limits for expensive operations
-- [ ] Add rate limit metrics to monitoring dashboard
-
+- [ ] Verify `RATE_LIMIT_ENABLED=true` in production
+- [ ] Configure appropriate limits for your expected traffic
+- [ ] Ensure Redis is available for distributed rate limiting
+- [ ] Monitor rate limit hit rates
+- [ ] Set up alerts for high rate limit hit frequency
+- [ ] Test rate limiting with production-like traffic

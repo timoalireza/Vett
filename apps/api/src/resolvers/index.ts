@@ -8,6 +8,7 @@ import { feedbackService } from "../services/feedback-service.js";
 import { vettAIService } from "../services/vettai-service.js";
 import type { DataLoaderContext } from "../loaders/index.js";
 import type { PaginationArgs } from "../utils/pagination.js";
+import { trackGraphQLMutation, trackGraphQLError } from "../plugins/metrics.js";
 
 interface GraphQLContext {
   userId?: string;
@@ -217,6 +218,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
   },
   Mutation: {
       submitAnalysis: async (_parent, args, context) => {
+        trackGraphQLMutation("submitAnalysis");
         try {
           console.log("[GraphQL] submitAnalysis called", { 
             hasInput: !!args.input,
@@ -256,6 +258,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
           status: "QUEUED"
         };
       } catch (error) {
+        trackGraphQLError();
         // Log the actual error for debugging
         console.error("[submitAnalysis] Error:", error);
         
