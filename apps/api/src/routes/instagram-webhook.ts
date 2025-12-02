@@ -81,10 +81,17 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
       }
     },
     async (request: FastifyRequest<{ Querystring: { "hub.mode": string; "hub.verify_token": string; "hub.challenge": string } }>, reply: FastifyReply) => {
+      // Sanitize query object to exclude sensitive verification token
+      const sanitizedQuery = {
+        "hub.mode": request.query["hub.mode"],
+        "hub.challenge": request.query["hub.challenge"] ? `${request.query["hub.challenge"].substring(0, 10)}...` : undefined,
+        "hub.verify_token": request.query["hub.verify_token"] ? "[REDACTED]" : undefined
+      };
+      
       app.log.info({
         method: request.method,
         url: request.url,
-        query: request.query
+        query: sanitizedQuery
       }, "[Instagram] 📥 Webhook verification request");
       
       const mode = request.query["hub.mode"];
@@ -351,9 +358,10 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
 
         // Still return 200 to prevent Instagram from retrying
         // Log the error for investigation
+        const errorMessage = error instanceof Error ? error.message : String(error);
         return reply.code(200).send({
           received: true,
-          error: error.message
+          error: errorMessage
         });
       }
     }
