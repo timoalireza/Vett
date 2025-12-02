@@ -194,14 +194,14 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
               // Note: INSTAGRAM_PAGE_ID is the bot's page ID (constant), not individual user IDs
               // Individual Instagram users (event.sender.id) are automatically tracked in the database
               if (!env.INSTAGRAM_PAGE_ID) {
-                // If page ID is not configured, log it but process anyway
-                // The first message will tell us what the page ID should be
-                app.log.warn({
+                // Skip processing if page ID is not configured - sendDM requires it to send responses
+                // Without it, messages would be processed but responses would silently fail
+                app.log.error({
                   recipientId: event.recipient.id,
                   senderId: event.sender.id,
-                  message: "INSTAGRAM_PAGE_ID not configured - processing message anyway"
-                }, `[Instagram] ⚠️ INSTAGRAM_PAGE_ID is not set. Received message for recipient (bot page) ID ${event.recipient.id} from Instagram user ${event.sender.id}. Set INSTAGRAM_PAGE_ID=${event.recipient.id} in Railway to filter messages. Processing message anyway.`);
-                // Process the message - individual user tracking happens automatically via event.sender.id
+                  message: "INSTAGRAM_PAGE_ID not configured - skipping message"
+                }, `[Instagram] ❌ INSTAGRAM_PAGE_ID is not set. Received message for recipient (bot page) ID ${event.recipient.id} from Instagram user ${event.sender.id}. Set INSTAGRAM_PAGE_ID=${event.recipient.id} in Railway environment variables to enable message processing.`);
+                continue;
               } else if (event.recipient.id !== env.INSTAGRAM_PAGE_ID) {
                 // Skip messages not intended for our bot page
                 app.log.warn({
