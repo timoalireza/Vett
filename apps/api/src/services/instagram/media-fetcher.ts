@@ -24,7 +24,7 @@ export interface MediaFetchResult {
 export async function fetchMediaFromAttachment(
   attachment: InstagramAttachment
 ): Promise<MediaFetchResult> {
-  const mediaUrl = attachment.payload?.url;
+  let mediaUrl = attachment.payload?.url;
   
   if (!mediaUrl || typeof mediaUrl !== "string") {
     throw new Error("No media URL found in attachment payload");
@@ -48,7 +48,7 @@ export async function fetchMediaFromAttachment(
       }
     }
 
-    const response = await fetch(finalMediaUrl, {
+    const response = await fetch(mediaUrl, {
       method: "GET",
       headers
     });
@@ -66,7 +66,7 @@ export async function fetchMediaFromAttachment(
     const buffer = Buffer.from(arrayBuffer);
 
     serviceLogger.debug({ 
-      url: finalMediaUrl, 
+      url: mediaUrl, 
       mimeType, 
       size: buffer.length 
     }, "[Instagram] Successfully fetched media");
@@ -76,7 +76,7 @@ export async function fetchMediaFromAttachment(
       mimeType
     };
   } catch (error: any) {
-    serviceLogger.error({ error, url: finalMediaUrl }, "[Instagram] Failed to fetch media");
+    serviceLogger.error({ error, url: mediaUrl }, "[Instagram] Failed to fetch media");
     throw new Error(`Failed to download media: ${error.message || "Unknown error"}`);
   }
 }
