@@ -760,16 +760,38 @@ I'll send you the results as soon as they're ready! 📊`;
       }
 
       // Check usage limits
+      serviceLogger.debug({ instagramUserId }, "[Instagram] Checking usage limits");
       const usageCheck = await this.checkInstagramUsageLimit(instagramUserId);
+      serviceLogger.debug({ 
+        instagramUserId, 
+        allowed: usageCheck.allowed, 
+        remaining: usageCheck.remaining, 
+        limit: usageCheck.limit 
+      }, "[Instagram] Usage limit check result");
+      
       if (!usageCheck.allowed) {
-        await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
+        serviceLogger.info({ instagramUserId, remaining: usageCheck.remaining, limit: usageCheck.limit }, "[Instagram] Rate limit exceeded, sending rate limit message");
+        const rateLimitDmResult = await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
+        if (!rateLimitDmResult.success) {
+          serviceLogger.warn({ instagramUserId, error: rateLimitDmResult.error }, "[Instagram] Failed to send rate limit message");
+        }
         return { success: true };
       }
 
-      // Send processing message
-      await this.sendDM(instagramUserId, this.formatProcessingMessage());
+      // Send processing message (non-blocking - continue even if DM fails)
+      serviceLogger.debug({ instagramUserId }, "[Instagram] Sending processing message");
+      const processingDmResult = await this.sendDM(instagramUserId, this.formatProcessingMessage());
+      if (!processingDmResult.success) {
+        serviceLogger.warn({ 
+          instagramUserId, 
+          error: processingDmResult.error 
+        }, "[Instagram] Failed to send processing message (credentials may be missing), but continuing with analysis");
+      } else {
+        serviceLogger.debug({ instagramUserId }, "[Instagram] Processing message sent successfully");
+      }
 
       // Prepare analysis input
+      serviceLogger.debug({ instagramUserId }, "[Instagram] Preparing analysis input");
       const analysisInput: {
         text?: string;
         attachments: Array<{ kind: "link" | "image"; url: string }>;
@@ -811,8 +833,10 @@ I'll send you the results as soon as they're ready! 📊`;
       }
 
       // Get linked app user (if any) for analysis
+      serviceLogger.debug({ instagramUserId }, "[Instagram] Checking for linked app user");
       const linkedUser = await socialLinkingService.getLinkedAppUser(instagramUserId);
       const userId = linkedUser?.id || null;
+      serviceLogger.debug({ instagramUserId, userId: userId || "anonymous" }, "[Instagram] Linked user check complete");
 
       // Submit analysis (create anonymous analysis if not linked)
       // Store instagramUserId so we can retroactively link analyses when account is linked

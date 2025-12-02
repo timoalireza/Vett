@@ -320,6 +320,25 @@ async function buildServer() {
   await registerInstagramWebhook(app);
   await registerLegalRoutes(app);
 
+  // Root route handler to avoid 404s in logs
+  app.get("/", async (_request, reply) => {
+    return reply.code(200).send({
+      service: "Vett API",
+      version: "1.0.0",
+      status: "running",
+      endpoints: {
+        health: "/health",
+        ready: "/ready",
+        live: "/live",
+        graphql: "/graphql",
+        terms: "/terms",
+        privacy: "/privacy",
+        "data-deletion": "/data-deletion"
+      },
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // Initialize cache service
   await cacheService.initialize();
 
