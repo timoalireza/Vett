@@ -49,9 +49,7 @@ export async function describeImageAttachment(attachment: AnalysisAttachmentInpu
             },
             {
               type: "input_image",
-              image_url: {
-                url: attachment.url
-              }
+              image_url: attachment.url
             }
           ]
         }
