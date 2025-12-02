@@ -41,13 +41,28 @@ class InstagramService {
    * Send DM to Instagram user via Meta Graph API
    */
   async sendDM(instagramUserId: string, message: string): Promise<{ success: boolean; error?: string }> {
-    if (!env.INSTAGRAM_PAGE_ACCESS_TOKEN || !env.INSTAGRAM_PAGE_ID) {
-      serviceLogger.error({ instagramUserId }, "[Instagram] Missing Instagram API credentials");
+    // Check if credentials are set and not empty, then trim them for use
+    const accessToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+    const pageId = env.INSTAGRAM_PAGE_ID?.trim();
+    const hasAccessToken = accessToken && accessToken.length > 0;
+    const hasPageId = pageId && pageId.length > 0;
+    
+    if (!hasAccessToken || !hasPageId) {
+      serviceLogger.error({ 
+        instagramUserId,
+        hasAccessToken,
+        hasPageId,
+        accessTokenLength: env.INSTAGRAM_PAGE_ACCESS_TOKEN?.length || 0,
+        pageIdLength: env.INSTAGRAM_PAGE_ID?.length || 0,
+        accessTokenPreview: env.INSTAGRAM_PAGE_ACCESS_TOKEN ? `${env.INSTAGRAM_PAGE_ACCESS_TOKEN.substring(0, 10)}...` : "undefined",
+        pageIdPreview: env.INSTAGRAM_PAGE_ID ? `${env.INSTAGRAM_PAGE_ID.substring(0, 10)}...` : "undefined"
+      }, "[Instagram] Missing Instagram API credentials - check INSTAGRAM_PAGE_ACCESS_TOKEN and INSTAGRAM_PAGE_ID environment variables");
       return { success: false, error: "Instagram API not configured" };
     }
 
     try {
-      const url = `${INSTAGRAM_API_BASE}/${env.INSTAGRAM_PAGE_ID}/messages`;
+      // Use trimmed values to avoid API failures from whitespace
+      const url = `${INSTAGRAM_API_BASE}/${pageId}/messages`;
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -57,7 +72,7 @@ class InstagramService {
           recipient: { id: instagramUserId },
           message: { text: message },
           messaging_type: "RESPONSE",
-          access_token: env.INSTAGRAM_PAGE_ACCESS_TOKEN
+          access_token: accessToken
         })
       });
 
@@ -136,15 +151,17 @@ class InstagramService {
    * Get Instagram post permalink from media ID using Graph API
    */
   private async getPostPermalinkFromMediaId(mediaId: string): Promise<string | null> {
-    if (!env.INSTAGRAM_PAGE_ACCESS_TOKEN) {
+    const accessToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+    if (!accessToken || accessToken.length === 0) {
       serviceLogger.warn("[Instagram] INSTAGRAM_PAGE_ACCESS_TOKEN not configured, cannot fetch post permalink");
       return null;
     }
 
     try {
       // Use Graph API to get media information
+      // Use trimmed access token to avoid API failures from whitespace
       const response = await fetch(
-        `${INSTAGRAM_API_BASE}/${mediaId}?fields=permalink&access_token=${env.INSTAGRAM_PAGE_ACCESS_TOKEN}`,
+        `${INSTAGRAM_API_BASE}/${mediaId}?fields=permalink&access_token=${accessToken}`,
         {
           method: "GET",
           headers: {
@@ -732,10 +749,13 @@ I'll send you the results as soon as they're ready! 📊`;
           messageText: message.text,
           messageAttachments: message.attachments
         }, "[Instagram] No content found in message from user");
-        await this.sendDM(
+        const noContentDmResult = await this.sendDM(
           instagramUserId,
           "Please send a link, image, or text message to analyze. I can help you fact-check content! 🔍\n\nTo link your account, send the 6-digit verification code from the Vett app."
         );
+        if (!noContentDmResult.success) {
+          serviceLogger.warn({ instagramUserId, error: noContentDmResult.error }, "[Instagram] Failed to send 'no content' message");
+        }
         return { success: true };
       }
 

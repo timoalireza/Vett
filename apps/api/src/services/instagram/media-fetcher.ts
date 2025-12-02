@@ -39,11 +39,13 @@ export async function fetchMediaFromAttachment(
     };
 
     // If we have an access token and the URL is from Instagram Graph API, add it
-    if (env.INSTAGRAM_PAGE_ACCESS_TOKEN && mediaUrl.includes("graph.facebook.com")) {
+    const accessToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+    if (accessToken && accessToken.length > 0 && mediaUrl.includes("graph.facebook.com")) {
       // URL might already have access_token, or we might need to add it
       const urlObj = new URL(mediaUrl);
       if (!urlObj.searchParams.has("access_token")) {
-        urlObj.searchParams.set("access_token", env.INSTAGRAM_PAGE_ACCESS_TOKEN);
+        // Use trimmed access token to avoid API failures from whitespace
+        urlObj.searchParams.set("access_token", accessToken);
         mediaUrl = urlObj.toString();
       }
     }

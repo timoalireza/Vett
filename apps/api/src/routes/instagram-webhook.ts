@@ -218,22 +218,25 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
               // Verify message is for our bot page (recipient.id is the bot's page ID)
               // Note: INSTAGRAM_PAGE_ID is the bot's page ID (constant), not individual user IDs
               // Individual Instagram users (event.sender.id) are automatically tracked in the database
-              if (!env.INSTAGRAM_PAGE_ID) {
+              const pageId = env.INSTAGRAM_PAGE_ID?.trim();
+              if (!pageId || pageId.length === 0) {
                 // Skip processing if page ID is not configured - sendDM requires it to send responses
                 // Without it, messages would be processed but responses would silently fail
                 app.log.error({
                   recipientId: event.recipient.id,
                   senderId: event.sender.id,
+                  pageIdLength: env.INSTAGRAM_PAGE_ID?.length || 0,
+                  pageIdPreview: env.INSTAGRAM_PAGE_ID ? `${env.INSTAGRAM_PAGE_ID.substring(0, 10)}...` : "undefined",
                   message: "INSTAGRAM_PAGE_ID not configured - skipping message"
-                }, `[Instagram] ❌ INSTAGRAM_PAGE_ID is not set. Received message for recipient (bot page) ID ${event.recipient.id} from Instagram user ${event.sender.id}. Set INSTAGRAM_PAGE_ID=${event.recipient.id} in Railway environment variables to enable message processing.`);
+                }, `[Instagram] ❌ INSTAGRAM_PAGE_ID is not set or empty. Received message for recipient (bot page) ID ${event.recipient.id} from Instagram user ${event.sender.id}. Set INSTAGRAM_PAGE_ID=${event.recipient.id} in Railway environment variables to enable message processing.`);
                 continue;
-              } else if (event.recipient.id !== env.INSTAGRAM_PAGE_ID) {
+              } else if (event.recipient.id !== pageId) {
                 // Skip messages not intended for our bot page
                 app.log.warn({
                   recipientId: event.recipient.id,
-                  configuredPageId: env.INSTAGRAM_PAGE_ID,
+                  configuredPageId: pageId, // Use trimmed value for consistency
                   senderId: event.sender.id
-                }, `[Instagram] Skipping message - recipient ID ${event.recipient.id} doesn't match configured bot page ID ${env.INSTAGRAM_PAGE_ID}`);
+                }, `[Instagram] Skipping message - recipient ID ${event.recipient.id} doesn't match configured bot page ID ${pageId}`);
                 continue;
               }
 
