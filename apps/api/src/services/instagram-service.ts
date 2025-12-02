@@ -72,6 +72,103 @@ class InstagramService {
   }
 
   /**
+   * Extract Instagram post URL from shared post attachment using Graph API
+   * When a user shares a post, we get a CDN URL, but we need the actual post URL for content extraction
+   */
+  private async extractPostUrlFromAttachment(attachment: InstagramMessage["attachments"][0]): Promise<string | null> {
+    try {
+      // Check if attachment has target field (contains post URL)
+      if (attachment.payload?.target) {
+        const target = attachment.payload.target as string;
+        if (target.includes("instagram.com")) {
+          serviceLogger.debug({ target }, "[Instagram] Found post URL in attachment.target");
+          return target;
+        }
+      }
+
+      // Check if attachment has media field with permalink
+      if (attachment.payload?.media) {
+        const media = attachment.payload.media as { permalink?: string; id?: string };
+        if (media.permalink) {
+          serviceLogger.debug({ permalink: media.permalink }, "[Instagram] Found post URL in attachment.media.permalink");
+          return media.permalink;
+        }
+        // If we have media ID, construct URL
+        if (media.id) {
+          // Try to get permalink from Graph API
+          const permalink = await this.getPostPermalinkFromMediaId(media.id);
+          if (permalink) {
+            return permalink;
+          }
+        }
+      }
+
+      // Check if attachment has share field with href
+      if (attachment.payload?.share) {
+        const share = attachment.payload.share as { href?: string };
+        if (share.href && share.href.includes("instagram.com")) {
+          serviceLogger.debug({ href: share.href }, "[Instagram] Found post URL in attachment.share.href");
+          return share.href;
+        }
+      }
+
+      // Check attachment ID field - might be a media ID we can use
+      if ((attachment as any).id) {
+        const mediaId = (attachment as any).id;
+        const permalink = await this.getPostPermalinkFromMediaId(mediaId);
+        if (permalink) {
+          return permalink;
+        }
+      }
+
+      serviceLogger.debug({ attachment }, "[Instagram] No post URL found in attachment payload");
+      return null;
+    } catch (error) {
+      serviceLogger.error({ error, attachment }, "[Instagram] Error extracting post URL from attachment");
+      return null;
+    }
+  }
+
+  /**
+   * Get Instagram post permalink from media ID using Graph API
+   */
+  private async getPostPermalinkFromMediaId(mediaId: string): Promise<string | null> {
+    if (!env.INSTAGRAM_PAGE_ACCESS_TOKEN) {
+      serviceLogger.warn("[Instagram] INSTAGRAM_PAGE_ACCESS_TOKEN not configured, cannot fetch post permalink");
+      return null;
+    }
+
+    try {
+      // Use Graph API to get media information
+      const response = await fetch(
+        `${INSTAGRAM_API_BASE}/${mediaId}?fields=permalink&access_token=${env.INSTAGRAM_PAGE_ACCESS_TOKEN}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (!response.ok) {
+        serviceLogger.warn({ mediaId, status: response.status }, "[Instagram] Failed to fetch post permalink from Graph API");
+        return null;
+      }
+
+      const data = await response.json() as { permalink?: string };
+      if (data.permalink) {
+        serviceLogger.debug({ mediaId, permalink: data.permalink }, "[Instagram] Retrieved post permalink from Graph API");
+        return data.permalink;
+      }
+
+      return null;
+    } catch (error) {
+      serviceLogger.error({ error, mediaId }, "[Instagram] Error fetching post permalink from Graph API");
+      return null;
+    }
+  }
+
+  /**
    * Check if a URL is an Instagram CDN URL
    */
   private isInstagramCdnUrl(url: string): boolean {
@@ -108,7 +205,7 @@ class InstagramService {
   /**
    * Extract content from Instagram message (links, images, text)
    */
-  extractContentFromMessage(message: InstagramMessage): ExtractedContent {
+  async extractContentFromMessage(message: InstagramMessage): Promise<ExtractedContent> {
     const content: ExtractedContent = {
       links: [],
       images: []
@@ -162,14 +259,28 @@ class InstagramService {
           content.images.push(attachment.payload.url);
           serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added image URL");
         } else if (attachment.type === "share" && attachment.payload?.url) {
-          // Check if shared URL is an Instagram CDN URL (should be treated as image)
           const shareUrl = attachment.payload.url;
+          
+          // Check if this is an Instagram CDN URL (shared post attachment)
           if (this.isInstagramCdnUrl(shareUrl)) {
-            // Instagram CDN URLs are media files, treat as images
-            content.images.push(shareUrl);
-            serviceLogger.debug({ url: shareUrl }, "[Instagram] Added shared image from CDN URL");
+            // Try to extract the actual Instagram post URL from the attachment
+            // This allows us to process the post content via Apify instead of just the CDN image
+            const postUrl = await this.extractPostUrlFromAttachment(attachment);
+            
+            if (postUrl) {
+              // Use the extracted post URL as a link for content extraction
+              content.links.push(postUrl);
+              serviceLogger.debug({ 
+                cdnUrl: shareUrl, 
+                postUrl 
+              }, "[Instagram] Extracted post URL from shared attachment, added as link");
+            } else {
+              // Fallback: treat CDN URL as image if we can't extract post URL
+              content.images.push(shareUrl);
+              serviceLogger.debug({ url: shareUrl }, "[Instagram] Could not extract post URL, treating CDN URL as image");
+            }
           } else {
-            // Regular shared links/posts
+            // Regular shared links/posts (not CDN URLs)
             content.links.push(shareUrl);
             serviceLogger.debug({ url: shareUrl }, "[Instagram] Added shared link URL");
           }
@@ -456,7 +567,7 @@ I'll send you the results as soon as they're ready! 📊`;
       await socialLinkingService.getOrCreateInstagramUser(instagramUserId, username);
 
       // Extract content from message
-      const content = this.extractContentFromMessage(message);
+      const content = await this.extractContentFromMessage(message);
       
       serviceLogger.info({
         instagramUserId,
