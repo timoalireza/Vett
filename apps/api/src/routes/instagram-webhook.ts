@@ -235,7 +235,15 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
 
                 // Handle incoming DM asynchronously (don't block webhook response)
                 instagramService.handleIncomingDM({ message }).catch((error) => {
-                  app.log.error("[Instagram] Error processing DM:", error);
+                  app.log.error({
+                    error: error instanceof Error ? {
+                      message: error.message,
+                      stack: error.stack,
+                      name: error.name
+                    } : error,
+                    senderId: event.sender.id,
+                    messageId: event.message.mid
+                  }, "[Instagram] Error processing DM");
                 });
               } else {
                 app.log.warn("[Instagram] Event has no message field", { event });

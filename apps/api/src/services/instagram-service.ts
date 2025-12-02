@@ -659,12 +659,21 @@ I'll send you the results as soon as they're ready! 📊`;
                   claims: extractedClaims
                 }, "[Instagram] Successfully extracted claims from multimodal content");
               } catch (error: any) {
-                serviceLogger.error({ error }, "[Instagram] Claim extraction failed");
-                await this.sendDM(
-                  instagramUserId,
-                  "❌ *Analysis Failed*\n\nI couldn't extract clear claims from the content. Please try a different post."
-                );
-                return { success: false, error: "Failed to extract claims" };
+                serviceLogger.error({ error }, "[Instagram] Claim extraction failed, falling back to regular content extraction");
+                // Don't return early - fall through to use regular content extraction
+                // This ensures the job is still enqueued even if multimodal claim extraction fails
+                visionExtractionFailed = true;
+                // Send warning but continue with regular extraction
+                try {
+                  await this.sendDM(
+                    instagramUserId,
+                    "⚠️ *Claim Extraction Failed*\n\nI couldn't extract claims from the media. Falling back to regular analysis."
+                  );
+                } catch (dmError) {
+                  serviceLogger.error({ dmError }, "[Instagram] Failed to send claim extraction failure warning");
+                }
+                // Clear extractedClaims so we use regular content extraction
+                extractedClaims = [];
               }
             }
           }
@@ -765,9 +774,11 @@ I'll send you the results as soon as they're ready! 📊`;
           analysisInput.attachments.push({ kind: "link", url: link });
         }
 
-        // Add images (only if not processed by multimodal pipeline)
-        // Skip images that were processed via multimodal pipeline
-        if (!hasMediaAttachment) {
+        // Add images (only if not successfully processed by multimodal pipeline)
+        // Include images if multimodal processing wasn't attempted or failed
+        // If multimodal succeeded (extractedClaims.length > 0), skip images since they're already processed as claims
+        // If multimodal failed or wasn't attempted (extractedClaims.length === 0), include images for regular analysis
+        if (extractedClaims.length === 0) {
           for (const imageUrl of content.images) {
             analysisInput.attachments.push({ kind: "image", url: imageUrl });
           }
@@ -791,7 +802,9 @@ I'll send you the results as soon as they're ready! 📊`;
         textLength: analysisInput.text?.length || 0,
         attachmentsCount: analysisInput.attachments.length,
         attachments: analysisInput.attachments,
-        userId: userId || "anonymous"
+        userId: userId || "anonymous",
+        extractedClaimsCount: extractedClaims.length,
+        usingMultimodalClaims: extractedClaims.length > 0
       }, "[Instagram] Enqueueing analysis for Instagram user");
       
       let analysisId: string;
@@ -801,7 +814,8 @@ I'll send you the results as soon as they're ready! 📊`;
           text: analysisInput.text?.substring(0, 100),
           mediaType: "text",
           attachmentsCount: analysisInput.attachments.length,
-          userId: userId || undefined
+          userId: userId || undefined,
+          extractedClaimsCount: extractedClaims.length
         }, "[Instagram] Calling enqueueAnalysis");
         
         analysisId = await analysisService.enqueueAnalysis(
@@ -814,7 +828,12 @@ I'll send you the results as soon as they're ready! 📊`;
           instagramUserId // Store Instagram user ID for retroactive linking
         );
 
-        serviceLogger.info({ instagramUserId, analysisId }, "[Instagram] Analysis queued successfully");
+        serviceLogger.info({ 
+          instagramUserId, 
+          analysisId,
+          textLength: analysisInput.text?.length || 0,
+          attachmentsCount: analysisInput.attachments.length
+        }, "[Instagram] ✅ Analysis queued successfully - job should be picked up by worker");
       } catch (error: any) {
         serviceLogger.error({
           instagramUserId,
