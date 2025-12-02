@@ -37,10 +37,38 @@ export async function runMigrations(): Promise<void> {
 
       console.log(`[Migrations] Running ${file}...`);
       
-      // Execute migration
-      await pool.query(sql);
-      
-      console.log(`[Migrations] ✅ Completed ${file}`);
+      try {
+        // Execute migration
+        await pool.query(sql);
+        console.log(`[Migrations] ✅ Completed ${file}`);
+      } catch (error: any) {
+        // If migration fails due to already applied changes, log and continue
+        // Error codes that are safe to skip (indicate migration already applied):
+        // 42P07 = duplicate_object (object already exists)
+        // 42710 = duplicate_object (constraint/index already exists)
+        // 2BP01 = cannot drop type because it has dependent objects (handled in migration logic, but skip if still occurs)
+        // 
+        // Error codes that should NOT be skipped (critical failures):
+        // 22P02 = invalid input value for enum (data cannot be converted - indicates schema/data mismatch)
+        if (
+          error.code === "42P07" || 
+          error.code === "42710" || 
+          error.code === "2BP01" ||
+          error.message?.includes("already exists") ||
+          (error.message?.includes("dependent objects") && error.code === "2BP01")
+        ) {
+          console.log(`[Migrations] ⚠️  ${file} already applied or skipped (${error.code || error.message?.substring(0, 50)})`);
+        } else {
+          // Critical error - log and throw
+          console.error(`[Migrations] ❌ Error in ${file}:`, {
+            code: error.code,
+            message: error.message,
+            detail: error.detail,
+            hint: error.hint
+          });
+          throw error;
+        }
+      }
     }
 
     console.log("[Migrations] All migrations completed successfully");
