@@ -9,35 +9,50 @@ class SocialLinkingService {
    * Get or create Instagram user record
    */
   async getOrCreateInstagramUser(instagramUserId: string, username?: string) {
-    let instagramUser = await db.query.instagramUsers.findFirst({
-      where: eq(instagramUsers.instagramUserId, instagramUserId)
-    });
+    try {
+      let instagramUser = await db.query.instagramUsers.findFirst({
+        where: eq(instagramUsers.instagramUserId, instagramUserId)
+      });
 
-    if (!instagramUser) {
-      const [created] = await db
-        .insert(instagramUsers)
-        .values({
-          instagramUserId,
-          username: username || null
-        })
-        .returning();
+      if (!instagramUser) {
+        const [created] = await db
+          .insert(instagramUsers)
+          .values({
+            instagramUserId,
+            username: username || null
+          })
+          .returning();
 
-      instagramUser = created;
-    } else if (username && instagramUser.username !== username) {
-      // Update username if provided and different
-      const [updated] = await db
-        .update(instagramUsers)
-        .set({
-          username,
-          updatedAt: new Date()
-        })
-        .where(eq(instagramUsers.id, instagramUser.id))
-        .returning();
+        instagramUser = created;
+      } else if (username && instagramUser.username !== username) {
+        // Update username if provided and different
+        const [updated] = await db
+          .update(instagramUsers)
+          .set({
+            username,
+            updatedAt: new Date()
+          })
+          .where(eq(instagramUsers.id, instagramUser.id))
+          .returning();
 
-      instagramUser = updated;
+        instagramUser = updated;
+      }
+
+      return instagramUser;
+    } catch (error: any) {
+      // Check if error is due to missing table (42P01 = undefined_table)
+      if (error.code === "42P01" || error.message?.includes("does not exist") || (error.message?.includes("relation") && error.message?.includes("does not exist"))) {
+        const errorMessage = `Database migration required: Instagram tables are missing. Please run migrations:\n\n` +
+          `  pnpm --filter vett-api db:migrate\n\n` +
+          `Or use the SQL migration script:\n` +
+          `  pnpm --filter vett-api db:migrate:sql\n\n` +
+          `Missing table: instagram_users\n` +
+          `Error code: ${error.code || "N/A"}`;
+        console.error(`[SocialLinking] ${errorMessage}`);
+        throw new Error(errorMessage);
+      }
+      throw error;
     }
-
-    return instagramUser;
   }
 
   /**

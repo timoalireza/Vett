@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "node ../../scripts/drizzle.mjs generate --config ../../drizzle.config.ts",
     "db:migrate": "node ../../scripts/drizzle.mjs push --config ../../drizzle.config.ts",
+    "db:migrate:sql": "tsx src/utils/run-migrations.ts",
     "db:studio": "node ../../scripts/drizzle.mjs studio --config ../../drizzle.config.ts"
   },
   "dependencies": {

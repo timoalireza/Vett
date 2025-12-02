@@ -162,45 +162,61 @@ class InstagramService {
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1); // Start of current month
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // End of current month
 
-    let usage = await db.query.instagramDmUsage.findFirst({
-      where: eq(instagramDmUsage.instagramUserId, instagramUserId)
-    });
+    let usage;
+    try {
+      usage = await db.query.instagramDmUsage.findFirst({
+        where: eq(instagramDmUsage.instagramUserId, instagramUserId)
+      });
 
-    // Reset if period has changed
-    if (usage && (usage.periodEnd < now || usage.periodStart > now)) {
-      await db
-        .update(instagramDmUsage)
-        .set({
+      // Reset if period has changed
+      if (usage && (usage.periodEnd < now || usage.periodStart > now)) {
+        await db
+          .update(instagramDmUsage)
+          .set({
+            analysesCount: 0,
+            periodStart,
+            periodEnd,
+            lastResetAt: now,
+            updatedAt: now
+          })
+          .where(eq(instagramDmUsage.id, usage.id));
+
+        usage = {
+          ...usage,
           analysesCount: 0,
           periodStart,
           periodEnd,
-          lastResetAt: now,
-          updatedAt: now
-        })
-        .where(eq(instagramDmUsage.id, usage.id));
+          lastResetAt: now
+        };
+      }
 
-      usage = {
-        ...usage,
-        analysesCount: 0,
-        periodStart,
-        periodEnd,
-        lastResetAt: now
-      };
-    }
+      // Create usage record if it doesn't exist
+      if (!usage) {
+        const [created] = await db
+          .insert(instagramDmUsage)
+          .values({
+            instagramUserId,
+            analysesCount: 0,
+            periodStart,
+            periodEnd
+          })
+          .returning();
 
-    // Create usage record if it doesn't exist
-    if (!usage) {
-      const [created] = await db
-        .insert(instagramDmUsage)
-        .values({
-          instagramUserId,
-          analysesCount: 0,
-          periodStart,
-          periodEnd
-        })
-        .returning();
-
-      usage = created;
+        usage = created;
+      }
+    } catch (error: any) {
+      // Check if error is due to missing table (42P01 = undefined_table)
+      if (error.code === "42P01" || error.message?.includes("does not exist") || (error.message?.includes("relation") && error.message?.includes("does not exist"))) {
+        const errorMessage = `Database migration required: Instagram tables are missing. Please run migrations:\n\n` +
+          `  pnpm --filter vett-api db:migrate\n\n` +
+          `Or use the SQL migration script:\n` +
+          `  pnpm --filter vett-api db:migrate:sql\n\n` +
+          `Missing table: instagram_dm_usage\n` +
+          `Error code: ${error.code || "N/A"}`;
+        serviceLogger.error({ instagramUserId, error }, errorMessage);
+        throw new Error(errorMessage);
+      }
+      throw error;
     }
 
     const remaining = Math.max(0, FREE_TIER_DM_LIMIT - usage.analysesCount);
@@ -213,43 +229,58 @@ class InstagramService {
    * Increment Instagram DM usage count
    */
   async incrementInstagramUsage(instagramUserId: string): Promise<void> {
-    const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    try {
+      const now = new Date();
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-    let usage = await db.query.instagramDmUsage.findFirst({
-      where: eq(instagramDmUsage.instagramUserId, instagramUserId)
-    });
-
-    if (!usage) {
-      await db.insert(instagramDmUsage).values({
-        instagramUserId,
-        analysesCount: 1,
-        periodStart,
-        periodEnd
+      let usage = await db.query.instagramDmUsage.findFirst({
+        where: eq(instagramDmUsage.instagramUserId, instagramUserId)
       });
-    } else {
-      // Reset if period has changed
-      if (usage.periodEnd < now || usage.periodStart > now) {
-        await db
-          .update(instagramDmUsage)
-          .set({
-            analysesCount: 1,
-            periodStart,
-            periodEnd,
-            lastResetAt: now,
-            updatedAt: now
-          })
-          .where(eq(instagramDmUsage.id, usage.id));
+
+      if (!usage) {
+        await db.insert(instagramDmUsage).values({
+          instagramUserId,
+          analysesCount: 1,
+          periodStart,
+          periodEnd
+        });
       } else {
-        await db
-          .update(instagramDmUsage)
-          .set({
-            analysesCount: usage.analysesCount + 1,
-            updatedAt: now
-          })
-          .where(eq(instagramDmUsage.id, usage.id));
+        // Reset if period has changed
+        if (usage.periodEnd < now || usage.periodStart > now) {
+          await db
+            .update(instagramDmUsage)
+            .set({
+              analysesCount: 1,
+              periodStart,
+              periodEnd,
+              lastResetAt: now,
+              updatedAt: now
+            })
+            .where(eq(instagramDmUsage.id, usage.id));
+        } else {
+          await db
+            .update(instagramDmUsage)
+            .set({
+              analysesCount: usage.analysesCount + 1,
+              updatedAt: now
+            })
+            .where(eq(instagramDmUsage.id, usage.id));
+        }
       }
+    } catch (error: any) {
+      // Check if error is due to missing table (42P01 = undefined_table)
+      if (error.code === "42P01" || error.message?.includes("does not exist") || (error.message?.includes("relation") && error.message?.includes("does not exist"))) {
+        const errorMessage = `Database migration required: Instagram tables are missing. Please run migrations:\n\n` +
+          `  pnpm --filter vett-api db:migrate\n\n` +
+          `Or use the SQL migration script:\n` +
+          `  pnpm --filter vett-api db:migrate:sql\n\n` +
+          `Missing table: instagram_dm_usage\n` +
+          `Error code: ${error.code || "N/A"}`;
+        serviceLogger.error({ instagramUserId, error }, errorMessage);
+        throw new Error(errorMessage);
+      }
+      throw error;
     }
   }
 
