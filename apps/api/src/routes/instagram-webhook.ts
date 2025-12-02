@@ -68,19 +68,6 @@ function verifyInstagramWebhook(body: string, signature: string): boolean {
  * Register Instagram webhook route
  */
 export async function registerInstagramWebhook(app: FastifyInstance) {
-  // Configure content parser to preserve raw body for signature verification
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-    try {
-      // Store raw body for signature verification
-      (req as any).rawBody = body as string;
-      // Parse JSON
-      const json = JSON.parse(body as string);
-      done(null, json);
-    } catch (err) {
-      done(err as Error, undefined);
-    }
-  });
-
   // GET endpoint for webhook verification (Meta requires this)
   app.get(
     "/webhooks/instagram",
@@ -109,6 +96,27 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
     }
   );
 
+  // Register route-aware content parser for Instagram webhook
+  // This parser applies to all JSON requests but only stores rawBody for Instagram webhook route
+  // This is necessary because Fastify doesn't support route-specific content parsers
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, function (req, body, done) {
+    try {
+      // Extract pathname from URL (handles query parameters)
+      // req.url includes query string, so we extract just the path component
+      const urlPath = req.url?.split('?')[0] || req.url;
+      
+      // Only store raw body for Instagram webhook route (for signature verification)
+      if (urlPath === '/webhooks/instagram' && req.method === 'POST') {
+        (req as any).rawBody = body as string;
+      }
+      // Parse JSON normally for all routes
+      const json = JSON.parse(body as string);
+      done(null, json);
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
+
   // POST endpoint for receiving webhook events
   app.post(
     "/webhooks/instagram",
@@ -119,26 +127,51 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
       schema: {
         description: "Instagram webhook endpoint for DM and post events",
         tags: ["webhooks"]
-      }
+      },
+      bodyLimit: 1048576, // 1MB limit
     },
     async (request: FastifyRequest<{ Body: InstagramWebhookBody }>, reply: FastifyReply) => {
       try {
         // Verify webhook signature if provided
         const signature = request.headers["x-hub-signature-256"] as string;
-        if (signature && env.INSTAGRAM_APP_SECRET) {
-          // Use raw body if available (from content parser), otherwise stringify parsed body
-          const rawBody = (request as any).rawBody || JSON.stringify(request.body);
+        
+        // Signature verification is required if APP_SECRET is configured
+        // Only allow bypass if explicitly enabled via environment variable (for local testing only)
+        const requireSignature = env.INSTAGRAM_APP_SECRET !== undefined;
+        const allowSignatureBypass = env.NODE_ENV !== "production" && env.INSTAGRAM_ALLOW_UNSIGNED_WEBHOOKS === true;
+        
+        if (signature && requireSignature) {
+          // Use captured raw body from content parser (stored only for this route)
+          // Fallback to stringified parsed body if raw body unavailable (defensive programming)
+          let rawBody = (request as any).rawBody;
+          
+          if (!rawBody) {
+            app.log.warn("[Instagram] Raw body not available, falling back to stringified parsed body for signature verification");
+            // Fallback: stringify parsed body (may not match exactly due to JSON formatting differences)
+            // This is not ideal but prevents 500 errors that would cause Instagram to retry
+            rawBody = JSON.stringify(request.body);
+          }
+          
           const sig = signature.replace("sha256=", "");
           if (!verifyInstagramWebhook(rawBody, sig)) {
             app.log.warn("[Instagram] Webhook signature verification failed");
-            // In development, log but don't fail (allows testing without proper signature)
-            if (env.NODE_ENV === "production") {
-              return reply.code(401).send({ error: "Invalid signature" });
+            
+            // Only allow bypass if explicitly configured for local testing
+            if (allowSignatureBypass) {
+              app.log.warn("[Instagram] Signature verification failed but continuing due to INSTAGRAM_ALLOW_UNSIGNED_WEBHOOKS=true (local testing only)");
             } else {
-              app.log.warn("[Instagram] Signature verification failed but continuing in development mode");
+              return reply.code(401).send({ error: "Invalid signature" });
             }
           } else {
             app.log.info("[Instagram] Webhook signature verified successfully");
+          }
+        } else if (requireSignature && !signature) {
+          // Signature required but not provided
+          if (allowSignatureBypass) {
+            app.log.warn("[Instagram] No signature provided but continuing due to INSTAGRAM_ALLOW_UNSIGNED_WEBHOOKS=true (local testing only)");
+          } else {
+            app.log.warn("[Instagram] Signature required but not provided");
+            return reply.code(401).send({ error: "Signature required" });
           }
         }
 

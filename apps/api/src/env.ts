@@ -166,6 +166,9 @@ const envSchema = z.object({
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   INSTAGRAM_PAGE_ACCESS_TOKEN: z.string().optional(),
   INSTAGRAM_PAGE_ID: z.string().optional(),
+  // Allow unsigned webhooks in non-production (for local testing only)
+  // Set to "true" to bypass signature verification in development
+  INSTAGRAM_ALLOW_UNSIGNED_WEBHOOKS: z.string().optional().transform((val) => val === "true").pipe(z.boolean().default(false)),
   // Base URLs for production
   APP_BASE_URL: z.string().url().optional().default("https://app.vett.xyz"),
   API_BASE_URL: z.string().url().optional().default("https://api.vett.xyz")
