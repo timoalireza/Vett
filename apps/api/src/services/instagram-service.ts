@@ -5,6 +5,7 @@ import { env } from "../env.js";
 import { socialLinkingService } from "./social-linking-service.js";
 import { analysisService } from "./analysis-service.js";
 import type { AnalysisSummary } from "./analysis-service.js";
+import { serviceLogger } from "../utils/service-logger.js";
 
 const INSTAGRAM_API_BASE = "https://graph.facebook.com/v18.0";
 const FREE_TIER_DM_LIMIT = 3; // 3 analyses per month for FREE tier
@@ -16,12 +17,14 @@ interface InstagramMessage {
     username?: string;
   };
   text?: string;
-  attachments?: {
+  attachments?: Array<{
     type: string;
-    payload: {
+    payload?: {
       url?: string;
+      [key: string]: unknown; // Allow other payload fields
     };
-  }[];
+    [key: string]: unknown; // Allow other attachment fields
+  }>;
 }
 
 interface ExtractedContent {
@@ -36,7 +39,7 @@ class InstagramService {
    */
   async sendDM(instagramUserId: string, message: string): Promise<{ success: boolean; error?: string }> {
     if (!env.INSTAGRAM_PAGE_ACCESS_TOKEN || !env.INSTAGRAM_PAGE_ID) {
-      console.error("[Instagram] Missing Instagram API credentials");
+      serviceLogger.error({ instagramUserId }, "[Instagram] Missing Instagram API credentials");
       return { success: false, error: "Instagram API not configured" };
     }
 
@@ -57,13 +60,13 @@ class InstagramService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("[Instagram] Failed to send DM:", errorData);
+        serviceLogger.error({ instagramUserId, errorData }, "[Instagram] Failed to send DM");
         return { success: false, error: errorData.error?.message || "Failed to send DM" };
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error("[Instagram] Error sending DM:", error);
+      serviceLogger.error({ instagramUserId, error }, "[Instagram] Error sending DM");
       return { success: false, error: error.message || "Failed to send DM" };
     }
   }
@@ -77,6 +80,14 @@ class InstagramService {
       images: []
     };
 
+    serviceLogger.debug({
+      hasText: !!message.text,
+      textLength: message.text?.length || 0,
+      hasAttachments: !!message.attachments,
+      attachmentsCount: message.attachments?.length || 0,
+      attachmentTypes: message.attachments?.map(a => a.type) || []
+    }, "[Instagram] Extracting content from message");
+
     // Extract text
     if (message.text) {
       content.text = message.text;
@@ -86,20 +97,46 @@ class InstagramService {
       const urls = message.text.match(urlRegex);
       if (urls) {
         content.links.push(...urls);
+        serviceLogger.debug({ urls, count: urls.length }, "[Instagram] Found URL(s) in text");
       }
     }
 
-    // Extract attachments (images, videos, etc.)
+    // Extract attachments (images, videos, shared posts, etc.)
     if (message.attachments) {
       for (const attachment of message.attachments) {
+        serviceLogger.debug({
+          type: attachment.type,
+          hasPayload: !!attachment.payload,
+          payloadKeys: attachment.payload ? Object.keys(attachment.payload) : []
+        }, "[Instagram] Processing attachment");
+
         if (attachment.type === "image" && attachment.payload?.url) {
           content.images.push(attachment.payload.url);
+          serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added image URL");
         } else if (attachment.type === "share" && attachment.payload?.url) {
-          // Shared links
+          // Shared links/posts
           content.links.push(attachment.payload.url);
+          serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added shared link URL");
+        } else if (attachment.type === "video" && attachment.payload?.url) {
+          // Videos can also be analyzed
+          content.links.push(attachment.payload.url);
+          serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added video URL");
+        } else if (attachment.type === "fallback" && attachment.payload?.url) {
+          // Fallback attachment type
+          content.links.push(attachment.payload.url);
+          serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added fallback URL");
+        } else {
+          serviceLogger.debug({ attachment }, "[Instagram] Unhandled attachment type");
         }
       }
     }
+
+    serviceLogger.debug({
+      hasText: !!content.text,
+      textLength: content.text?.length || 0,
+      linksCount: content.links.length,
+      imagesCount: content.images.length
+    }, "[Instagram] Final extracted content");
 
     return content;
   }
@@ -298,17 +335,36 @@ I'll send you the results as soon as they're ready! 📊`;
     try {
       const message = webhookEvent.message;
       if (!message || !message.from) {
+        serviceLogger.error({ webhookEvent }, "[Instagram] Invalid message format");
         return { success: false, error: "Invalid message format" };
       }
 
       const instagramUserId = message.from.id;
       const username = message.from.username;
+      
+      serviceLogger.info({
+        instagramUserId,
+        messageId: message.id,
+        hasText: !!message.text,
+        hasAttachments: !!message.attachments?.length
+      }, "[Instagram] Handling DM from user");
 
       // Get or create Instagram user
       await socialLinkingService.getOrCreateInstagramUser(instagramUserId, username);
 
       // Extract content from message
       const content = this.extractContentFromMessage(message);
+      
+      serviceLogger.info({
+        instagramUserId,
+        hasText: !!content.text,
+        textLength: content.text?.length || 0,
+        linksCount: content.links.length,
+        imagesCount: content.images.length,
+        textPreview: content.text?.substring(0, 100),
+        links: content.links,
+        images: content.images
+      }, "[Instagram] Extracted content");
 
       // Check if message is a verification code (6-digit number)
       if (content.text && /^\d{6}$/.test(content.text.trim())) {
@@ -331,6 +387,11 @@ I'll send you the results as soon as they're ready! 📊`;
 
       // Check if message has any content to analyze
       if (!content.text && content.links.length === 0 && content.images.length === 0) {
+        serviceLogger.warn({
+          instagramUserId,
+          messageText: message.text,
+          messageAttachments: message.attachments
+        }, "[Instagram] No content found in message from user");
         await this.sendDM(
           instagramUserId,
           "Please send a link, image, or text message to analyze. I can help you fact-check content! 🔍\n\nTo link your account, send the 6-digit verification code from the Vett app."
@@ -382,26 +443,59 @@ I'll send you the results as soon as they're ready! 📊`;
 
       // Submit analysis (create anonymous analysis if not linked)
       // Store instagramUserId so we can retroactively link analyses when account is linked
-      const analysisId = await analysisService.enqueueAnalysis(
-        {
-          text: analysisInput.text,
+      serviceLogger.info({
+        instagramUserId,
+        hasText: !!analysisInput.text,
+        textLength: analysisInput.text?.length || 0,
+        attachmentsCount: analysisInput.attachments.length,
+        attachments: analysisInput.attachments,
+        userId: userId || "anonymous"
+      }, "[Instagram] Enqueueing analysis for Instagram user");
+      
+      let analysisId: string;
+      try {
+        serviceLogger.debug({
+          instagramUserId,
+          text: analysisInput.text?.substring(0, 100),
           mediaType: "text",
-          attachments: analysisInput.attachments
-        },
-        userId || undefined,
-        instagramUserId // Store Instagram user ID for retroactive linking
-      );
+          attachmentsCount: analysisInput.attachments.length,
+          userId: userId || undefined
+        }, "[Instagram] Calling enqueueAnalysis");
+        
+        analysisId = await analysisService.enqueueAnalysis(
+          {
+            text: analysisInput.text,
+            mediaType: "text",
+            attachments: analysisInput.attachments
+          },
+          userId || undefined,
+          instagramUserId // Store Instagram user ID for retroactive linking
+        );
+
+        serviceLogger.info({ instagramUserId, analysisId }, "[Instagram] Analysis queued successfully");
+      } catch (error: any) {
+        serviceLogger.error({
+          instagramUserId,
+          error: error.message,
+          stack: error.stack,
+          analysisInput
+        }, "[Instagram] Failed to enqueue analysis");
+        await this.sendDM(
+          instagramUserId,
+          `❌ *Error*\n\nFailed to process your request. Please try again or contact support.\n\nError: ${error.message || "Unknown error"}`
+        );
+        return { success: false, error: error.message || "Failed to enqueue analysis" };
+      }
 
       // Increment usage
       await this.incrementInstagramUsage(instagramUserId);
 
-      // Note: Analysis completion will be handled by a separate webhook/callback
-      // For now, we'll poll or use a webhook to send results when ready
-      // This is a simplified version - in production, you'd want to set up a callback
+      // Analysis completion callback is handled by QueueEvents listener in apps/api/src/index.ts
+      // Results will be sent automatically when the worker completes the analysis
 
       return { success: true };
     } catch (error: any) {
-      console.error("[Instagram] Error handling incoming DM:", error);
+      serviceLogger.error({ error }, "[Instagram] Error handling incoming DM");
       return { success: false, error: error.message || "Failed to process message" };
     }
   }
@@ -419,7 +513,7 @@ I'll send you the results as soon as they're ready! 📊`;
       const response = this.formatAnalysisResponse(analysis);
       return await this.sendDM(instagramUserId, response);
     } catch (error: any) {
-      console.error("[Instagram] Error sending analysis results:", error);
+      serviceLogger.error({ analysisId, instagramUserId, error }, "[Instagram] Error sending analysis results");
       return { success: false, error: error.message || "Failed to send results" };
     }
   }
@@ -508,7 +602,7 @@ I'll send you the results as soon as they're ready! 📊`;
 
       return { success: true };
     } catch (error: any) {
-      console.error("[Instagram] Error handling post mention:", error);
+      serviceLogger.error({ error, mention }, "[Instagram] Error handling post mention");
       return { success: false, error: error.message || "Failed to process post mention" };
     }
   }
@@ -602,7 +696,7 @@ I'll send you the results as soon as they're ready! 📊`;
 
       return { success: true };
     } catch (error: any) {
-      console.error("[Instagram] Error handling comment:", error);
+      serviceLogger.error({ error, comment }, "[Instagram] Error handling comment");
       return { success: false, error: error.message || "Failed to process comment" };
     }
   }

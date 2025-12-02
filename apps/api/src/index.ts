@@ -158,8 +158,11 @@ import { registerRevenueCatWebhook } from "./routes/revenuecat-webhook.js";
 import { registerInstagramWebhook } from "./routes/instagram-webhook.js";
 import { registerLegalRoutes } from "./routes/legal.js";
 import uploadsPlugin from "./plugins/uploads.js";
-import { queues } from "./queues/index.js";
+import { queues, initializeQueueEvents, closeQueueEvents } from "./queues/index.js";
 import { cacheService } from "./services/cache-service.js";
+import { instagramService } from "./services/instagram-service.js";
+import { analysisService } from "./services/analysis-service.js";
+import { setServiceLogger } from "./utils/service-logger.js";
 
 async function buildServer() {
   const app = Fastify({
@@ -320,9 +323,74 @@ async function buildServer() {
   // Initialize cache service
   await cacheService.initialize();
 
+  // Set service logger for services that don't have direct access to Fastify logger
+  setServiceLogger(app.log);
+
+  // Initialize QueueEvents to listen for completed Instagram analyses
+  try {
+    const queueEvents = await initializeQueueEvents();
+    
+    // Listen for completed analysis jobs
+    queueEvents.on("completed", async ({ jobId }) => {
+      try {
+        // Get the completed job to access its data
+        const job = await queues.analysis.getJob(jobId);
+        if (!job) {
+          return;
+        }
+
+        const analysisId = job.data?.analysisId;
+        if (!analysisId) {
+          return;
+        }
+
+        // Get the analysis from database to check if it has instagramUserId
+        const analysis = await analysisService.getAnalysisSummary(analysisId);
+        if (!analysis) {
+          return;
+        }
+
+        // Check if this analysis was created via Instagram DM
+        // We need to check the database for instagramUserId
+        const { db } = await import("./db/client.js");
+        const { analyses } = await import("./db/schema.js");
+        const { eq } = await import("drizzle-orm");
+        
+        const analysisRecord = await db.query.analyses.findFirst({
+          where: eq(analyses.id, analysisId),
+          columns: { instagramUserId: true }
+        });
+
+        // If analysis has instagramUserId, send results via DM
+        if (analysisRecord?.instagramUserId) {
+          app.log.info(`[Instagram] Analysis ${analysisId} completed, sending results to Instagram user ${analysisRecord.instagramUserId}`);
+          
+          const result = await instagramService.sendAnalysisResults(
+            analysisId,
+            analysisRecord.instagramUserId
+          );
+
+          if (result.success) {
+            app.log.info(`[Instagram] Successfully sent analysis results to Instagram user ${analysisRecord.instagramUserId}`);
+          } else {
+            app.log.error(`[Instagram] Failed to send analysis results: ${result.error}`);
+          }
+        }
+      } catch (error: any) {
+        app.log.error({ error, jobId }, "[Instagram] Error processing completed analysis for Instagram");
+      }
+    });
+
+    app.log.info("[Startup] QueueEvents initialized for Instagram analysis completion callbacks");
+  } catch (error: any) {
+    app.log.error({ error }, "[Startup] Failed to initialize QueueEvents for Instagram callbacks");
+    // Don't fail startup - Instagram callbacks are optional
+  }
+
   app.addHook("onClose", async () => {
     await queues.analysis.close();
     await cacheService.close();
+    await closeQueueEvents();
   });
 
   return app;

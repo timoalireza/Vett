@@ -1,4 +1,4 @@
-import { Queue, type ConnectionOptions } from "bullmq";
+import { Queue, QueueEvents, type ConnectionOptions } from "bullmq";
 import { createRedisClient } from "../utils/redis-config.js";
 import { env } from "../env.js";
 import type IORedis from "ioredis";
@@ -111,5 +111,71 @@ export type QueueName = keyof typeof queues;
 // Export connection getter for use in other modules
 export function getBullMQConnection(): IORedis {
   return getSharedConnection();
+}
+
+// QueueEvents instance for listening to job completion events
+let queueEvents: QueueEvents | null = null;
+
+/**
+ * Initialize QueueEvents to listen for completed analysis jobs
+ * This allows us to send results back to Instagram when analyses complete
+ */
+export async function initializeQueueEvents(): Promise<QueueEvents> {
+  if (queueEvents) {
+    return queueEvents;
+  }
+
+  const conn = getSharedConnection();
+  
+  // Wait for Redis to be ready with timeout (similar to waitForRedisReady pattern)
+  if (conn.status !== "ready") {
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn(`[QueueEvents] ⚠️ Redis ready timeout after 10s, proceeding anyway`);
+        resolve();
+      }, 10000);
+      
+      if (conn.status === "ready") {
+        clearTimeout(timeout);
+        resolve();
+      } else {
+        conn.once("ready", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        
+        if (conn.status === "wait" || conn.status === "end") {
+          conn.connect().catch(() => {
+            // Ignore connection errors - will retry
+            clearTimeout(timeout);
+            resolve(); // Continue anyway
+          });
+        }
+      }
+    });
+  }
+
+  queueEvents = new QueueEvents("analysis", {
+    connection: conn
+  });
+
+  return queueEvents;
+}
+
+/**
+ * Get QueueEvents instance (initializes if needed)
+ */
+export function getQueueEvents(): QueueEvents | null {
+  return queueEvents;
+}
+
+/**
+ * Close QueueEvents instance and clean up resources
+ */
+export async function closeQueueEvents(): Promise<void> {
+  if (queueEvents) {
+    await queueEvents.close();
+    queueEvents = null;
+  }
 }
 

@@ -187,18 +187,31 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
         for (const entry of body.entry || []) {
           // Process Direct Messages
           if (entry.messaging) {
+            app.log.info(`[Instagram] Processing ${entry.messaging.length} messaging event(s)`);
+            
             for (const event of entry.messaging) {
               // Only process messages sent to our page
               if (event.recipient.id !== env.INSTAGRAM_PAGE_ID) {
+                app.log.warn(`[Instagram] Skipping message - recipient ID ${event.recipient.id} doesn't match page ID ${env.INSTAGRAM_PAGE_ID}`);
                 continue;
               }
 
               // Process message event
               if (event.message) {
+                app.log.info(`[Instagram] Received message from ${event.sender.id}`, {
+                  messageId: event.message.mid,
+                  hasText: !!event.message.text,
+                  hasAttachments: !!event.message.attachments?.length,
+                  textPreview: event.message.text?.substring(0, 50),
+                  attachmentTypes: event.message.attachments?.map((a: any) => a.type) || [],
+                  fullMessage: JSON.stringify(event.message, null, 2)
+                });
+
                 const message = {
                   id: event.message.mid,
                   from: {
-                    id: event.sender.id
+                    id: event.sender.id,
+                    username: (event.sender as any).username
                   },
                   text: event.message.text,
                   attachments: event.message.attachments
@@ -208,8 +221,12 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
                 instagramService.handleIncomingDM({ message }).catch((error) => {
                   app.log.error("[Instagram] Error processing DM:", error);
                 });
+              } else {
+                app.log.warn("[Instagram] Event has no message field", { event });
               }
             }
+          } else {
+            app.log.debug("[Instagram] Entry has no messaging field", { entry });
           }
 
           // Process Post-related events (mentions, comments, etc.)
