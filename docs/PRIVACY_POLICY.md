@@ -5,17 +5,16 @@
 
 ## 1. Introduction
 
-[COMPANY_NAME] ("we," "us," or "our") operates Vett, a credibility analysis platform. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our Service.
+Alirezapp Ltd. ("we," "us," or "our") operates Vett, a credibility analysis platform. This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use our Service.
 
 We are committed to protecting your privacy and complying with applicable data protection laws, including the General Data Protection Regulation (GDPR) for users in the European Union.
 
 ## 2. Data Controller Information
 
-**Data Controller:** [COMPANY_NAME]  
-**Address:** [COMPANY_ADDRESS]  
-**Registration Number:** [REGISTRATION_NUMBER]  
-**Email:** [SUPPORT_EMAIL]  
-**Data Protection Officer:** [DPO_EMAIL] (if applicable)
+**Data Controller:** Alirezapp Ltd.    
+**Registration Number:** 16874098  
+**Email:** support@vett.xyz  
+**Data Protection Officer:** teymour@vett.xyz
 
 ## 3. Information We Collect
 
@@ -217,7 +216,7 @@ You have the right to object to processing of your personal data based on legiti
 Where processing is based on consent, you have the right to withdraw consent at any time.
 
 ### 9.8 Exercising Your Rights
-To exercise your rights, please contact us at [DPO_EMAIL] or [SUPPORT_EMAIL]. We will respond to your request within one month (may be extended by two months for complex requests).
+To exercise your rights, please contact us at teymour@vett.xyz or support@vett.xyz. We will respond to your request within one month (may be extended by two months for complex requests).
 
 ## 10. Data Security
 
@@ -270,9 +269,8 @@ Your continued use of the Service after changes become effective constitutes acc
 
 If you have questions about this Privacy Policy or wish to exercise your rights, please contact us:
 
-**General Inquiries:** [SUPPORT_EMAIL]  
-**Data Protection Officer:** [DPO_EMAIL]  
-**Address:** [COMPANY_ADDRESS]
+**General Inquiries:** support@vett.xyz
+**Data Protection Officer:** teymour@vett.xyz
 
 **Supervisory Authority:**  
 If you are in the EU and believe we have not addressed your concerns, you have the right to lodge a complaint with your local data protection supervisory authority.
