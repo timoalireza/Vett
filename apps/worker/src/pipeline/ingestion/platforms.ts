@@ -21,6 +21,25 @@ export function detectPlatform(url: string): PlatformInfo {
     const hostname = urlObj.hostname.toLowerCase();
     const pathname = urlObj.pathname.toLowerCase();
 
+    // IMPORTANT: Check Instagram CDN URLs FIRST before any other platform detection
+    // Instagram CDN URLs can appear in multiple formats:
+    // 1. lookaside.fbsbx.com/ig_messaging_cdn/... (hostname: lookaside.fbsbx.com, pathname: /ig_messaging_cdn/)
+    // 2. ig_messaging_cdn.fbsbx.com/... (hostname: ig_messaging_cdn.fbsbx.com)
+    // 3. *.fbsbx.com/ig_messaging_cdn/... (any fbsbx.com subdomain with ig_messaging_cdn in pathname)
+    // Use .endsWith() for domain matching to avoid false positives (e.g., xfbsbx.com matching fbsbx.com)
+    const isLookasideFbsbx = hostname === "lookaside.fbsbx.com" || hostname.endsWith(".lookaside.fbsbx.com");
+    const isIgMessagingCdn = hostname === "ig_messaging_cdn.fbsbx.com" || hostname.endsWith(".ig_messaging_cdn.fbsbx.com");
+    const isFbsbxDomain = hostname === "fbsbx.com" || hostname.endsWith(".fbsbx.com");
+    
+    if (isLookasideFbsbx || 
+        isIgMessagingCdn ||
+        (isFbsbxDomain && pathname.includes("ig_messaging_cdn"))) {
+      return {
+        platform: "instagram",
+        isPost: true // Treat CDN URLs as posts for extraction purposes
+      };
+    }
+
     // X (Twitter) - handles both twitter.com and x.com
     if (hostname.includes("twitter.com") || hostname.includes("x.com")) {
       const match = pathname.match(/\/(?:status|statuses)\/(\d+)/);
@@ -32,8 +51,10 @@ export function detectPlatform(url: string): PlatformInfo {
       };
     }
 
-    // Instagram - handles posts and reels
+    // Instagram - handles posts and reels (regular Instagram URLs)
     if (hostname.includes("instagram.com")) {
+      
+      // Regular Instagram URLs
       const reelMatch = pathname.match(/\/reel\/([^\/]+)/);
       const postMatch = pathname.match(/\/p\/([^\/]+)/);
       const usernameMatch = pathname.match(/\/([^\/]+)\//);

@@ -72,6 +72,40 @@ class InstagramService {
   }
 
   /**
+   * Check if a URL is an Instagram CDN URL
+   */
+  private isInstagramCdnUrl(url: string): boolean {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.toLowerCase();
+      const pathname = urlObj.pathname.toLowerCase();
+      
+      // Check for Instagram CDN URL formats (matching detectPlatform logic):
+      // 1. lookaside.fbsbx.com/ig_messaging_cdn/...
+      // 2. ig_messaging_cdn.fbsbx.com/...
+      // 3. *.fbsbx.com/ig_messaging_cdn/...
+      // Use .endsWith() for domain matching to avoid false positives (e.g., xfbsbx.com matching fbsbx.com)
+      const isLookasideFbsbx = hostname === "lookaside.fbsbx.com" || hostname.endsWith(".lookaside.fbsbx.com");
+      const isIgMessagingCdn = hostname === "ig_messaging_cdn.fbsbx.com" || hostname.endsWith(".ig_messaging_cdn.fbsbx.com");
+      const isFbsbxDomain = hostname === "fbsbx.com" || hostname.endsWith(".fbsbx.com");
+      
+      return isLookasideFbsbx ||
+             isIgMessagingCdn ||
+             (isFbsbxDomain && pathname.includes("ig_messaging_cdn"));
+    } catch {
+      // If URL parsing fails, check string directly using domain boundaries
+      // Use regex with word boundaries to avoid false positives (e.g., xfbsbx.com matching fbsbx.com)
+      const lookasidePattern = /[./]lookaside\.fbsbx\.com[/?]|^lookaside\.fbsbx\.com[/?]/i;
+      const igMessagingPattern = /[./]ig_messaging_cdn\.fbsbx\.com[/?]|^ig_messaging_cdn\.fbsbx\.com[/?]/i;
+      const fbsbxPattern = /[./]fbsbx\.com[/?]|^fbsbx\.com[/?]/i;
+      
+      return lookasidePattern.test(url) ||
+             igMessagingPattern.test(url) ||
+             (fbsbxPattern.test(url) && url.includes("ig_messaging_cdn"));
+    }
+  }
+
+  /**
    * Extract content from Instagram message (links, images, text)
    */
   extractContentFromMessage(message: InstagramMessage): ExtractedContent {
@@ -96,8 +130,21 @@ class InstagramService {
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const urls = message.text.match(urlRegex);
       if (urls) {
-        content.links.push(...urls);
-        serviceLogger.debug({ urls, count: urls.length }, "[Instagram] Found URL(s) in text");
+        // Classify URLs: Instagram CDN URLs go to images, others go to links
+        for (const url of urls) {
+          if (this.isInstagramCdnUrl(url)) {
+            content.images.push(url);
+            serviceLogger.debug({ url }, "[Instagram] Found Instagram CDN URL in text, added as image");
+          } else {
+            content.links.push(url);
+            serviceLogger.debug({ url }, "[Instagram] Found URL in text, added as link");
+          }
+        }
+        serviceLogger.debug({ 
+          totalUrls: urls.length, 
+          links: content.links.length, 
+          images: content.images.length 
+        }, "[Instagram] Classified URLs from text");
       }
     }
 
@@ -111,20 +158,45 @@ class InstagramService {
         }, "[Instagram] Processing attachment");
 
         if (attachment.type === "image" && attachment.payload?.url) {
+          // Images should always be treated as images, not links
           content.images.push(attachment.payload.url);
           serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added image URL");
         } else if (attachment.type === "share" && attachment.payload?.url) {
-          // Shared links/posts
-          content.links.push(attachment.payload.url);
-          serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added shared link URL");
+          // Check if shared URL is an Instagram CDN URL (should be treated as image)
+          const shareUrl = attachment.payload.url;
+          if (this.isInstagramCdnUrl(shareUrl)) {
+            // Instagram CDN URLs are media files, treat as images
+            content.images.push(shareUrl);
+            serviceLogger.debug({ url: shareUrl }, "[Instagram] Added shared image from CDN URL");
+          } else {
+            // Regular shared links/posts
+            content.links.push(shareUrl);
+            serviceLogger.debug({ url: shareUrl }, "[Instagram] Added shared link URL");
+          }
         } else if (attachment.type === "video" && attachment.payload?.url) {
-          // Videos can also be analyzed
-          content.links.push(attachment.payload.url);
-          serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added video URL");
+          // Check if video URL is an Instagram CDN URL
+          const videoUrl = attachment.payload.url;
+          if (this.isInstagramCdnUrl(videoUrl)) {
+            // Instagram CDN URLs are media files, treat as images (videos can be analyzed as images)
+            content.images.push(videoUrl);
+            serviceLogger.debug({ url: videoUrl }, "[Instagram] Added video from CDN URL as image");
+          } else {
+            // Regular video links
+            content.links.push(videoUrl);
+            serviceLogger.debug({ url: videoUrl }, "[Instagram] Added video URL");
+          }
         } else if (attachment.type === "fallback" && attachment.payload?.url) {
-          // Fallback attachment type
-          content.links.push(attachment.payload.url);
-          serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added fallback URL");
+          // Check if fallback URL is an Instagram CDN URL
+          const fallbackUrl = attachment.payload.url;
+          if (this.isInstagramCdnUrl(fallbackUrl)) {
+            // Instagram CDN URLs are media files, treat as images
+            content.images.push(fallbackUrl);
+            serviceLogger.debug({ url: fallbackUrl }, "[Instagram] Added fallback image from CDN URL");
+          } else {
+            // Regular fallback links
+            content.links.push(fallbackUrl);
+            serviceLogger.debug({ url: fallbackUrl }, "[Instagram] Added fallback URL");
+          }
         } else {
           serviceLogger.debug({ attachment }, "[Instagram] Unhandled attachment type");
         }

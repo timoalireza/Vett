@@ -291,6 +291,36 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
   // Detect platform and try platform-specific extraction first
   const platformInfo = detectPlatform(attachment.url);
   
+  // Safeguard: Never try Twitter extraction for Instagram CDN URLs
+  // These should be treated as images, not links
+  // Use proper URL parsing to avoid false positives (matching detectPlatform logic)
+  try {
+    const urlObj = new URL(attachment.url);
+    const hostname = urlObj.hostname.toLowerCase();
+    const pathname = urlObj.pathname.toLowerCase();
+    
+    // Check for Instagram CDN URL formats (matching detectPlatform logic):
+    // 1. lookaside.fbsbx.com/ig_messaging_cdn/...
+    // 2. ig_messaging_cdn.fbsbx.com/...
+    // 3. *.fbsbx.com/ig_messaging_cdn/...
+    // Use .endsWith() for domain matching to avoid false positives (e.g., xfbsbx.com matching fbsbx.com)
+    const isLookasideFbsbx = hostname === "lookaside.fbsbx.com" || hostname.endsWith(".lookaside.fbsbx.com");
+    const isIgMessagingCdn = hostname === "ig_messaging_cdn.fbsbx.com" || hostname.endsWith(".ig_messaging_cdn.fbsbx.com");
+    const isFbsbxDomain = hostname === "fbsbx.com" || hostname.endsWith(".fbsbx.com");
+    
+    const isInstagramCdn = isLookasideFbsbx ||
+                          isIgMessagingCdn ||
+                          (isFbsbxDomain && pathname.includes("ig_messaging_cdn"));
+    
+    if (isInstagramCdn) {
+      return { 
+        error: "Instagram CDN URLs should be processed as image attachments, not links. Please ensure Instagram image attachments are marked as kind: 'image'." 
+      };
+    }
+  } catch {
+    // If URL parsing fails, skip safeguard (let platform detection handle it)
+  }
+  
   if (platformInfo.platform === "x" || platformInfo.platform === "twitter") {
     const twitterResult = await extractTwitterContent(attachment.url);
     if (twitterResult?.text) {
