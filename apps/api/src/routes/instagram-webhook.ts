@@ -81,16 +81,22 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
       }
     },
     async (request: FastifyRequest<{ Querystring: { "hub.mode": string; "hub.verify_token": string; "hub.challenge": string } }>, reply: FastifyReply) => {
+      app.log.info({
+        method: request.method,
+        url: request.url,
+        query: request.query
+      }, "[Instagram] 📥 Webhook verification request");
+      
       const mode = request.query["hub.mode"];
       const token = request.query["hub.verify_token"];
       const challenge = request.query["hub.challenge"];
 
       // Verify the webhook
       if (mode === "subscribe" && token === env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN) {
-        app.log.info("[Instagram] Webhook verified successfully");
+        app.log.info({ mode, challengeLength: challenge?.length || 0 }, "[Instagram] ✅ Webhook verified successfully");
         return reply.send(challenge);
       } else {
-        app.log.warn("[Instagram] Webhook verification failed", { mode, token });
+        app.log.warn({ mode, tokenProvided: !!token }, "[Instagram] ❌ Webhook verification failed");
         return reply.code(403).send("Forbidden");
       }
     }
@@ -131,6 +137,18 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
       bodyLimit: 1048576, // 1MB limit
     },
     async (request: FastifyRequest<{ Body: InstagramWebhookBody }>, reply: FastifyReply) => {
+      // Log incoming webhook request
+      app.log.info({
+        method: request.method,
+        url: request.url,
+        headers: {
+          "content-type": request.headers["content-type"],
+          "x-hub-signature-256": request.headers["x-hub-signature-256"] ? "present" : "missing",
+          "user-agent": request.headers["user-agent"]
+        },
+        bodySize: request.body ? JSON.stringify(request.body).length : 0
+      }, "[Instagram] 📥 Incoming webhook request");
+      
       try {
         // Verify webhook signature if provided
         const signature = request.headers["x-hub-signature-256"] as string;
@@ -313,9 +331,23 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
         }
 
         // Return 200 OK immediately to acknowledge receipt
+        app.log.info({
+          entryCount: body.entry?.length || 0,
+          messagingEvents: body.entry?.reduce((sum, e) => sum + (e.messaging?.length || 0), 0) || 0,
+          changeEvents: body.entry?.reduce((sum, e) => sum + (e.changes?.length || 0), 0) || 0
+        }, "[Instagram] ✅ Webhook processed successfully");
+        
         return reply.code(200).send({ received: true });
       } catch (error: any) {
-        app.log.error("[Instagram] Webhook processing error:", error);
+        app.log.error({
+          error: error instanceof Error ? {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          } : error,
+          url: request.url,
+          method: request.method
+        }, "[Instagram] ❌ Webhook processing error");
 
         // Still return 200 to prevent Instagram from retrying
         // Log the error for investigation
