@@ -190,9 +190,25 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
             app.log.info(`[Instagram] Processing ${entry.messaging.length} messaging event(s)`);
             
             for (const event of entry.messaging) {
-              // Only process messages sent to our page
-              if (event.recipient.id !== env.INSTAGRAM_PAGE_ID) {
-                app.log.warn(`[Instagram] Skipping message - recipient ID ${event.recipient.id} doesn't match page ID ${env.INSTAGRAM_PAGE_ID}`);
+              // Verify message is for our bot page (recipient.id is the bot's page ID)
+              // Note: INSTAGRAM_PAGE_ID is the bot's page ID (constant), not individual user IDs
+              // Individual Instagram users (event.sender.id) are automatically tracked in the database
+              if (!env.INSTAGRAM_PAGE_ID) {
+                // If page ID is not configured, log it but process anyway
+                // The first message will tell us what the page ID should be
+                app.log.warn({
+                  recipientId: event.recipient.id,
+                  senderId: event.sender.id,
+                  message: "INSTAGRAM_PAGE_ID not configured - processing message anyway"
+                }, `[Instagram] ⚠️ INSTAGRAM_PAGE_ID is not set. Received message for recipient (bot page) ID ${event.recipient.id} from Instagram user ${event.sender.id}. Set INSTAGRAM_PAGE_ID=${event.recipient.id} in Railway to filter messages. Processing message anyway.`);
+                // Process the message - individual user tracking happens automatically via event.sender.id
+              } else if (event.recipient.id !== env.INSTAGRAM_PAGE_ID) {
+                // Skip messages not intended for our bot page
+                app.log.warn({
+                  recipientId: event.recipient.id,
+                  configuredPageId: env.INSTAGRAM_PAGE_ID,
+                  senderId: event.sender.id
+                }, `[Instagram] Skipping message - recipient ID ${event.recipient.id} doesn't match configured bot page ID ${env.INSTAGRAM_PAGE_ID}`);
                 continue;
               }
 
