@@ -229,5 +229,98 @@ export async function registerLegalRoutes(app: FastifyInstance) {
       }
     }
   );
+
+  // Serve Data Deletion Policy
+  app.get(
+    "/data-deletion",
+    {
+      config: {
+        skipAuth: true // Public access
+      },
+      schema: {
+        description: "Data Deletion Policy document",
+        tags: ["legal"]
+      }
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        // Read Data Deletion Policy markdown file
+        const docsPath = findDocsPath("DATA_DELETION.md");
+        const content = await readFile(docsPath, "utf-8");
+
+        // Return as markdown with proper content type
+        return reply
+          .type("text/markdown; charset=utf-8")
+          .header("Cache-Control", "public, max-age=3600") // Cache for 1 hour
+          .send(content);
+      } catch (error: any) {
+        app.log.error({ error }, "Failed to read Data Deletion Policy");
+        
+        // Return error response
+        if (error.code === "ENOENT") {
+          return reply.code(404).send({
+            error: "Data Deletion Policy not found",
+            message: "The Data Deletion Policy document is not available."
+          });
+        }
+        
+        return reply.code(500).send({
+          error: "Internal server error",
+          message: "Failed to retrieve Data Deletion Policy."
+        });
+      }
+    }
+  );
+
+  // Optional: Serve Data Deletion Policy as HTML
+  app.get(
+    "/data-deletion.html",
+    {
+      config: {
+        skipAuth: true
+      },
+      schema: {
+        description: "Data Deletion Policy document (HTML format)",
+        tags: ["legal"]
+      }
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const docsPath = findDocsPath("DATA_DELETION.md");
+        const markdown = await readFile(docsPath, "utf-8");
+        
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Deletion Policy - Vett</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+    h1 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    h2 { color: #555; margin-top: 30px; }
+    h3 { color: #777; }
+    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+    pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <pre style="white-space: pre-wrap; font-family: inherit;">${markdown}</pre>
+</body>
+</html>`;
+
+        return reply
+          .type("text/html; charset=utf-8")
+          .header("Cache-Control", "public, max-age=3600")
+          .send(html);
+      } catch (error: any) {
+        app.log.error({ error }, "Failed to read Data Deletion Policy");
+        return reply.code(500).send({
+          error: "Internal server error",
+          message: "Failed to retrieve Data Deletion Policy."
+        });
+      }
+    }
+  );
 }
 
