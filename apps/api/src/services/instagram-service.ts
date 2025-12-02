@@ -47,8 +47,31 @@ class InstagramService {
     const pageId = env.INSTAGRAM_PAGE_ID?.trim();
     const businessAccountId = env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.trim();
     
-    // Use Instagram Business Account ID if provided, otherwise fall back to Page ID
-    const accountId = businessAccountId || pageId;
+    // Determine token type and appropriate account ID
+    const tokenPrefix = accessToken ? accessToken.substring(0, 4).toUpperCase() : "";
+    const isInstagramToken = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
+    const isPageToken = tokenPrefix.startsWith("EAA");
+    
+    // For Instagram tokens (IGA), we MUST use Instagram Business Account ID
+    // For Page tokens (EAA), we can use either Page ID or Business Account ID
+    let accountId: string;
+    if (isInstagramToken) {
+      if (!businessAccountId) {
+        serviceLogger.error({ 
+          instagramUserId,
+          tokenPrefix,
+          note: "Instagram tokens (IGA prefix) require INSTAGRAM_BUSINESS_ACCOUNT_ID, not INSTAGRAM_PAGE_ID"
+        }, "[Instagram] Instagram token requires Instagram Business Account ID");
+        return { 
+          success: false, 
+          error: "Instagram access token (IGA) requires INSTAGRAM_BUSINESS_ACCOUNT_ID to be set. Please set INSTAGRAM_BUSINESS_ACCOUNT_ID environment variable with your Instagram Business Account ID." 
+        };
+      }
+      accountId = businessAccountId;
+    } else {
+      // For Page tokens, prefer Business Account ID if available, otherwise use Page ID
+      accountId = businessAccountId || pageId;
+    }
     
     const hasAccessToken = accessToken && accessToken.length > 0;
     const hasAccountId = accountId && accountId.length > 0;
@@ -59,12 +82,14 @@ class InstagramService {
         hasAccessToken,
         hasPageId: !!pageId,
         hasBusinessAccountId: !!businessAccountId,
+        tokenPrefix,
+        isInstagramToken,
         accessTokenLength: env.INSTAGRAM_PAGE_ACCESS_TOKEN?.length || 0,
         pageIdLength: env.INSTAGRAM_PAGE_ID?.length || 0,
         businessAccountIdLength: env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.length || 0,
         accessTokenPreview: env.INSTAGRAM_PAGE_ACCESS_TOKEN ? `${env.INSTAGRAM_PAGE_ACCESS_TOKEN.substring(0, 10)}...` : "undefined",
         accountIdPreview: accountId ? `${accountId.substring(0, 10)}...` : "undefined"
-      }, "[Instagram] Missing Instagram API credentials - check INSTAGRAM_PAGE_ACCESS_TOKEN and either INSTAGRAM_PAGE_ID or INSTAGRAM_BUSINESS_ACCOUNT_ID environment variables");
+      }, "[Instagram] Missing Instagram API credentials");
       return { success: false, error: "Instagram API not configured" };
     }
 
@@ -72,17 +97,20 @@ class InstagramService {
       // Use trimmed values to avoid API failures from whitespace
       // Instagram Graph API accepts access_token as query parameter or in body
       // Using query parameter is more standard and reliable
-      // Use Instagram Business Account ID if provided, otherwise use Page ID
+      // For Instagram tokens, use Instagram Business Account ID endpoint
+      // For Page tokens, can use either Page ID or Business Account ID endpoint
       const url = `${INSTAGRAM_API_BASE}/${accountId}/messages?access_token=${encodeURIComponent(accessToken)}`;
       
       serviceLogger.debug({ 
         instagramUserId,
         accountId,
-        accountIdType: businessAccountId ? "Instagram Business Account ID" : "Page ID",
+        accountIdType: isInstagramToken ? "Instagram Business Account ID (required for IGA token)" : (businessAccountId ? "Instagram Business Account ID" : "Page ID"),
+        tokenType: isInstagramToken ? "Instagram Token (IGA)" : (isPageToken ? "Page Token (EAA)" : "Unknown"),
         url: url.replace(accessToken, "[REDACTED]"),
         messageLength: message.length,
         accessTokenLength: accessToken.length,
-        accessTokenPreview: `${accessToken.substring(0, 10)}...`
+        accessTokenPreview: `${accessToken.substring(0, 10)}...`,
+        tokenPrefix
       }, "[Instagram] Sending DM via Graph API");
       
       const response = await fetch(url, {
@@ -121,9 +149,38 @@ class InstagramService {
         
         // Provide helpful error messages for common issues
         if (errorCode === 190) {
+          const isInstagramToken = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
+          const troubleshootingTips = isInstagramToken ? [
+            "1. Verify Instagram token has 'instagram_basic' and 'pages_messaging' permissions",
+            "2. Ensure INSTAGRAM_BUSINESS_ACCOUNT_ID is set (required for Instagram tokens)",
+            "3. Check token hasn't expired - use Meta Access Token Debugger: https://developers.facebook.com/tools/debug/accesstoken/",
+            "4. Verify Instagram Business Account is linked to a Facebook Page",
+            "5. Ensure your app has Instagram Graph API product added",
+            "6. Check token has access to the Instagram Business Account",
+            `7. Token preview: ${accessToken.substring(0, 10)}... (length: ${accessToken.length}, type: Instagram)`
+          ] : [
+            "1. Verify token is a Facebook Page Access Token (starts with EAAB or EAA)",
+            "2. Check token hasn't expired - use Meta Access Token Debugger: https://developers.facebook.com/tools/debug/accesstoken/",
+            "3. Ensure token has 'pages_messaging' permission",
+            "4. Verify Instagram Business Account is linked to the Facebook Page",
+            "5. Check for extra whitespace or characters in the token",
+            `6. Token preview: ${accessToken.substring(0, 10)}... (length: ${accessToken.length}, type: Page)`
+          ];
+          
+          serviceLogger.error({ 
+            instagramUserId,
+            accountId,
+            accountIdType: isInstagramToken ? "Instagram Business Account ID" : "Page ID",
+            tokenPrefix: accessToken.substring(0, 4),
+            tokenType: isInstagramToken ? "Instagram Token (IGA)" : "Page Token (EAA)",
+            tokenLength: accessToken.length,
+            errorMessage,
+            troubleshootingTips
+          }, "[Instagram] OAuth token error - see troubleshooting tips below");
+          
           return { 
             success: false, 
-            error: "Invalid OAuth access token. Please check INSTAGRAM_PAGE_ACCESS_TOKEN environment variable. Error: " + errorMessage
+            error: `Invalid OAuth access token (Error 190). ${errorMessage}\n\nTroubleshooting:\n${troubleshootingTips.join("\n")}`
           };
         }
         
@@ -396,11 +453,35 @@ class InstagramService {
   /**
    * Check if Instagram user has exceeded FREE tier limit
    */
+  /**
+   * Check if an Instagram user ID is whitelisted for unlimited access
+   */
+  private isWhitelisted(instagramUserId: string): boolean {
+    const whitelistStr = env.INSTAGRAM_WHITELIST_ACCOUNTS?.trim();
+    if (!whitelistStr || whitelistStr.length === 0) {
+      return false;
+    }
+
+    // Parse comma-separated list and trim whitespace
+    const whitelist = whitelistStr
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+
+    return whitelist.includes(instagramUserId);
+  }
+
   async checkInstagramUsageLimit(instagramUserId: string): Promise<{
     allowed: boolean;
     remaining: number;
     limit: number;
   }> {
+    // Check if user is whitelisted for unlimited access (for testing/admin accounts)
+    if (this.isWhitelisted(instagramUserId)) {
+      serviceLogger.debug({ instagramUserId }, "[Instagram] User is whitelisted - unlimited access granted");
+      return { allowed: true, remaining: -1, limit: -1 }; // -1 means unlimited
+    }
+
     // Check if user is linked to PRO plan
     const subscriptionTier = await socialLinkingService.getInstagramUserSubscription(instagramUserId);
 
@@ -479,8 +560,15 @@ class InstagramService {
 
   /**
    * Increment Instagram DM usage count
+   * Skips incrementing for whitelisted users (they have unlimited access)
    */
   async incrementInstagramUsage(instagramUserId: string): Promise<void> {
+    // Skip incrementing for whitelisted users
+    if (this.isWhitelisted(instagramUserId)) {
+      serviceLogger.debug({ instagramUserId }, "[Instagram] User is whitelisted - skipping usage increment");
+      return;
+    }
+
     try {
       const now = new Date();
       const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
