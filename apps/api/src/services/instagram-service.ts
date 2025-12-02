@@ -38,6 +38,64 @@ interface ExtractedContent {
 
 class InstagramService {
   /**
+   * Exchange Instagram Business Account token for Page Access Token
+   * Instagram Messaging API requires a Page Access Token, not an Instagram token
+   * 
+   * Note: This requires the Instagram Business Account to be linked to a Facebook Page
+   */
+  private async exchangeInstagramTokenForPageToken(instagramToken: string, businessAccountId: string): Promise<{ pageToken: string; pageId: string } | null> {
+    try {
+      // Try to get pages associated with the user's account
+      // Instagram tokens with proper permissions can query /me/accounts to get Page Access Tokens
+      const pagesResponse = await fetch(
+        `${INSTAGRAM_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${encodeURIComponent(instagramToken)}`
+      );
+      
+      if (!pagesResponse.ok) {
+        const errorData = await pagesResponse.json().catch(() => ({}));
+        serviceLogger.warn({ 
+          businessAccountId, 
+          status: pagesResponse.status,
+          error: errorData.error?.message || "Unknown error"
+        }, "[Instagram] Failed to get pages for token exchange - Instagram token may not have 'pages_show_list' permission");
+        return null;
+      }
+      
+      const pagesData = await pagesResponse.json() as { data?: Array<{ id: string; access_token: string; instagram_business_account?: { id: string } }> };
+      
+      if (!pagesData.data || pagesData.data.length === 0) {
+        serviceLogger.warn({ businessAccountId }, "[Instagram] No pages found - Instagram Business Account may not be linked to a Facebook Page");
+        return null;
+      }
+      
+      // Find the page that matches the Instagram Business Account ID
+      const matchingPage = pagesData.data.find(p => p.instagram_business_account?.id === businessAccountId);
+      
+      if (matchingPage?.access_token) {
+        serviceLogger.info({ 
+          pageId: matchingPage.id, 
+          businessAccountId,
+          pageName: matchingPage.name || "Unknown"
+        }, "[Instagram] Successfully exchanged Instagram token for Page Access Token");
+        return { pageToken: matchingPage.access_token, pageId: matchingPage.id };
+      }
+      
+      serviceLogger.warn({ 
+        businessAccountId, 
+        pagesCount: pagesData.data.length,
+        pageIds: pagesData.data.map(p => ({ id: p.id, instagramId: p.instagram_business_account?.id }))
+      }, "[Instagram] No matching page found for Instagram Business Account ID");
+      return null;
+    } catch (error: any) {
+      serviceLogger.error({ 
+        error: error instanceof Error ? error.message : String(error),
+        businessAccountId 
+      }, "[Instagram] Error exchanging Instagram token for Page Access Token");
+      return null;
+    }
+  }
+
+  /**
    * Send DM to Instagram user via Meta Graph API
    */
   async sendDM(instagramUserId: string, message: string): Promise<{ success: boolean; error?: string }> {
@@ -52,28 +110,57 @@ class InstagramService {
     const isInstagramToken = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
     const isPageToken = tokenPrefix.startsWith("EAA");
     
-    // For Instagram tokens (IGA), we MUST use Instagram Business Account ID
-    // For Page tokens (EAA), we can use either Page ID or Business Account ID
     let accountId: string;
+    let accountIdType: string;
+    let finalAccessToken = accessToken;
+    
+    // For Instagram tokens (IGA), we need to exchange for Page Access Token
+    // Instagram Messaging API requires a Page Access Token, not an Instagram token
     if (isInstagramToken) {
       if (!businessAccountId) {
         serviceLogger.error({ 
           instagramUserId,
           tokenPrefix,
-          note: "Instagram tokens (IGA prefix) require INSTAGRAM_BUSINESS_ACCOUNT_ID, not INSTAGRAM_PAGE_ID"
+          note: "Instagram tokens (IGA prefix) require INSTAGRAM_BUSINESS_ACCOUNT_ID for token exchange"
         }, "[Instagram] Instagram token requires Instagram Business Account ID");
         return { 
           success: false, 
-          error: "Instagram access token (IGA) requires INSTAGRAM_BUSINESS_ACCOUNT_ID to be set. Please set INSTAGRAM_BUSINESS_ACCOUNT_ID environment variable with your Instagram Business Account ID." 
+          error: "Instagram access token (IGA) requires INSTAGRAM_BUSINESS_ACCOUNT_ID to be set. Instagram Messaging API requires a Page Access Token - attempting to exchange Instagram token for Page Access Token." 
         };
       }
-      accountId = businessAccountId;
+      
+      // Try to exchange Instagram token for Page Access Token
+      serviceLogger.info({ businessAccountId }, "[Instagram] Attempting to exchange Instagram token for Page Access Token");
+      const exchangeResult = await this.exchangeInstagramTokenForPageToken(accessToken, businessAccountId);
+      
+      if (!exchangeResult) {
+        serviceLogger.error({ 
+          instagramUserId,
+          businessAccountId,
+          note: "Failed to exchange Instagram token for Page Access Token. Instagram Messaging API requires a Page Access Token."
+        }, "[Instagram] Token exchange failed");
+        return { 
+          success: false, 
+          error: "Failed to exchange Instagram token for Page Access Token. Instagram Messaging API requires a Facebook Page Access Token (EAAB/EAA), not an Instagram token (IGA).\n\nSOLUTION:\n1. Link your Instagram Business Account to a Facebook Page (if not already linked)\n2. In Meta App Dashboard → Instagram → Settings → 'Generate access tokens'\n3. Click 'Generate token' for your Instagram account\n4. This will generate a Page Access Token (starts with EAAB/EAA) that works with messaging\n5. Copy that token and set it as INSTAGRAM_PAGE_ACCESS_TOKEN\n\nNote: Even with 'API setup with Instagram login', you can generate Page Access Tokens from the 'Generate access tokens' section." 
+        };
+      }
+      
+      // Use the exchanged Page Access Token
+      finalAccessToken = exchangeResult.pageToken;
+      accountId = exchangeResult.pageId;
+      accountIdType = "Page ID (from token exchange)";
+      serviceLogger.info({ pageId: accountId, businessAccountId }, "[Instagram] Using exchanged Page Access Token for messaging");
     } else {
       // For Page tokens, prefer Business Account ID if available, otherwise use Page ID
       accountId = businessAccountId || pageId;
+      // Determine accountIdType based on which ID is actually being used
+      accountIdType = businessAccountId && accountId === businessAccountId 
+        ? "Instagram Business Account ID" 
+        : "Page ID";
     }
     
-    const hasAccessToken = accessToken && accessToken.length > 0;
+    // Validate the token that will actually be used (finalAccessToken), not the original token
+    const hasAccessToken = finalAccessToken && finalAccessToken.length > 0;
     const hasAccountId = accountId && accountId.length > 0;
     
     if (!hasAccessToken || !hasAccountId) {
@@ -84,10 +171,14 @@ class InstagramService {
         hasBusinessAccountId: !!businessAccountId,
         tokenPrefix,
         isInstagramToken,
+        wasTokenExchanged: isInstagramToken && finalAccessToken !== accessToken,
+        originalTokenLength: accessToken?.length || 0,
+        finalTokenLength: finalAccessToken?.length || 0,
         accessTokenLength: env.INSTAGRAM_PAGE_ACCESS_TOKEN?.length || 0,
         pageIdLength: env.INSTAGRAM_PAGE_ID?.length || 0,
         businessAccountIdLength: env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.length || 0,
         accessTokenPreview: env.INSTAGRAM_PAGE_ACCESS_TOKEN ? `${env.INSTAGRAM_PAGE_ACCESS_TOKEN.substring(0, 10)}...` : "undefined",
+        finalTokenPreview: finalAccessToken ? `${finalAccessToken.substring(0, 10)}...` : "undefined",
         accountIdPreview: accountId ? `${accountId.substring(0, 10)}...` : "undefined"
       }, "[Instagram] Missing Instagram API credentials");
       return { success: false, error: "Instagram API not configured" };
@@ -99,18 +190,19 @@ class InstagramService {
       // Using query parameter is more standard and reliable
       // For Instagram tokens, use Instagram Business Account ID endpoint
       // For Page tokens, can use either Page ID or Business Account ID endpoint
-      const url = `${INSTAGRAM_API_BASE}/${accountId}/messages?access_token=${encodeURIComponent(accessToken)}`;
+      const url = `${INSTAGRAM_API_BASE}/${accountId}/messages?access_token=${encodeURIComponent(finalAccessToken)}`;
       
       serviceLogger.debug({ 
         instagramUserId,
         accountId,
-        accountIdType: isInstagramToken ? "Instagram Business Account ID (required for IGA token)" : (businessAccountId ? "Instagram Business Account ID" : "Page ID"),
-        tokenType: isInstagramToken ? "Instagram Token (IGA)" : (isPageToken ? "Page Token (EAA)" : "Unknown"),
-        url: url.replace(accessToken, "[REDACTED]"),
+        accountIdType,
+        tokenType: isInstagramToken ? "Page Token (EAA) - exchanged from Instagram token" : (isPageToken ? "Page Token (EAA)" : "Unknown"),
+        url: url.replace(finalAccessToken, "[REDACTED]"),
         messageLength: message.length,
-        accessTokenLength: accessToken.length,
-        accessTokenPreview: `${accessToken.substring(0, 10)}...`,
-        tokenPrefix
+        accessTokenLength: finalAccessToken.length,
+        accessTokenPreview: `${finalAccessToken.substring(0, 10)}...`,
+        tokenPrefix: finalAccessToken.substring(0, 4).toUpperCase(),
+        wasExchanged: isInstagramToken
       }, "[Instagram] Sending DM via Graph API");
       
       const response = await fetch(url, {
@@ -136,25 +228,37 @@ class InstagramService {
         serviceLogger.error({ 
           instagramUserId,
           accountId,
-          accountIdType: businessAccountId ? "Instagram Business Account ID" : "Page ID",
+          accountIdType,
           errorData,
           errorCode,
           errorSubcode,
           errorType,
           errorMessage,
           httpStatus: response.status,
-          url: url.replace(accessToken, "[REDACTED]"), // Don't log full token
-          responseHeaders: Object.fromEntries(response.headers.entries())
+          url: url.replace(finalAccessToken, "[REDACTED]"), // Don't log full token
+          responseHeaders: Object.fromEntries(response.headers.entries()),
+          wasTokenExchanged: isInstagramToken
         }, "[Instagram] Failed to send DM");
         
         // Provide helpful error messages for common issues
         if (errorCode === 190) {
-          const isInstagramToken = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
+          // Check if token exchange was attempted (original token was Instagram token but we're using exchanged Page token)
+          const wasTokenExchanged = isInstagramToken && finalAccessToken !== accessToken;
           
           // Special handling for "Cannot parse access token" error
           const cannotParseError = errorMessage.toLowerCase().includes("cannot parse") || errorMessage.toLowerCase().includes("parse");
           
-          const troubleshootingTips = isInstagramToken ? [
+          // Determine troubleshooting tips based on whether exchange was attempted
+          const troubleshootingTips = wasTokenExchanged ? [
+            "⚠️ Token exchange succeeded, but the Page Access Token is invalid or lacks permissions",
+            "1. The Instagram token was successfully exchanged for a Page Access Token, but the Page token failed",
+            "2. Check if the Page Access Token has expired - use Meta Access Token Debugger: https://developers.facebook.com/tools/debug/accesstoken/",
+            "3. Ensure the Page Access Token has 'pages_messaging' permission",
+            "4. Verify the Page is properly linked to the Instagram Business Account",
+            "5. Try regenerating the Page Access Token directly from Meta App Dashboard → Instagram → Settings → 'Generate access tokens'",
+            "6. Ensure the Page token has not been revoked or invalidated",
+            ...(cannotParseError ? ["7. The exchanged Page token format appears invalid - try regenerating from Meta App Dashboard"] : [])
+          ] : isInstagramToken ? [
             "⚠️ CRITICAL: Instagram Messaging API requires a Facebook Page Access Token (EAAB/EAA), NOT an Instagram token (IGA)",
             "1. Switch to 'API setup with Facebook login' in Meta App Dashboard (not 'API setup with Instagram login')",
             "2. Generate a Page Access Token from your Facebook Page (linked to Instagram Business Account)",
@@ -176,10 +280,11 @@ class InstagramService {
           serviceLogger.error({ 
             instagramUserId,
             accountId,
-            accountIdType: isInstagramToken ? "Instagram Business Account ID" : "Page ID",
-            tokenPrefix: accessToken.substring(0, 4),
-            tokenType: isInstagramToken ? "Instagram Token (IGA)" : "Page Token (EAA)",
-            tokenLength: accessToken.length,
+            accountIdType,
+            tokenPrefix: finalAccessToken.substring(0, 4).toUpperCase(),
+            tokenType: wasTokenExchanged ? "Page Token (EAA) - exchanged from Instagram token" : (isPageToken ? "Page Token (EAA)" : (isInstagramToken ? "Instagram Token (IGA) - exchange not attempted" : "Unknown")),
+            tokenLength: finalAccessToken.length,
+            wasTokenExchanged,
             errorMessage,
             troubleshootingTips
           }, "[Instagram] OAuth token error - see troubleshooting tips below");
