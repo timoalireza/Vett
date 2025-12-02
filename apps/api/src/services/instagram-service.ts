@@ -423,6 +423,189 @@ I'll send you the results as soon as they're ready! 📊`;
       return { success: false, error: error.message || "Failed to send results" };
     }
   }
+
+  /**
+   * Handle post mention (when someone tags @vettapp in a post)
+   */
+  async handlePostMention(mention: {
+    mediaId: string;
+    mediaUrl?: string;
+    permalink?: string;
+    caption?: string;
+    mediaType?: string;
+    from: {
+      id: string;
+      username?: string;
+    };
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const instagramUserId = mention.from.id;
+      const username = mention.from.username;
+
+      // Get or create Instagram user
+      await socialLinkingService.getOrCreateInstagramUser(instagramUserId, username);
+
+      // Check usage limits
+      const usageCheck = await this.checkInstagramUsageLimit(instagramUserId);
+      if (!usageCheck.allowed) {
+        // Send rate limit message via DM
+        await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
+        return { success: true };
+      }
+
+      // Send processing message
+      await this.sendDM(instagramUserId, this.formatProcessingMessage());
+
+      // Prepare analysis input from post
+      const analysisInput: {
+        text?: string;
+        attachments: Array<{ kind: "link" | "image"; url: string }>;
+      } = {
+        attachments: []
+      };
+
+      // Add caption as text
+      if (mention.caption) {
+        analysisInput.text = mention.caption;
+        
+        // Extract URLs from caption
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const urls = mention.caption.match(urlRegex);
+        if (urls) {
+          for (const url of urls) {
+            analysisInput.attachments.push({ kind: "link", url });
+          }
+        }
+      }
+
+      // Add media URL as image attachment
+      if (mention.mediaUrl && mention.mediaType === "IMAGE") {
+        analysisInput.attachments.push({ kind: "image", url: mention.mediaUrl });
+      }
+
+      // Add permalink as link
+      if (mention.permalink) {
+        analysisInput.attachments.push({ kind: "link", url: mention.permalink });
+      }
+
+      // Get linked app user (if any) for analysis
+      const linkedUser = await socialLinkingService.getLinkedAppUser(instagramUserId);
+      const userId = linkedUser?.id || null;
+
+      // Submit analysis
+      const analysisId = await analysisService.enqueueAnalysis(
+        {
+          text: analysisInput.text,
+          mediaType: "text",
+          attachments: analysisInput.attachments
+        },
+        userId || undefined,
+        instagramUserId
+      );
+
+      // Increment usage
+      await this.incrementInstagramUsage(instagramUserId);
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[Instagram] Error handling post mention:", error);
+      return { success: false, error: error.message || "Failed to process post mention" };
+    }
+  }
+
+  /**
+   * Handle comment (when someone comments on a post mentioning @vettapp)
+   */
+  async handleComment(comment: {
+    commentId: string;
+    text?: string;
+    mediaId?: string;
+    from?: {
+      id: string;
+      username?: string;
+    };
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!comment.from) {
+        return { success: false, error: "Comment missing sender information" };
+      }
+
+      const instagramUserId = comment.from.id;
+      const username = comment.from.username;
+
+      // Get or create Instagram user
+      await socialLinkingService.getOrCreateInstagramUser(instagramUserId, username);
+
+      // Check if comment contains content to analyze
+      if (!comment.text || comment.text.trim().length === 0) {
+        // Empty comment, ignore
+        return { success: true };
+      }
+
+      // Check usage limits
+      const usageCheck = await this.checkInstagramUsageLimit(instagramUserId);
+      if (!usageCheck.allowed) {
+        // Send rate limit message via DM
+        await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
+        return { success: true };
+      }
+
+      // Send processing message
+      await this.sendDM(instagramUserId, this.formatProcessingMessage());
+
+      // Prepare analysis input from comment
+      const analysisInput: {
+        text?: string;
+        attachments: Array<{ kind: "link" | "image"; url: string }>;
+      } = {
+        attachments: []
+      };
+
+      // Add comment text
+      if (comment.text) {
+        analysisInput.text = comment.text;
+        
+        // Extract URLs from comment
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const urls = comment.text.match(urlRegex);
+        if (urls) {
+          for (const url of urls) {
+            analysisInput.attachments.push({ kind: "link", url });
+          }
+        }
+      }
+
+      // Add post permalink if available
+      if (comment.mediaId) {
+        // Construct Instagram post URL
+        const postUrl = `https://www.instagram.com/p/${comment.mediaId}/`;
+        analysisInput.attachments.push({ kind: "link", url: postUrl });
+      }
+
+      // Get linked app user (if any) for analysis
+      const linkedUser = await socialLinkingService.getLinkedAppUser(instagramUserId);
+      const userId = linkedUser?.id || null;
+
+      // Submit analysis
+      const analysisId = await analysisService.enqueueAnalysis(
+        {
+          text: analysisInput.text,
+          mediaType: "text",
+          attachments: analysisInput.attachments
+        },
+        userId || undefined,
+        instagramUserId
+      );
+
+      // Increment usage
+      await this.incrementInstagramUsage(instagramUserId);
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[Instagram] Error handling comment:", error);
+      return { success: false, error: error.message || "Failed to process comment" };
+    }
+  }
 }
 
 export const instagramService = new InstagramService();
