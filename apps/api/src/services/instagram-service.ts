@@ -42,27 +42,49 @@ class InstagramService {
    */
   async sendDM(instagramUserId: string, message: string): Promise<{ success: boolean; error?: string }> {
     // Check if credentials are set and not empty, then trim them for use
+    // Accept either INSTAGRAM_PAGE_ID (Facebook Page ID) or INSTAGRAM_BUSINESS_ACCOUNT_ID (Instagram Business Account ID)
     const accessToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
     const pageId = env.INSTAGRAM_PAGE_ID?.trim();
-    const hasAccessToken = accessToken && accessToken.length > 0;
-    const hasPageId = pageId && pageId.length > 0;
+    const businessAccountId = env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.trim();
     
-    if (!hasAccessToken || !hasPageId) {
+    // Use Instagram Business Account ID if provided, otherwise fall back to Page ID
+    const accountId = businessAccountId || pageId;
+    
+    const hasAccessToken = accessToken && accessToken.length > 0;
+    const hasAccountId = accountId && accountId.length > 0;
+    
+    if (!hasAccessToken || !hasAccountId) {
       serviceLogger.error({ 
         instagramUserId,
         hasAccessToken,
-        hasPageId,
+        hasPageId: !!pageId,
+        hasBusinessAccountId: !!businessAccountId,
         accessTokenLength: env.INSTAGRAM_PAGE_ACCESS_TOKEN?.length || 0,
         pageIdLength: env.INSTAGRAM_PAGE_ID?.length || 0,
+        businessAccountIdLength: env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.length || 0,
         accessTokenPreview: env.INSTAGRAM_PAGE_ACCESS_TOKEN ? `${env.INSTAGRAM_PAGE_ACCESS_TOKEN.substring(0, 10)}...` : "undefined",
-        pageIdPreview: env.INSTAGRAM_PAGE_ID ? `${env.INSTAGRAM_PAGE_ID.substring(0, 10)}...` : "undefined"
-      }, "[Instagram] Missing Instagram API credentials - check INSTAGRAM_PAGE_ACCESS_TOKEN and INSTAGRAM_PAGE_ID environment variables");
+        accountIdPreview: accountId ? `${accountId.substring(0, 10)}...` : "undefined"
+      }, "[Instagram] Missing Instagram API credentials - check INSTAGRAM_PAGE_ACCESS_TOKEN and either INSTAGRAM_PAGE_ID or INSTAGRAM_BUSINESS_ACCOUNT_ID environment variables");
       return { success: false, error: "Instagram API not configured" };
     }
 
     try {
       // Use trimmed values to avoid API failures from whitespace
-      const url = `${INSTAGRAM_API_BASE}/${pageId}/messages`;
+      // Instagram Graph API accepts access_token as query parameter or in body
+      // Using query parameter is more standard and reliable
+      // Use Instagram Business Account ID if provided, otherwise use Page ID
+      const url = `${INSTAGRAM_API_BASE}/${accountId}/messages?access_token=${encodeURIComponent(accessToken)}`;
+      
+      serviceLogger.debug({ 
+        instagramUserId,
+        accountId,
+        accountIdType: businessAccountId ? "Instagram Business Account ID" : "Page ID",
+        url: url.replace(accessToken, "[REDACTED]"),
+        messageLength: message.length,
+        accessTokenLength: accessToken.length,
+        accessTokenPreview: `${accessToken.substring(0, 10)}...`
+      }, "[Instagram] Sending DM via Graph API");
+      
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -71,15 +93,41 @@ class InstagramService {
         body: JSON.stringify({
           recipient: { id: instagramUserId },
           message: { text: message },
-          messaging_type: "RESPONSE",
-          access_token: accessToken
+          messaging_type: "RESPONSE"
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        serviceLogger.error({ instagramUserId, errorData }, "[Instagram] Failed to send DM");
-        return { success: false, error: errorData.error?.message || "Failed to send DM" };
+        const errorCode = errorData.error?.code;
+        const errorMessage = errorData.error?.message || "Failed to send DM";
+        const errorSubcode = errorData.error?.error_subcode;
+        const errorType = errorData.error?.type;
+        
+        // Log detailed error information
+        serviceLogger.error({ 
+          instagramUserId,
+          accountId,
+          accountIdType: businessAccountId ? "Instagram Business Account ID" : "Page ID",
+          errorData,
+          errorCode,
+          errorSubcode,
+          errorType,
+          errorMessage,
+          httpStatus: response.status,
+          url: url.replace(accessToken, "[REDACTED]"), // Don't log full token
+          responseHeaders: Object.fromEntries(response.headers.entries())
+        }, "[Instagram] Failed to send DM");
+        
+        // Provide helpful error messages for common issues
+        if (errorCode === 190) {
+          return { 
+            success: false, 
+            error: "Invalid OAuth access token. Please check INSTAGRAM_PAGE_ACCESS_TOKEN environment variable. Error: " + errorMessage
+          };
+        }
+        
+        return { success: false, error: errorMessage };
       }
 
       return { success: true };
@@ -160,8 +208,9 @@ class InstagramService {
     try {
       // Use Graph API to get media information
       // Use trimmed access token to avoid API failures from whitespace
+      // Send access_token as query parameter (standard for Graph API)
       const response = await fetch(
-        `${INSTAGRAM_API_BASE}/${mediaId}?fields=permalink&access_token=${accessToken}`,
+        `${INSTAGRAM_API_BASE}/${mediaId}?fields=permalink&access_token=${encodeURIComponent(accessToken)}`,
         {
           method: "GET",
           headers: {
@@ -770,11 +819,24 @@ I'll send you the results as soon as they're ready! 📊`;
       }, "[Instagram] Usage limit check result");
       
       if (!usageCheck.allowed) {
-        serviceLogger.info({ instagramUserId, remaining: usageCheck.remaining, limit: usageCheck.limit }, "[Instagram] Rate limit exceeded, sending rate limit message");
+        serviceLogger.info({ 
+          instagramUserId, 
+          remaining: usageCheck.remaining, 
+          limit: usageCheck.limit,
+          reason: "Rate limit exceeded - analysis will not be queued"
+        }, "[Instagram] ⛔ Rate limit exceeded - skipping analysis queue");
+        
+        // Try to send rate limit message (non-blocking)
         const rateLimitDmResult = await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
         if (!rateLimitDmResult.success) {
-          serviceLogger.warn({ instagramUserId, error: rateLimitDmResult.error }, "[Instagram] Failed to send rate limit message");
+          serviceLogger.warn({ 
+            instagramUserId, 
+            error: rateLimitDmResult.error,
+            note: "User will not receive rate limit notification due to DM failure"
+          }, "[Instagram] Failed to send rate limit message");
         }
+        
+        // Return early - do not queue analysis when rate limited
         return { success: true };
       }
 

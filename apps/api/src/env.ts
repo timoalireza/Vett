@@ -165,7 +165,8 @@ const envSchema = z.object({
   INSTAGRAM_APP_SECRET: z.string().optional(),
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   INSTAGRAM_PAGE_ACCESS_TOKEN: z.string().optional(),
-  INSTAGRAM_PAGE_ID: z.string().optional(),
+  INSTAGRAM_PAGE_ID: z.string().optional(), // Can be Page ID or Instagram Business Account ID
+  INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().optional(), // Alternative: Instagram Business Account ID for messaging
   // Allow unsigned webhooks in non-production (for local testing only)
   // Set to "true" to bypass signature verification in development
   INSTAGRAM_ALLOW_UNSIGNED_WEBHOOKS: z.string().optional().transform((val) => val === "true").pipe(z.boolean().default(false)),

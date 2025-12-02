@@ -215,28 +215,34 @@ export async function registerInstagramWebhook(app: FastifyInstance) {
             app.log.info(`[Instagram] Processing ${entry.messaging.length} messaging event(s)`);
             
             for (const event of entry.messaging) {
-              // Verify message is for our bot page (recipient.id is the bot's page ID)
-              // Note: INSTAGRAM_PAGE_ID is the bot's page ID (constant), not individual user IDs
+              // Verify message is for our bot account (recipient.id can be Page ID or Instagram Business Account ID)
+              // Note: We can use either INSTAGRAM_PAGE_ID (Facebook Page ID) or INSTAGRAM_BUSINESS_ACCOUNT_ID (Instagram Business Account ID)
               // Individual Instagram users (event.sender.id) are automatically tracked in the database
               const pageId = env.INSTAGRAM_PAGE_ID?.trim();
-              if (!pageId || pageId.length === 0) {
-                // Skip processing if page ID is not configured - sendDM requires it to send responses
+              const businessAccountId = env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.trim();
+              const configuredAccountId = businessAccountId || pageId;
+              
+              if (!configuredAccountId || configuredAccountId.length === 0) {
+                // Skip processing if account ID is not configured - sendDM requires it to send responses
                 // Without it, messages would be processed but responses would silently fail
                 app.log.error({
                   recipientId: event.recipient.id,
                   senderId: event.sender.id,
                   pageIdLength: env.INSTAGRAM_PAGE_ID?.length || 0,
+                  businessAccountIdLength: env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.length || 0,
                   pageIdPreview: env.INSTAGRAM_PAGE_ID ? `${env.INSTAGRAM_PAGE_ID.substring(0, 10)}...` : "undefined",
-                  message: "INSTAGRAM_PAGE_ID not configured - skipping message"
-                }, `[Instagram] ❌ INSTAGRAM_PAGE_ID is not set or empty. Received message for recipient (bot page) ID ${event.recipient.id} from Instagram user ${event.sender.id}. Set INSTAGRAM_PAGE_ID=${event.recipient.id} in Railway environment variables to enable message processing.`);
+                  businessAccountIdPreview: env.INSTAGRAM_BUSINESS_ACCOUNT_ID ? `${env.INSTAGRAM_BUSINESS_ACCOUNT_ID.substring(0, 10)}...` : "undefined",
+                  message: "Neither INSTAGRAM_PAGE_ID nor INSTAGRAM_BUSINESS_ACCOUNT_ID configured - skipping message"
+                }, `[Instagram] ❌ Neither INSTAGRAM_PAGE_ID nor INSTAGRAM_BUSINESS_ACCOUNT_ID is set. Received message for recipient (bot account) ID ${event.recipient.id} from Instagram user ${event.sender.id}. Set INSTAGRAM_PAGE_ID=${event.recipient.id} or INSTAGRAM_BUSINESS_ACCOUNT_ID=${event.recipient.id} in Railway environment variables to enable message processing.`);
                 continue;
-              } else if (event.recipient.id !== pageId) {
-                // Skip messages not intended for our bot page
+              } else if (event.recipient.id !== configuredAccountId) {
+                // Skip messages not intended for our bot account
                 app.log.warn({
                   recipientId: event.recipient.id,
-                  configuredPageId: pageId, // Use trimmed value for consistency
+                  configuredAccountId,
+                  accountIdType: businessAccountId ? "Instagram Business Account ID" : "Page ID",
                   senderId: event.sender.id
-                }, `[Instagram] Skipping message - recipient ID ${event.recipient.id} doesn't match configured bot page ID ${pageId}`);
+                }, `[Instagram] Skipping message - recipient ID ${event.recipient.id} doesn't match configured account ID ${configuredAccountId}`);
                 continue;
               }
 
