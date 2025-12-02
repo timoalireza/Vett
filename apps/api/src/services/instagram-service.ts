@@ -6,6 +6,9 @@ import { socialLinkingService } from "./social-linking-service.js";
 import { analysisService } from "./analysis-service.js";
 import type { AnalysisSummary } from "./analysis-service.js";
 import { serviceLogger } from "../utils/service-logger.js";
+import { fetchMediaFromAttachment } from "./instagram/media-fetcher.js";
+import { extractVisionData } from "./instagram/vision-extractor.js";
+import { extractClaims } from "./instagram/claim-extractor.js";
 
 const INSTAGRAM_API_BASE = "https://graph.facebook.com/v18.0";
 const FREE_TIER_DM_LIMIT = 3; // 3 analyses per month for FREE tier
@@ -566,7 +569,113 @@ I'll send you the results as soon as they're ready! 📊`;
       // Get or create Instagram user
       await socialLinkingService.getOrCreateInstagramUser(instagramUserId, username);
 
-      // Extract content from message
+      // Check if message has media attachments (image or video) for multimodal processing
+      const hasMediaAttachment = message.attachments?.some(
+        (att: any) => 
+          (att.type === "image" || att.type === "video") && 
+          att.payload?.url
+      );
+
+      let extractedClaims: string[] = [];
+      let visionExtractionFailed = false;
+
+      // Process media attachments with multimodal pipeline
+      if (hasMediaAttachment) {
+        serviceLogger.info({ instagramUserId }, "[Instagram] Detected media attachment, using multimodal pipeline");
+        
+        try {
+          // Find first media attachment (image or video)
+          const mediaAttachment = message.attachments?.find(
+            (att: any) => 
+              (att.type === "image" || att.type === "video") && 
+              att.payload?.url
+          );
+
+          if (mediaAttachment) {
+            // Step 1: Download media
+            let mediaData;
+            try {
+              mediaData = await fetchMediaFromAttachment(mediaAttachment);
+              serviceLogger.debug({ 
+                mimeType: mediaData.mimeType,
+                size: mediaData.buffer.length 
+              }, "[Instagram] Successfully downloaded media");
+            } catch (error: any) {
+              serviceLogger.error({ error }, "[Instagram] Failed to download media");
+              await this.sendDM(
+                instagramUserId,
+                "❌ *Media Download Failed*\n\nI couldn't access the media. Please try sending it again."
+              );
+              return { success: false, error: "Failed to download media" };
+            }
+
+            // Step 2: Extract vision data (OCR + description)
+            let visionOutput;
+            try {
+              // Convert Buffer to ArrayBuffer
+              // Buffer extends Uint8Array, so we can access the underlying ArrayBuffer
+              const arrayBuffer = mediaData.buffer.buffer 
+                ? mediaData.buffer.buffer.slice(
+                    mediaData.buffer.byteOffset,
+                    mediaData.buffer.byteOffset + mediaData.buffer.byteLength
+                  )
+                : (() => {
+                    // Fallback: create new ArrayBuffer and copy data
+                    const ab = new ArrayBuffer(mediaData.buffer.length);
+                    const view = new Uint8Array(ab);
+                    mediaData.buffer.copy(view);
+                    return ab;
+                  })();
+              
+              visionOutput = await extractVisionData(
+                arrayBuffer,
+                mediaData.mimeType
+              );
+              serviceLogger.debug({ 
+                rawTextLength: visionOutput.rawText.length,
+                descriptionLength: visionOutput.description.length
+              }, "[Instagram] Successfully extracted vision data");
+            } catch (error: any) {
+              serviceLogger.error({ error }, "[Instagram] Vision extraction failed, falling back to caption");
+              visionExtractionFailed = true;
+              // Send warning but continue with caption-only extraction
+              try {
+                await this.sendDM(
+                  instagramUserId,
+                  "⚠️ *Vision Analysis Failed*\n\nI couldn't analyze the media. Falling back to text analysis."
+                );
+              } catch (dmError) {
+                serviceLogger.error({ dmError }, "[Instagram] Failed to send vision failure warning");
+              }
+              // Fall through to use caption only
+            }
+
+            // Step 3: Extract claims from vision output + caption
+            if (visionOutput) {
+              try {
+                extractedClaims = await extractClaims(visionOutput, message.text);
+                serviceLogger.info({ 
+                  claimCount: extractedClaims.length,
+                  claims: extractedClaims
+                }, "[Instagram] Successfully extracted claims from multimodal content");
+              } catch (error: any) {
+                serviceLogger.error({ error }, "[Instagram] Claim extraction failed");
+                await this.sendDM(
+                  instagramUserId,
+                  "❌ *Analysis Failed*\n\nI couldn't extract clear claims from the content. Please try a different post."
+                );
+                return { success: false, error: "Failed to extract claims" };
+              }
+            }
+          }
+        } catch (error: any) {
+          serviceLogger.error({ error }, "[Instagram] Multimodal pipeline error");
+          visionExtractionFailed = true;
+          // Fall through to regular text extraction
+        }
+      }
+
+      // Extract content from message (for text/links or fallback)
       const content = await this.extractContentFromMessage(message);
       
       serviceLogger.info({
@@ -575,6 +684,8 @@ I'll send you the results as soon as they're ready! 📊`;
         textLength: content.text?.length || 0,
         linksCount: content.links.length,
         imagesCount: content.images.length,
+        extractedClaimsCount: extractedClaims.length,
+        visionExtractionFailed,
         textPreview: content.text?.substring(0, 100),
         links: content.links,
         images: content.images
@@ -600,7 +711,13 @@ I'll send you the results as soon as they're ready! 📊`;
       }
 
       // Check if message has any content to analyze
-      if (!content.text && content.links.length === 0 && content.images.length === 0) {
+      // Include extracted claims from multimodal pipeline
+      const hasContent = extractedClaims.length > 0 || 
+                        content.text || 
+                        content.links.length > 0 || 
+                        content.images.length > 0;
+      
+      if (!hasContent) {
         serviceLogger.warn({
           instagramUserId,
           messageText: message.text,
@@ -631,8 +748,16 @@ I'll send you the results as soon as they're ready! 📊`;
         attachments: []
       };
 
-      if (content.text && content.links.length === 0 && content.images.length === 0) {
-        // Text-only message
+      // If we extracted claims from multimodal pipeline, use them as text input
+      if (extractedClaims.length > 0) {
+        // Combine extracted claims into text for analysis
+        analysisInput.text = extractedClaims.join("\n\n");
+        serviceLogger.debug({ 
+          claimCount: extractedClaims.length,
+          combinedTextLength: analysisInput.text.length
+        }, "[Instagram] Using extracted claims as text input for analysis");
+      } else if (content.text && content.links.length === 0 && content.images.length === 0) {
+        // Text-only message (no multimodal extraction)
         analysisInput.text = content.text;
       } else {
         // Add links
@@ -640,9 +765,12 @@ I'll send you the results as soon as they're ready! 📊`;
           analysisInput.attachments.push({ kind: "link", url: link });
         }
 
-        // Add images
-        for (const imageUrl of content.images) {
-          analysisInput.attachments.push({ kind: "image", url: imageUrl });
+        // Add images (only if not processed by multimodal pipeline)
+        // Skip images that were processed via multimodal pipeline
+        if (!hasMediaAttachment) {
+          for (const imageUrl of content.images) {
+            analysisInput.attachments.push({ kind: "image", url: imageUrl });
+          }
         }
 
         // Add text if present (as context)
