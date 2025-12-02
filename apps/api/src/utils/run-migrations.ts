@@ -50,13 +50,16 @@ export async function runMigrations(): Promise<void> {
         // 
         // Error codes that should NOT be skipped (critical failures):
         // 22P02 = invalid input value for enum (data cannot be converted - indicates schema/data mismatch)
-        if (
-          error.code === "42P07" || 
-          error.code === "42710" || 
-          error.code === "2BP01" ||
-          error.message?.includes("already exists") ||
-          (error.message?.includes("dependent objects") && error.code === "2BP01")
-        ) {
+        // 
+        // IMPORTANT: Only suppress errors with known safe error codes. Message-based checks
+        // are only used as additional validation, never standalone, to prevent suppressing
+        // critical errors that happen to mention "already exists" in their message.
+        const isSafeToSkip = 
+          error.code === "42P07" || // duplicate_object (object already exists)
+          error.code === "42710" || // duplicate_object (constraint/index already exists)
+          (error.code === "2BP01" && error.message?.includes("dependent objects")); // cannot drop type with dependent objects
+        
+        if (isSafeToSkip) {
           console.log(`[Migrations] ⚠️  ${file} already applied or skipped (${error.code || error.message?.substring(0, 50)})`);
         } else {
           // Critical error - log and throw
