@@ -47,9 +47,11 @@ docker-compose*.yml
 .github
 
 # Documentation
-docs
+# Allow docs folder (needed for legal documents)
+# docs
 *.md
 !README.md
+!docs/**/*.md
 
 # Scripts (not needed in production)
 scripts

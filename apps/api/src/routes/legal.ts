@@ -1,11 +1,41 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { readFile } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import { existsSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+/**
+ * Find the docs directory by checking multiple possible locations
+ * Works in both development and production (Railway)
+ */
+function findDocsPath(filename: string): string {
+  // Try multiple possible locations
+  const possiblePaths = [
+    // In production (Docker): docs folder is copied to /app/docs
+    join(process.cwd(), "docs", filename),
+    // From source: apps/api/src/routes -> go up 4 levels to repo root
+    join(__dirname, "../../../../docs", filename),
+    // From dist: apps/api/dist/routes -> go up 4 levels to repo root
+    join(__dirname, "../../../../docs", filename),
+    // From apps/api (if cwd is apps/api)
+    join(process.cwd(), "../docs", filename),
+    // Absolute path fallback
+    resolve(process.cwd(), "docs", filename)
+  ];
+
+  for (const path of possiblePaths) {
+    if (existsSync(path)) {
+      return path;
+    }
+  }
+
+  // If none found, return the first path (will throw error with helpful message)
+  return possiblePaths[0];
+}
 
 /**
  * Register legal document routes (Terms of Service and Privacy Policy)
@@ -26,9 +56,7 @@ export async function registerLegalRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         // Read Terms of Service markdown file
-        // Path: docs/TERMS_OF_SERVICE.md at repo root
-        // From apps/api/src/routes -> go up 4 levels to repo root
-        const docsPath = join(__dirname, "../../../../docs/TERMS_OF_SERVICE.md");
+        const docsPath = findDocsPath("TERMS_OF_SERVICE.md");
         const content = await readFile(docsPath, "utf-8");
 
         // Return as markdown with proper content type
@@ -70,9 +98,7 @@ export async function registerLegalRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         // Read Privacy Policy markdown file
-        // Path: docs/PRIVACY_POLICY.md at repo root
-        // From apps/api/src/routes -> go up 4 levels to repo root
-        const docsPath = join(__dirname, "../../../../docs/PRIVACY_POLICY.md");
+        const docsPath = findDocsPath("PRIVACY_POLICY.md");
         const content = await readFile(docsPath, "utf-8");
 
         // Return as markdown with proper content type
@@ -114,7 +140,7 @@ export async function registerLegalRoutes(app: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const docsPath = join(__dirname, "../../../../docs/TERMS_OF_SERVICE.md");
+        const docsPath = findDocsPath("TERMS_OF_SERVICE.md");
         const markdown = await readFile(docsPath, "utf-8");
         
         // For now, return markdown wrapped in basic HTML
@@ -167,7 +193,7 @@ export async function registerLegalRoutes(app: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const docsPath = join(__dirname, "../../../../docs/PRIVACY_POLICY.md");
+        const docsPath = findDocsPath("PRIVACY_POLICY.md");
         const markdown = await readFile(docsPath, "utf-8");
         
         const html = `<!DOCTYPE html>
