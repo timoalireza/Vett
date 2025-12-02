@@ -8,13 +8,19 @@ let client: ApifyClient | null = null;
 function getClient(): ApifyClient | null {
   if (client) return client;
   
-  if (env.APIFY_API_TOKEN) {
+  // Check for both APIFY_API_TOKEN and APIFY_API_KEY (common naming variations)
+  const apiToken = env.APIFY_API_TOKEN || (process.env.APIFY_API_KEY as string | undefined);
+  
+  if (apiToken) {
+    // Log only non-sensitive metadata - never log token preview or actual characters
+    console.log(`[Apify] Initializing Apify client (token length: ${apiToken.length} characters)`);
     client = new ApifyClient({
-      token: env.APIFY_API_TOKEN,
+      token: apiToken,
     });
     return client;
   }
   
+  console.warn(`[Apify] No API token found. Checked APIFY_API_TOKEN=${!!env.APIFY_API_TOKEN}, APIFY_API_KEY=${!!process.env.APIFY_API_KEY}`);
   return null;
 }
 
@@ -113,37 +119,52 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
 
   try {
     console.log(`[Apify] Scraping Instagram post: ${url}`);
-    // Using "apify/instagram-post-scraper" - this is a specific actor for posts
-    // Note: If you haven't added this actor to your account in Apify console, do so.
-    // Alternatively, stick to "apify/instagram-scraper" if you prefer, but ensure input matches.
-    // Let's stick to "apify/instagram-scraper" for now as it's the "official" one, but update input
-    // to be more robust or fallback.
     
-    // Actually, let's use the input format that works for 'apify/instagram-scraper' but ensure we ask for posts
+    // Use the input format that works for 'apify/instagram-scraper'
     const inputScraper = {
       directUrls: [url],
       resultsType: "posts",
       searchLimit: 1,
     };
 
-    // console.log(`[Apify] calling apify/instagram-scraper with input:`, JSON.stringify(inputScraper));
+    console.log(`[Apify] Calling apify/instagram-scraper with input:`, JSON.stringify(inputScraper));
+    
+    // Start the actor run
     const run = await apify.actor("apify/instagram-scraper").call(inputScraper);
+    
+    console.log(`[Apify] Run finished - status: ${run.status}, datasetId: ${run.defaultDatasetId}, runId: ${run.id}`);
 
-    // console.log(`[Apify] Run finished: ${run.status}, datasetId: ${run.defaultDatasetId}`);
+    // Check run status
+    if (run.status !== "SUCCEEDED") {
+      console.warn(`[Apify] Run did not succeed. Status: ${run.status}, defaultDatasetId: ${run.defaultDatasetId}`);
+      return null;
+    }
 
     // Fetch results from the dataset
     const { items } = await apify.dataset(run.defaultDatasetId).listItems();
     
+    console.log(`[Apify] Retrieved ${items?.length || 0} items from dataset ${run.defaultDatasetId}`);
+    
     if (items && items.length > 0) {
-      console.log(`[Apify] Found ${items.length} items`);
+      console.log(`[Apify] Successfully extracted Instagram post - first item keys: ${Object.keys(items[0]).join(", ")}`);
       return items[0] as ApifyInstagramResult;
     }
-    console.warn(`[Apify] No items found in dataset ${run.defaultDatasetId}`);
     
-    // Fallback or retry logic could go here
+    console.warn(`[Apify] No items found in dataset ${run.defaultDatasetId} for URL: ${url}`);
     return null;
   } catch (error) {
-    console.error("[Apify] Instagram scrape failed:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : typeof error;
+    
+    console.error(`[Apify] Instagram scrape failed for ${url}:`, {
+      name: errorName,
+      message: errorMessage,
+      stack: errorStack,
+      // Log error details if available
+      ...(error instanceof Error && 'code' in error ? { code: (error as any).code } : {}),
+      ...(error instanceof Error && 'statusCode' in error ? { statusCode: (error as any).statusCode } : {})
+    });
     return null;
   }
 }

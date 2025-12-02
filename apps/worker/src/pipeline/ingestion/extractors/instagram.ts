@@ -87,10 +87,20 @@ export async function extractInstagramContent(
           likeCount: apifyResult.likesCount,
           commentCount: apifyResult.commentsCount
         };
+      } else {
+        console.warn(`[Instagram] Apify returned result but no text content for: ${url}`);
       }
+    } else {
+      console.warn(`[Instagram] Apify returned null/undefined for: ${url}`);
     }
   } catch (error) {
-    console.warn(`[Instagram] Apify extraction error:`, error instanceof Error ? error.message : String(error));
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.warn(`[Instagram] Apify extraction error for ${url}:`, {
+      message: errorMessage,
+      stack: errorStack,
+      errorType: error instanceof Error ? error.constructor.name : typeof error
+    });
     // Fall through to HTML scraping
   }
   

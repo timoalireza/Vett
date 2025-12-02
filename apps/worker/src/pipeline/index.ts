@@ -240,7 +240,42 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         .map((r) => r.error)
         .join("; ");
       
-      const baseError = errorMessages || "The link may be private, require authentication, or the content may not be accessible.";
+      // Get attachment URLs for better error context
+      const attachmentUrls = context.attachments
+        .map((att) => att.kind === "link" ? att.url : att.kind === "image" ? `[image: ${att.url.substring(0, 50)}...]` : "[unknown]")
+        .join(", ");
+      
+      // Check if any attachments are Instagram CDN URLs (should be images, not links)
+      const instagramCdnUrls = context.attachments
+        .filter((att) => att.kind === "link" && (
+          att.url.includes("fbsbx.com") || 
+          att.url.includes("ig_messaging_cdn") ||
+          att.url.includes("lookaside.fbsbx.com")
+        ))
+        .map((att) => att.url);
+      
+      let baseError = errorMessages || "The link may be private, require authentication, or the content may not be accessible.";
+      
+      // Provide specific guidance for Instagram CDN URLs
+      if (instagramCdnUrls.length > 0) {
+        baseError = `Instagram CDN URLs detected: ${instagramCdnUrls.join(", ")}. These should be processed as image attachments, not links. Please ensure Instagram media attachments are marked as kind: 'image'. ${baseError}`;
+      }
+      
+      // Log detailed error information for debugging
+      console.error(`[Pipeline] Content extraction failed:`, {
+        attachmentCount: context.attachments.length,
+        attachmentUrls,
+        errorMessages,
+        hasInstagramCdnUrls: instagramCdnUrls.length > 0,
+        combinedTextLength: ingestion.combinedText?.length || 0,
+        records: ingestion.records.map((r) => ({
+          kind: r.attachment.kind,
+          url: r.attachment.kind === "link" ? r.attachment.url : r.attachment.kind === "image" ? r.attachment.url.substring(0, 50) : "unknown",
+          error: r.error,
+          textLength: r.text?.length || 0
+        }))
+      });
+      
       throw new Error(`Failed to extract content from the provided link(s). ${baseError} Please try uploading a screenshot of the post instead.`);
     }
 
