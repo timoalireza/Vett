@@ -150,21 +150,27 @@ class InstagramService {
         // Provide helpful error messages for common issues
         if (errorCode === 190) {
           const isInstagramToken = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
+          
+          // Special handling for "Cannot parse access token" error
+          const cannotParseError = errorMessage.toLowerCase().includes("cannot parse") || errorMessage.toLowerCase().includes("parse");
+          
           const troubleshootingTips = isInstagramToken ? [
-            "1. Verify Instagram token has 'instagram_basic' and 'pages_messaging' permissions",
-            "2. Ensure INSTAGRAM_BUSINESS_ACCOUNT_ID is set (required for Instagram tokens)",
-            "3. Check token hasn't expired - use Meta Access Token Debugger: https://developers.facebook.com/tools/debug/accesstoken/",
-            "4. Verify Instagram Business Account is linked to a Facebook Page",
-            "5. Ensure your app has Instagram Graph API product added",
-            "6. Check token has access to the Instagram Business Account",
-            `7. Token preview: ${accessToken.substring(0, 10)}... (length: ${accessToken.length}, type: Instagram)`
+            "⚠️ CRITICAL: Instagram Messaging API requires a Facebook Page Access Token (EAAB/EAA), NOT an Instagram token (IGA)",
+            "1. Switch to 'API setup with Facebook login' in Meta App Dashboard (not 'API setup with Instagram login')",
+            "2. Generate a Page Access Token from your Facebook Page (linked to Instagram Business Account)",
+            "3. The token should start with 'EAAB' or 'EAA', not 'IGA'",
+            "4. Ensure the Page Access Token has 'pages_messaging' permission",
+            "5. Use the Page ID (not Instagram Business Account ID) with Page Access Tokens",
+            "6. Check token hasn't expired - use Meta Access Token Debugger: https://developers.facebook.com/tools/debug/accesstoken/",
+            "7. Verify Instagram Business Account is linked to the Facebook Page",
+            ...(cannotParseError ? ["8. The current token format is invalid - regenerate using Facebook Page Access Token method"] : [])
           ] : [
             "1. Verify token is a Facebook Page Access Token (starts with EAAB or EAA)",
             "2. Check token hasn't expired - use Meta Access Token Debugger: https://developers.facebook.com/tools/debug/accesstoken/",
             "3. Ensure token has 'pages_messaging' permission",
             "4. Verify Instagram Business Account is linked to the Facebook Page",
             "5. Check for extra whitespace or characters in the token",
-            `6. Token preview: ${accessToken.substring(0, 10)}... (length: ${accessToken.length}, type: Page)`
+            ...(cannotParseError ? ["6. Token format appears invalid - try regenerating the token"] : [])
           ];
           
           serviceLogger.error({ 
