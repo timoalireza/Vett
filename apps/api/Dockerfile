@@ -6,8 +6,9 @@
 FROM node:20-alpine AS base
 
 # Install pnpm and build dependencies
+# Note: ffmpeg is required for fluent-ffmpeg (video frame extraction)
 RUN npm install -g pnpm@9.12.0 && \
-    apk add --no-cache libc6-compat python3 make g++
+    apk add --no-cache libc6-compat python3 make g++ ffmpeg
 
 FROM base AS builder
 WORKDIR /app
