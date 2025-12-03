@@ -295,6 +295,57 @@ class InstagramService {
           };
         }
         
+        // Error code 3: Application does not have the capability to make this API call
+        if (errorCode === 3) {
+          const troubleshootingTips = [
+            "⚠️ CRITICAL: Your app does not have Instagram Messaging API capability enabled",
+            "",
+            "This error means your Meta App is not configured or approved for Instagram Messaging API.",
+            "",
+            "SOLUTION - Enable Instagram Messaging API:",
+            "1. Go to Meta App Dashboard: https://developers.facebook.com/apps/",
+            "2. Select your app",
+            "3. Navigate to: Instagram → Instagram Messaging → Settings",
+            "4. Ensure 'Instagram Messaging' is enabled",
+            "5. Check that your app is in 'Live' mode (not Development mode)",
+            "",
+            "If your app is in Development mode:",
+            "- Only test users can receive messages",
+            "- Switch to Live mode: App Dashboard → App Review → Permissions and Features",
+            "",
+            "Required Permissions:",
+            "- Ensure 'pages_messaging' permission is approved",
+            "- Ensure 'instagram_basic' permission is approved",
+            "- Verify Instagram Business Account is linked to Facebook Page",
+            "",
+            "App Review (if needed):",
+            "- If your app is new, you may need to submit for App Review",
+            "- Go to: App Dashboard → App Review → Permissions and Features",
+            "- Submit 'pages_messaging' permission for review",
+            "",
+            "Verify Setup:",
+            "- Check that INSTAGRAM_PAGE_ACCESS_TOKEN is a Page Access Token (starts with EAAB/EAA)",
+            "- Verify INSTAGRAM_PAGE_ID or INSTAGRAM_BUSINESS_ACCOUNT_ID is set correctly",
+            "- Test webhook: Ensure webhook is verified and receiving events"
+          ];
+          
+          serviceLogger.error({ 
+            instagramUserId,
+            accountId,
+            accountIdType,
+            tokenPrefix: finalAccessToken.substring(0, 4).toUpperCase(),
+            tokenType: isInstagramToken && finalAccessToken !== accessToken ? "Page Token (EAA) - exchanged from Instagram token" : (isPageToken ? "Page Token (EAA)" : (isInstagramToken ? "Instagram Token (IGA)" : "Unknown")),
+            errorCode,
+            errorMessage,
+            troubleshootingTips
+          }, "[Instagram] App does not have Instagram Messaging API capability - see troubleshooting tips");
+          
+          return { 
+            success: false, 
+            error: `Application does not have the capability to make this API call (Error 3). ${errorMessage}\n\n${troubleshootingTips.join("\n")}`
+          };
+        }
+        
         return { success: false, error: errorMessage };
       }
 
