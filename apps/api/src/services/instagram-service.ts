@@ -277,12 +277,18 @@ class InstagramService {
             ...(cannotParseError ? ["6. Token format appears invalid - try regenerating the token"] : [])
           ];
           
+          // Determine tokenType: if isInstagramToken is true, exchange must have succeeded (otherwise we'd return early)
+          // So wasTokenExchanged is always true when isInstagramToken is true, making the "exchange not attempted" branch unreachable
+          const tokenType = wasTokenExchanged 
+            ? "Page Token (EAA) - exchanged from Instagram token" 
+            : (isPageToken ? "Page Token (EAA)" : "Unknown");
+          
           serviceLogger.error({ 
             instagramUserId,
             accountId,
             accountIdType,
             tokenPrefix: finalAccessToken.substring(0, 4).toUpperCase(),
-            tokenType: wasTokenExchanged ? "Page Token (EAA) - exchanged from Instagram token" : (isPageToken ? "Page Token (EAA)" : (isInstagramToken ? "Instagram Token (IGA) - exchange not attempted" : "Unknown")),
+            tokenType,
             tokenLength: finalAccessToken.length,
             wasTokenExchanged,
             errorMessage,
@@ -297,6 +303,9 @@ class InstagramService {
         
         // Error code 3: Application does not have the capability to make this API call
         if (errorCode === 3) {
+          // Check if token exchange was attempted (consistent with error 190 handling)
+          const wasTokenExchanged = isInstagramToken && finalAccessToken !== accessToken;
+          
           const troubleshootingTips = [
             "⚠️ CRITICAL: Your app does not have Instagram Messaging API capability enabled",
             "",
@@ -329,12 +338,20 @@ class InstagramService {
             "- Test webhook: Ensure webhook is verified and receiving events"
           ];
           
+          // Determine tokenType: if isInstagramToken is true, exchange must have succeeded (otherwise we'd return early)
+          // So wasTokenExchanged is always true when isInstagramToken is true, making the "exchange not attempted" branch unreachable
+          const tokenType = wasTokenExchanged 
+            ? "Page Token (EAA) - exchanged from Instagram token" 
+            : (isPageToken ? "Page Token (EAA)" : "Unknown");
+          
           serviceLogger.error({ 
             instagramUserId,
             accountId,
             accountIdType,
             tokenPrefix: finalAccessToken.substring(0, 4).toUpperCase(),
-            tokenType: isInstagramToken && finalAccessToken !== accessToken ? "Page Token (EAA) - exchanged from Instagram token" : (isPageToken ? "Page Token (EAA)" : (isInstagramToken ? "Instagram Token (IGA)" : "Unknown")),
+            tokenType,
+            tokenLength: finalAccessToken.length,
+            wasTokenExchanged,
             errorCode,
             errorMessage,
             troubleshootingTips
