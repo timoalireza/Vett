@@ -164,7 +164,8 @@ const envSchema = z.object({
   INSTAGRAM_APP_ID: z.string().optional(),
   INSTAGRAM_APP_SECRET: z.string().optional(),
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
-  INSTAGRAM_PAGE_ACCESS_TOKEN: z.string().optional(), // Can be Facebook Page Access Token (EAAB/EAA) or Instagram Business Account Token (IGA)
+  INSTAGRAM_PAGE_ACCESS_TOKEN: z.string().optional(), // Facebook Page Access Token (EAAB/EAA) - preferred for messaging
+  INSTAGRAM_BUSINESS_ACCOUNT_TOKEN: z.string().optional(), // Instagram Business Account Token (IGA) - will be exchanged for Page token if needed
   INSTAGRAM_PAGE_ID: z.string().optional(), // Facebook Page ID (required for Page tokens, optional for Instagram tokens)
   INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().optional(), // Instagram Business Account ID (REQUIRED for Instagram tokens (IGA), optional for Page tokens)
   INSTAGRAM_WHITELIST_ACCOUNTS: z.string().optional(), // Comma-separated list of Instagram user IDs with unlimited access (e.g., "123456789,987654321")

@@ -18,6 +18,27 @@ export interface MediaFetchResult {
 }
 
 /**
+ * Get the appropriate access token for Instagram API calls
+ * Prefers Facebook Page Access Token, falls back to Instagram Business Account Token
+ */
+function getAccessToken(): string | null {
+  const pageToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+  const instagramToken = env.INSTAGRAM_BUSINESS_ACCOUNT_TOKEN?.trim();
+  
+  // Prefer Page Access Token if available
+  if (pageToken && pageToken.length > 0) {
+    return pageToken;
+  }
+  
+  // Fall back to Instagram Business Account Token
+  if (instagramToken && instagramToken.length > 0) {
+    return instagramToken;
+  }
+  
+  return null;
+}
+
+/**
  * Fetch media from Instagram attachment
  * Downloads media from Instagram CDN URLs or attachment payload URLs
  */
@@ -39,7 +60,7 @@ export async function fetchMediaFromAttachment(
     };
 
     // If we have an access token and the URL is from Instagram Graph API, add it
-    const accessToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+    const accessToken = getAccessToken();
     if (accessToken && accessToken.length > 0 && mediaUrl.includes("graph.facebook.com")) {
       // URL might already have access_token, or we might need to add it
       const urlObj = new URL(mediaUrl);

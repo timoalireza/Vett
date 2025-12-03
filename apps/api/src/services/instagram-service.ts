@@ -38,6 +38,71 @@ interface ExtractedContent {
 
 class InstagramService {
   /**
+   * Get the appropriate access token for Instagram API calls
+   * Prefers Facebook Page Access Token, falls back to Instagram Business Account Token
+   * 
+   * @returns Object with token, token type, and whether it's an Instagram token (needs exchange)
+   */
+  private getAccessToken(): { token: string | null; isInstagramToken: boolean; tokenType: string } {
+    const pageToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+    const instagramToken = env.INSTAGRAM_BUSINESS_ACCOUNT_TOKEN?.trim();
+    
+    // Prefer Page Access Token if available
+    if (pageToken && pageToken.length > 0) {
+      const tokenPrefix = pageToken.substring(0, 4).toUpperCase();
+      const isInstagramToken = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
+      return {
+        token: pageToken,
+        isInstagramToken,
+        tokenType: isInstagramToken ? "Instagram Token (IGA) - from INSTAGRAM_PAGE_ACCESS_TOKEN" : "Page Token (EAA) - from INSTAGRAM_PAGE_ACCESS_TOKEN"
+      };
+    }
+    
+    // Fall back to Instagram Business Account Token
+    if (instagramToken && instagramToken.length > 0) {
+      // Validate token prefix to determine actual token type
+      const tokenPrefix = instagramToken.substring(0, 4).toUpperCase();
+      const isInstagramTokenType = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
+      const isPageTokenType = tokenPrefix.startsWith("EAA");
+      
+      // Warn if Page token is mistakenly placed in INSTAGRAM_BUSINESS_ACCOUNT_TOKEN
+      if (isPageTokenType) {
+        serviceLogger.warn({ 
+          tokenPrefix,
+          note: "INSTAGRAM_BUSINESS_ACCOUNT_TOKEN contains a Page token (EAA) instead of Instagram token (IGA). Consider using INSTAGRAM_PAGE_ACCESS_TOKEN instead."
+        }, "[Instagram] Page token detected in INSTAGRAM_BUSINESS_ACCOUNT_TOKEN - treating as Page token");
+        return {
+          token: instagramToken,
+          isInstagramToken: false,
+          tokenType: "Page Token (EAA) - from INSTAGRAM_BUSINESS_ACCOUNT_TOKEN (should use INSTAGRAM_PAGE_ACCESS_TOKEN)"
+        };
+      }
+      
+      // Validate it's actually an Instagram token
+      if (!isInstagramTokenType) {
+        serviceLogger.warn({ 
+          tokenPrefix,
+          note: "INSTAGRAM_BUSINESS_ACCOUNT_TOKEN has unexpected prefix. Expected IGA/IG prefix for Instagram token."
+        }, "[Instagram] Unexpected token prefix in INSTAGRAM_BUSINESS_ACCOUNT_TOKEN");
+      }
+      
+      return {
+        token: instagramToken,
+        isInstagramToken: isInstagramTokenType,
+        tokenType: isInstagramTokenType 
+          ? "Instagram Token (IGA) - from INSTAGRAM_BUSINESS_ACCOUNT_TOKEN"
+          : `Unknown Token Type (${tokenPrefix}) - from INSTAGRAM_BUSINESS_ACCOUNT_TOKEN`
+      };
+    }
+    
+    return {
+      token: null,
+      isInstagramToken: false,
+      tokenType: "None"
+    };
+  }
+
+  /**
    * Exchange Instagram Business Account token for Page Access Token
    * Instagram Messaging API requires a Page Access Token, not an Instagram token
    * 
@@ -99,15 +164,25 @@ class InstagramService {
    * Send DM to Instagram user via Meta Graph API
    */
   async sendDM(instagramUserId: string, message: string): Promise<{ success: boolean; error?: string }> {
-    // Check if credentials are set and not empty, then trim them for use
-    // Accept either INSTAGRAM_PAGE_ID (Facebook Page ID) or INSTAGRAM_BUSINESS_ACCOUNT_ID (Instagram Business Account ID)
-    const accessToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+    // Get the appropriate access token (prefers Page token, falls back to Instagram token)
+    const { token: accessToken, isInstagramToken: isTokenInstagramType, tokenType } = this.getAccessToken();
     const pageId = env.INSTAGRAM_PAGE_ID?.trim();
     const businessAccountId = env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.trim();
     
+    if (!accessToken) {
+      serviceLogger.error({ 
+        instagramUserId,
+        hasPageToken: !!env.INSTAGRAM_PAGE_ACCESS_TOKEN,
+        hasInstagramToken: !!env.INSTAGRAM_BUSINESS_ACCOUNT_TOKEN,
+        pageTokenLength: env.INSTAGRAM_PAGE_ACCESS_TOKEN?.length || 0,
+        instagramTokenLength: env.INSTAGRAM_BUSINESS_ACCOUNT_TOKEN?.length || 0
+      }, "[Instagram] No access token configured - set either INSTAGRAM_PAGE_ACCESS_TOKEN or INSTAGRAM_BUSINESS_ACCOUNT_TOKEN");
+      return { success: false, error: "Instagram API not configured - set either INSTAGRAM_PAGE_ACCESS_TOKEN (preferred) or INSTAGRAM_BUSINESS_ACCOUNT_TOKEN" };
+    }
+    
     // Determine token type and appropriate account ID
-    const tokenPrefix = accessToken ? accessToken.substring(0, 4).toUpperCase() : "";
-    const isInstagramToken = tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
+    const tokenPrefix = accessToken.substring(0, 4).toUpperCase();
+    const isInstagramToken = isTokenInstagramType || tokenPrefix.startsWith("IGA") || tokenPrefix.startsWith("IG");
     const isPageToken = tokenPrefix.startsWith("EAA");
     
     let accountId: string;
@@ -174,10 +249,13 @@ class InstagramService {
         wasTokenExchanged: isInstagramToken && finalAccessToken !== accessToken,
         originalTokenLength: accessToken?.length || 0,
         finalTokenLength: finalAccessToken?.length || 0,
-        accessTokenLength: env.INSTAGRAM_PAGE_ACCESS_TOKEN?.length || 0,
+        accessTokenLength: accessToken?.length || 0,
         pageIdLength: env.INSTAGRAM_PAGE_ID?.length || 0,
         businessAccountIdLength: env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.length || 0,
-        accessTokenPreview: env.INSTAGRAM_PAGE_ACCESS_TOKEN ? `${env.INSTAGRAM_PAGE_ACCESS_TOKEN.substring(0, 10)}...` : "undefined",
+        tokenSource: tokenType,
+        hasPageToken: !!env.INSTAGRAM_PAGE_ACCESS_TOKEN,
+        hasInstagramToken: !!env.INSTAGRAM_BUSINESS_ACCOUNT_TOKEN,
+        accessTokenPreview: accessToken ? `${accessToken.substring(0, 10)}...` : "undefined",
         finalTokenPreview: finalAccessToken ? `${finalAccessToken.substring(0, 10)}...` : "undefined",
         accountIdPreview: accountId ? `${accountId.substring(0, 10)}...` : "undefined"
       }, "[Instagram] Missing Instagram API credentials");
@@ -196,13 +274,16 @@ class InstagramService {
         instagramUserId,
         accountId,
         accountIdType,
-        tokenType: isInstagramToken ? "Page Token (EAA) - exchanged from Instagram token" : (isPageToken ? "Page Token (EAA)" : "Unknown"),
+        tokenType: isInstagramToken && finalAccessToken !== accessToken 
+          ? "Page Token (EAA) - exchanged from Instagram token" 
+          : (isPageToken ? "Page Token (EAA)" : (isInstagramToken ? "Instagram Token (IGA) - will exchange" : "Unknown")),
+        tokenSource: tokenType,
         url: url.replace(finalAccessToken, "[REDACTED]"),
         messageLength: message.length,
         accessTokenLength: finalAccessToken.length,
         accessTokenPreview: `${finalAccessToken.substring(0, 10)}...`,
         tokenPrefix: finalAccessToken.substring(0, 4).toUpperCase(),
-        wasExchanged: isInstagramToken
+        wasExchanged: isInstagramToken && finalAccessToken !== accessToken
       }, "[Instagram] Sending DM via Graph API");
       
       const response = await fetch(url, {
@@ -435,9 +516,12 @@ class InstagramService {
    * Get Instagram post permalink from media ID using Graph API
    */
   private async getPostPermalinkFromMediaId(mediaId: string): Promise<string | null> {
-    const accessToken = env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim();
+    const { token: accessToken, tokenType } = this.getAccessToken();
     if (!accessToken || accessToken.length === 0) {
-      serviceLogger.warn("[Instagram] INSTAGRAM_PAGE_ACCESS_TOKEN not configured, cannot fetch post permalink");
+      serviceLogger.warn({ 
+        hasPageToken: !!env.INSTAGRAM_PAGE_ACCESS_TOKEN,
+        hasInstagramToken: !!env.INSTAGRAM_BUSINESS_ACCOUNT_TOKEN
+      }, "[Instagram] No access token configured, cannot fetch post permalink - set either INSTAGRAM_PAGE_ACCESS_TOKEN or INSTAGRAM_BUSINESS_ACCOUNT_TOKEN");
       return null;
     }
 
