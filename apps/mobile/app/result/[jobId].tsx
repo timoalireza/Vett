@@ -37,9 +37,10 @@ export default function ResultScreen() {
     const setToken = async () => {
       try {
         const token = await getToken();
-        if (token) tokenProvider.setToken(token);
+        tokenProvider.setToken(token);
       } catch (e) {
         console.error("Failed to set token", e);
+        tokenProvider.setToken(null);
       }
     };
     setToken();

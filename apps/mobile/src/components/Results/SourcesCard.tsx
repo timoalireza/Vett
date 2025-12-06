@@ -27,6 +27,14 @@ interface SourcesCardProps {
   sources: Source[];
 }
 
+const getHostname = (url: string) => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+};
+
 export const SourcesCard: React.FC<SourcesCardProps> = ({ sources }) => {
   if (!sources || sources.length === 0) return null;
 
@@ -46,7 +54,7 @@ export const SourcesCard: React.FC<SourcesCardProps> = ({ sources }) => {
                 {source.title}
               </Text>
               <Text style={styles.sourceUrl} numberOfLines={1}>
-                {source.summary || new URL(source.url).hostname}
+                {source.summary || getHostname(source.url)}
               </Text>
             </View>
           </TouchableOpacity>

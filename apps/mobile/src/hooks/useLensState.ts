@@ -6,7 +6,7 @@ export function useLensState() {
   const [state, setState] = useState<LensState>("idle");
 
   const toInput = useCallback(() => {
-    setState((curr) => (curr === "idle" ? "input" : curr));
+    setState((curr) => (curr === "idle" || curr === "input" ? "input" : curr));
   }, []);
 
   const toLoading = useCallback(() => {
