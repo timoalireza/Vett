@@ -1,102 +1,30 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
-  FlatList,
-  Modal,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
   View,
+  Text,
   StyleSheet,
+  TouchableOpacity,
+  KeyboardAvoidingView,
   Platform,
-  Linking,
-  Image,
-  Alert
+  TouchableWithoutFeedback,
+  Keyboard,
+  Alert,
+  SafeAreaView,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { useAuth } from "@clerk/clerk-expo";
-import { tokenProvider } from "../../src/api/token-provider";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useShareIntent } from "expo-share-intent";
 
-import * as ImagePicker from "expo-image-picker";
-
-// Verify ImagePicker is available
-const isImagePickerAvailable = () => {
-  const available = (
-    ImagePicker &&
-    typeof ImagePicker.requestMediaLibraryPermissionsAsync === "function" &&
-    typeof ImagePicker.launchImageLibraryAsync === "function" &&
-    typeof ImagePicker.requestCameraPermissionsAsync === "function" &&
-    typeof ImagePicker.launchCameraAsync === "function"
-  );
-  
-  if (!available) {
-    console.error("[ImagePicker] Module not available:", {
-      ImagePicker: !!ImagePicker,
-      requestMediaLibraryPermissionsAsync: typeof ImagePicker?.requestMediaLibraryPermissionsAsync,
-      launchImageLibraryAsync: typeof ImagePicker?.launchImageLibraryAsync,
-      requestCameraPermissionsAsync: typeof ImagePicker?.requestCameraPermissionsAsync,
-      launchCameraAsync: typeof ImagePicker?.launchCameraAsync,
-    });
-  }
-  
-  return available;
-};
-
+import { tokenProvider } from "../../src/api/token-provider";
+import { submitAnalysis } from "../../src/api/analysis";
 import { useTheme } from "../../src/hooks/use-theme";
-import { GradientBackground } from "../../src/components/GradientBackground";
-import { GlassCard } from "../../src/components/GlassCard";
-import { AnalysisCardVertical } from "../../src/components/AnalysisCardVertical";
-import { submitAnalysis, fetchAnalyses, deleteAnalysis } from "../../src/api/analysis";
-import { fetchSubscription } from "../../src/api/subscription";
-import { useQuery } from "@tanstack/react-query";
-
-// Membership Badge Component
-function MembershipBadge() {
-  const theme = useTheme();
-  const { data: subscription } = useQuery({
-    queryKey: ["subscription"],
-    queryFn: fetchSubscription,
-    staleTime: 60000, // Cache for 1 minute
-    retry: 1,
-    refetchOnWindowFocus: false
-  });
-
-  if (!subscription) return null;
-
-  const plan = subscription.plan;
-  const isPro = plan === "PRO";
-  const isPlus = plan === "PLUS";
-
-  return (
-    <View style={styles.membershipBadge}>
-      <BlurView intensity={20} tint="dark" style={styles.membershipBadgeBlur}>
-        <View style={styles.membershipBadgeContent}>
-          {isPro ? (
-            <>
-              <Ionicons name="diamond" size={14} color="#2EFAC0" />
-              <Text style={styles.membershipBadgeText}>PRO</Text>
-            </>
-          ) : isPlus ? (
-            <>
-              <Ionicons name="star" size={14} color="#53D8FF" />
-              <Text style={styles.membershipBadgeText}>PLUS</Text>
-            </>
-          ) : (
-            <>
-              <Ionicons name="person" size={14} color="rgba(255, 255, 255, 0.6)" />
-              <Text style={styles.membershipBadgeTextFree}>FREE</Text>
-            </>
-          )}
-        </View>
-      </BlurView>
-    </View>
-  );
-}
+import { LensMotif } from "../../src/components/Lens/LensMotif";
+import { AnimatedLens } from "../../src/components/Lens/AnimatedLens";
+import { ClaimInput } from "../../src/components/Input/ClaimInput";
+import { useLensState } from "../../src/hooks/useLensState";
 
 export default function AnalyzeScreen() {
   const theme = useTheme();
@@ -104,64 +32,32 @@ export default function AnalyzeScreen() {
   const queryClient = useQueryClient();
   const { isSignedIn, getToken } = useAuth();
   const params = useLocalSearchParams<{ openSheet?: string }>();
-  const [sheetVisible, setSheetVisible] = useState(false);
+  
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  
+  const { state: lensState, toInput, toLoading, reset } = useLensState();
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+  const [permissionStatus, requestPermission] = ImagePicker.useMediaLibraryPermissions();
 
-  // Handle incoming share intents
-  useEffect(() => {
-    if (hasShareIntent && shareIntent) {
-      console.log("[Analyze] Received share intent:", shareIntent);
-      
-      // Handle Web URL or Text (Instagram links, etc.)
-      // Check for specific properties rather than 'type'
-      if (shareIntent.webUrl || shareIntent.text || (shareIntent as any).url) {
-        const content = shareIntent.webUrl || shareIntent.text || (shareIntent as any).url;
-        
-        if (content && typeof content === "string") {
-          setInput(content);
-          setSheetVisible(true);
-        }
-      } 
-      // Handle Image/Media (files array)
-      else if (shareIntent.files && shareIntent.files.length > 0) {
-        const file = shareIntent.files[0];
-        // Prioritize file path/uri
-        const uri = file.path || (file as any).contentUri || (file as any).uri;
-        
-        if (uri && typeof uri === "string") {
-          setSelectedImage(uri);
-          setSheetVisible(true);
-        }
-      }
-      
-      // Reset immediately to avoid re-triggering
-      resetShareIntent();
-    }
-    // Remove resetShareIntent from dependencies to avoid loops if it's not memoized
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasShareIntent, shareIntent]);
+  // Reset state on focus
+  useFocusEffect(
+    useCallback(() => {
+      reset();
+      setInput("");
+      setSelectedImage(null);
+      setIsInputFocused(false);
+    }, [reset])
+  );
 
-  // Open sheet when navigating from history page
-  useEffect(() => {
-    if (params.openSheet === "true") {
-      setSheetVisible(true);
-      // Clear the param to avoid reopening on re-render
-      router.setParams({ openSheet: undefined });
-    }
-  }, [params.openSheet, router]);
-
-  // Update token provider when auth state changes
+  // Update token provider
   useEffect(() => {
     const updateToken = async () => {
       if (isSignedIn && getToken) {
         try {
           const token = await getToken();
           tokenProvider.setToken(token);
-          console.log("[Analyze] Token set in provider:", !!token);
         } catch (error) {
           console.error("[Analyze] Error getting token:", error);
           tokenProvider.setToken(null);
@@ -172,1050 +68,254 @@ export default function AnalyzeScreen() {
     };
     updateToken();
   }, [isSignedIn, getToken]);
-  
-  // Fetch user's recent analyses
-  const { data: analysesData, refetch: refetchAnalyses, error: analysesError, isLoading: analysesLoading } = useQuery({
-    queryKey: ["analyses", "recent"],
-    queryFn: async () => {
-      try {
-        const result = await fetchAnalyses(10);
-        console.log("[Analyze] Fetched analyses:", result?.edges?.length || 0, "analyses");
-        console.log("[Analyze] Analyses data:", JSON.stringify(result, null, 2));
-        return result;
-      } catch (error: any) {
-        // Log full error details for debugging
-        console.error("[Analyze] Error fetching analyses:", {
-          message: error?.message,
-          stack: error?.stack,
-          name: error?.name,
-          cause: error?.cause,
-          response: error?.response,
-          data: error?.data
-        });
-        // Re-throw with more context if available
-        if (error?.message) {
-          throw new Error(`Failed to fetch analyses: ${error.message}`);
-        }
-        throw error;
-      }
-    },
-    enabled: isSignedIn ?? false, // Only fetch when user is authenticated
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when screen comes into focus
-    retry: 1 // Retry once on failure
-  });
 
-  // Log authentication and query state
+  // Handle Share Intent
   useEffect(() => {
-    console.log("[Analyze] Auth state:", { isSignedIn, analysesLoading, error: analysesError?.message });
-    if (analysesData) {
-      console.log("[Analyze] Analyses count:", analysesData?.edges?.length || 0);
-    }
-  }, [isSignedIn, analysesData, analysesLoading, analysesError]);
-
-  // Refetch analyses when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      if (isSignedIn) {
-        // Small delay to ensure backend has processed any new analyses
-        setTimeout(() => {
-          refetchAnalyses();
-          queryClient.invalidateQueries({ queryKey: ["analyses"] });
-        }, 500);
-      }
-    }, [isSignedIn, refetchAnalyses, queryClient])
-  );
-
-  const recentAnalyses = useMemo(() => {
-    if (!analysesData?.edges) return [];
-    return analysesData.edges
-      .filter((edge) => edge.node.status === "COMPLETED")
-      .slice(0, 5)
-      .map((edge) => {
-        const node = edge.node;
-        // Map bias to topic (bias values: LEFT, CENTER, RIGHT -> map to political)
-        // Or use a default topic based on analysis content
-        let topic = "general";
-        if (node.bias) {
-          topic = "political"; // Bias indicates political analysis
+    if (hasShareIntent && shareIntent) {
+      let handled = false;
+      if (shareIntent.webUrl || shareIntent.text || (shareIntent as any).url) {
+        const content = shareIntent.webUrl || shareIntent.text || (shareIntent as any).url;
+        if (content && typeof content === "string") {
+          setInput(content);
+          toInput();
+          setIsInputFocused(true);
+          handled = true;
         }
-        return {
-          id: node.id,
-          title: node.claims?.[0]?.text || node.summary || "Analysis",
-          topic: topic,
-          score: node.score ?? 0,
-          verdict: node.verdict ?? null,
-          createdAt: node.createdAt
-        };
-      });
-  }, [analysesData]);
-
-  const placeholderTopic = useMemo(() => {
-    if (input.includes("election") || input.includes("treaty")) return "political";
-    if (input.includes("flu") || input.includes("cdc")) return "health";
-    if (input.includes("image") || input.includes("video")) return "media";
-    return "general";
-  }, [input]);
-
-  const handleResubmit = useCallback((id: string, title: string) => {
-    setInput(title);
-    setSheetVisible(true);
-  }, []);
-
-  const handleDelete = useCallback((id: string) => {
-    // Wrap async operation in synchronous callback
-    // The component expects a synchronous function, so we handle the promise here
-    (async () => {
-      try {
-        await deleteAnalysis(id);
-        // Invalidate queries to refresh the list
-        queryClient.invalidateQueries({ queryKey: ["analyses"] });
-      } catch (error: any) {
-        console.error("Failed to delete analysis:", error);
-        // Extract error message, avoiding double "Error:" prefix
-        const errorMessage = error?.message || "Failed to delete analysis. Please try again.";
-        const cleanMessage = errorMessage.replace(/^Error:\s*/i, "").trim() || "Failed to delete analysis. Please try again.";
-        Alert.alert("Error", cleanMessage);
+      } else if (shareIntent.files && shareIntent.files.length > 0) {
+        const file = shareIntent.files[0];
+        const uri = file.path || (file as any).contentUri || (file as any).uri;
+        if (uri && typeof uri === "string") {
+          setSelectedImage(uri);
+          toInput();
+          handled = true;
+        }
       }
-    })();
-  }, [queryClient]);
-
-  const handleShare = useCallback((id: string, title: string, score: number) => {
-    router.push({
-      pathname: "/modals/share",
-      params: {
-        score: score.toString(),
-        verdict: "Analysis",
-        analysisId: id
+      
+      if (!handled) {
+        Alert.alert("Unsupported Content", "The shared content could not be processed.");
       }
-    });
-  }, [router]);
+      resetShareIntent();
+    }
+  }, [hasShareIntent, shareIntent, toInput, resetShareIntent]);
 
-  const submitMutation = useMutation({
-    mutationFn: () =>
-      submitAnalysis({
-        text: input.trim().length ? input.trim() : null,
-        contentUri: selectedImage,
-        mediaType: selectedImage ? "IMAGE" : "TEXT",
-        topicHint: placeholderTopic.toUpperCase()
-      }),
-    onSuccess: ({ analysisId }) => {
-      // Clear input and close sheet first
-      setSheetVisible(false);
-      setErrorMessage(null);
-      setInput("");
-      setSelectedImage(null);
-      
-      // Invalidate queries immediately
-      queryClient.invalidateQueries({ queryKey: ["analyses"] });
-      
-      // Navigate to result page
-      router.push({
-        pathname: `/result/${analysisId}`
+  // Submit Mutation
+  const mutation = useMutation({
+    mutationFn: async (data: { text?: string; imageUri?: string }) => {
+      const mediaType = data.imageUri ? "IMAGE" : "TEXT";
+      return await submitAnalysis({
+        text: data.text,
+        contentUri: data.imageUri,
+        mediaType,
       });
     },
-    onError: (err: Error) => {
-      setErrorMessage(err.message);
-    }
+    onMutate: () => {
+      toLoading();
+    },
+    onSuccess: (data) => {
+      console.log("[Analyze] Submission success, job ID:", data.analysisId);
+      queryClient.invalidateQueries({ queryKey: ["analyses"] });
+      router.push(`/result/${data.analysisId}`);
+    },
+    onError: (error: any) => {
+      console.error("[Analyze] Submission error:", error);
+      Alert.alert("Error", "Failed to submit analysis. Please try again.");
+      reset();
+    },
   });
 
-  const handleAnalyze = () => {
-    // Validation should match button enablement logic: require either text OR image
-    if (!input.trim().length && !selectedImage) {
-      setErrorMessage("Please paste a link, description, or select an image before analyzing.");
-      return;
-    }
-    submitMutation.mutate();
-  };
-
-  return (
-    <GradientBackground>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingTop: Platform.OS === "ios" ? 60 : 40,
-            paddingBottom: theme.spacing(6)
-          }
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={[styles.header, { marginBottom: theme.spacing(1) }]}>
-          <Text
-            style={[
-              styles.headerTitle,
-              {
-                color: theme.colors.text,
-                fontSize: theme.typography.heading,
-                fontWeight: "700",
-                letterSpacing: -0.5
-              }
-            ]}
-          >
-            Vett
-          </Text>
-          <MembershipBadge />
-        </View>
-
-        {/* Dominant glass card for new analysis - Multiple concentrated color points with blur */}
-        <TouchableOpacity
-          onPress={() => setSheetVisible(true)}
-          activeOpacity={0.9}
-          style={styles.mainCard}
-        >
-          <View
-            style={[
-              styles.mainCardGradient,
-              {
-                borderRadius: theme.radii.lg,
-                overflow: "hidden",
-                backgroundColor: "rgba(10, 14, 26, 0.85)",
-                borderWidth: 1,
-                borderColor: "rgba(255, 255, 255, 0.1)"
-              }
-            ]}
-          >
-            {/* Dark base background */}
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: "rgba(10, 14, 26, 0.90)"
-                }
-              ]}
-            />
-            
-            {/* Concentrated color point 1 - Top left (bright blue) */}
-            <View
-              style={[
-                styles.colorSpot,
-                {
-                  position: "absolute",
-                  top: -40,
-                  left: -40,
-                  width: 160,
-                  height: 160,
-                  borderRadius: 80,
-                  overflow: "hidden"
-                }
-              ]}
-            >
-              <LinearGradient
-                colors={[
-                  "rgba(90, 143, 212, 0.95)",
-                  "rgba(90, 143, 212, 0.70)",
-                  "rgba(90, 143, 212, 0.40)",
-                  "rgba(90, 143, 212, 0)"
-                ]}
-                start={{ x: 0.5, y: 0.5 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </View>
-            
-            {/* Concentrated color point 2 - Top right (bright teal) */}
-            <View
-              style={[
-                styles.colorSpot,
-                {
-                  position: "absolute",
-                  top: -30,
-                  right: -30,
-                  width: 140,
-                  height: 140,
-                  borderRadius: 70,
-                  overflow: "hidden"
-                }
-              ]}
-            >
-              <LinearGradient
-                colors={[
-                  "rgba(106, 168, 184, 0.90)",
-                  "rgba(106, 168, 184, 0.65)",
-                  "rgba(106, 168, 184, 0.35)",
-                  "rgba(106, 168, 184, 0)"
-                ]}
-                start={{ x: 0.5, y: 0.5 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </View>
-            
-            {/* Concentrated color point 3 - Bottom left (bright purple-blue) */}
-            <View
-              style={[
-                styles.colorSpot,
-                {
-                  position: "absolute",
-                  bottom: -50,
-                  left: -20,
-                  width: 180,
-                  height: 180,
-                  borderRadius: 90,
-                  overflow: "hidden"
-                }
-              ]}
-            >
-              <LinearGradient
-                colors={[
-                  "rgba(138, 127, 168, 0.85)",
-                  "rgba(138, 127, 168, 0.60)",
-                  "rgba(138, 127, 168, 0.30)",
-                  "rgba(138, 127, 168, 0)"
-                ]}
-                start={{ x: 0.5, y: 0.5 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </View>
-            
-            {/* Concentrated color point 4 - Bottom right (bright blue) */}
-            <View
-              style={[
-                styles.colorSpot,
-                {
-                  position: "absolute",
-                  bottom: -40,
-                  right: -50,
-                  width: 150,
-                  height: 150,
-                  borderRadius: 75,
-                  overflow: "hidden"
-                }
-              ]}
-            >
-              <LinearGradient
-                colors={[
-                  "rgba(90, 143, 212, 0.90)",
-                  "rgba(90, 143, 212, 0.65)",
-                  "rgba(90, 143, 212, 0.35)",
-                  "rgba(90, 143, 212, 0)"
-                ]}
-                start={{ x: 0.5, y: 0.5 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </View>
-            
-            {/* Blur filter over entire card, under text - extends beyond edges to cover gaps */}
-            <BlurView
-              intensity={60}
-              tint="dark"
-              style={{
-                position: "absolute",
-                top: -20,
-                left: -20,
-                right: -20,
-                bottom: -20
-              }}
-            />
-            
-            {/* Content */}
-            <View style={styles.mainCardContent}>
-              <View style={styles.mainCardHeader}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    {
-                      backgroundColor: "rgba(255, 255, 255, 0.15)",
-                      borderRadius: theme.radii.md
-                    }
-                  ]}
-                >
-                  <Ionicons name="scan-outline" size={28} color="#FFFFFF" />
-                </View>
-                <View style={styles.mainCardText}>
-                  <Text
-                    style={[
-                      styles.mainCardTitle,
-                      {
-                        color: "#FFFFFF",
-                        fontSize: theme.typography.heading,
-                        lineHeight: theme.typography.heading * theme.typography.lineHeight.tight,
-                        fontWeight: "700"
-                      }
-                    ]}
-                  >
-                    Analyze Content
-                  </Text>
-                  <Text
-                    style={[
-                      styles.mainCardSubtitle,
-                      {
-                        color: "rgba(255, 255, 255, 0.75)",
-                        fontSize: theme.typography.body,
-                        marginTop: theme.spacing(0.5)
-                      }
-                    ]}
-                  >
-                    Paste a link, upload a post, or import a screenshot
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="rgba(255, 255, 255, 0.6)" />
-              </View>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* Pro Tier Card */}
-        <TouchableOpacity
-          onPress={() => router.push("/modals/subscription")}
-          activeOpacity={0.9}
-          style={styles.proTierCard}
-        >
-          <LinearGradient
-            colors={["#5A8FD4", "#8A7FA8", "#FFB88C"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[
-              styles.proTierGradient,
-              {
-                borderRadius: theme.radii.lg,
-                overflow: "hidden",
-                padding: theme.spacing(3)
-              }
-            ]}
-          >
-            <View style={styles.proTierContent}>
-              <View style={styles.proTierLeft}>
-                <Text
-                  style={[
-                    styles.proTierTitle,
-                    {
-                      color: "#FFFFFF",
-                      fontSize: theme.typography.heading,
-                      fontWeight: "700",
-                      letterSpacing: -0.5,
-                      marginBottom: theme.spacing(1)
-                    }
-                  ]}
-                >
-                  Unlimited Analyses
-                </Text>
-                <Text
-                  style={[
-                    styles.proTierDescription,
-                    {
-                      color: "rgba(255, 255, 255, 0.9)",
-                      fontSize: theme.typography.body,
-                      lineHeight: theme.typography.body * theme.typography.lineHeight.relaxed,
-                      marginBottom: theme.spacing(2)
-                    }
-                  ]}
-                >
-                  Unlimited analyses, VettAI chat assistant, and advanced insights
-                </Text>
-                <Text
-                  style={[
-                    styles.proTierPrice,
-                    {
-                      color: "#FFFFFF",
-                      fontSize: theme.typography.body,
-                      fontWeight: "600"
-                    }
-                  ]}
-                >
-                  Try Pro for $6.99/month
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.proTierBadge,
-                  {
-                    backgroundColor: "rgba(0, 0, 0, 0.3)",
-                    borderRadius: theme.radii.md,
-                    paddingHorizontal: theme.spacing(2),
-                    paddingVertical: theme.spacing(1),
-                    borderWidth: 1,
-                    borderColor: "rgba(255, 255, 255, 0.3)"
-                  }
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.proTierBadgeText,
-                    {
-                      color: "#FFFFFF",
-                      fontSize: theme.typography.caption,
-                      fontWeight: "600",
-                      letterSpacing: 0.5
-                    }
-                  ]}
-                >
-                  Vett Pro
-                </Text>
-              </View>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color="rgba(255, 255, 255, 0.8)"
-              style={styles.proTierChevron}
-            />
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Recent analyses vertical list */}
-        {recentAnalyses.length > 0 && (
-          <View style={styles.section}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: theme.colors.textSecondary,
-                  fontSize: theme.typography.caption,
-                  letterSpacing: 0.5,
-                  textTransform: "uppercase",
-                  marginBottom: theme.spacing(2)
-                }
-              ]}
-            >
-              Recent Analyses
-            </Text>
-            <View style={styles.analysesList}>
-              {recentAnalyses.map((analysis) => (
-                <AnalysisCardVertical
-                  key={analysis.id}
-                  id={analysis.id}
-                  title={analysis.title}
-                  score={analysis.score}
-                  verdict={analysis.verdict}
-                  topic={analysis.topic}
-                  createdAt={analysis.createdAt}
-                  onResubmit={handleResubmit}
-                  onDelete={handleDelete}
-                  onShare={handleShare}
-                />
-              ))}
-            </View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Analysis input sheet */}
-      <AnalyzeSheet
-        visible={sheetVisible}
-        onClose={() => {
-          setSheetVisible(false);
-          setSelectedImage(null);
-          setInput("");
-        }}
-        input={input}
-        onChange={setInput}
-        onAnalyze={handleAnalyze}
-        topic={placeholderTopic}
-        loading={submitMutation.isPending}
-        errorMessage={errorMessage}
-        selectedImage={selectedImage}
-        onImageSelect={setSelectedImage}
-        onImageRemove={() => setSelectedImage(null)}
-      />
-    </GradientBackground>
-  );
-}
-
-interface SheetProps {
-  visible: boolean;
-  onClose: () => void;
-  input: string;
-  onChange: (value: string) => void;
-  onAnalyze: () => void;
-  topic: string;
-  loading?: boolean;
-  errorMessage?: string | null;
-  selectedImage: string | null;
-  onImageSelect: (uri: string | null) => void;
-  onImageRemove: () => void;
-}
-
-function AnalyzeSheet({ 
-  visible, 
-  onClose, 
-  input, 
-  onChange, 
-  onAnalyze, 
-  topic, 
-  loading, 
-  errorMessage,
-  selectedImage,
-  onImageSelect,
-  onImageRemove
-}: SheetProps) {
-  const theme = useTheme();
-
-  const requestImagePermissions = async () => {
-    if (!isImagePickerAvailable()) {
-      Alert.alert(
-        "Not Available", 
-        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
-      );
-      return false;
-    }
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "We need access to your photos to analyze images."
-      );
-      return false;
-    }
-    return true;
+  const handleSubmit = () => {
+    const trimmedInput = input.trim();
+    if (!trimmedInput && !selectedImage) return;
+    
+    Keyboard.dismiss();
+    setIsInputFocused(false);
+    mutation.mutate({
+      text: trimmedInput || undefined,
+      imageUri: selectedImage || undefined,
+    });
   };
 
   const pickImage = async () => {
-    if (!isImagePickerAvailable()) {
-      Alert.alert(
-        "Not Available", 
-        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
-      );
-      return;
-    }
-    const hasPermission = await requestImagePermissions();
-    if (!hasPermission) return;
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        onImageSelect(result.assets[0].uri);
+    if (permissionStatus?.status !== ImagePicker.PermissionStatus.GRANTED) {
+      const permission = await requestPermission();
+      if (!permission.granted) {
+        Alert.alert("Permission required", "Please allow access to your photos to upload images.");
+        return;
       }
-    } catch (error) {
-      console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image. Please try again.");
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setSelectedImage(result.assets[0].uri);
+      toInput();
     }
   };
 
-  const takePhoto = async () => {
-    if (!isImagePickerAvailable()) {
-      Alert.alert(
-        "Not Available", 
-        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
-      );
-      return;
-    }
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "We need access to your camera to take photos."
-      );
-      return;
-    }
-
-    try {
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        onImageSelect(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error taking photo:", error);
-      Alert.alert("Error", "Failed to take photo. Please try again.");
-    }
-  };
-
-  const showImageOptions = () => {
-    if (!isImagePickerAvailable()) {
-      Alert.alert(
-        "Not Available", 
-        "Image picker module is not available. Please rebuild the app with 'npx expo prebuild --clean' and 'pnpm ios'."
-      );
-      return;
-    }
-    Alert.alert(
-      "Select Image",
-      "Choose an option",
-      [
-        { text: "Camera", onPress: takePhoto },
-        { text: "Photo Library", onPress: pickImage },
-        { text: "Cancel", style: "cancel" }
-      ]
-    );
-  };
-  
   return (
-    <Modal
-      animationType="slide"
-      visible={visible}
-      onRequestClose={onClose}
-      transparent
-      statusBarTranslucent
-    >
-      <BlurView
-        intensity={20}
-        tint="dark"
-        style={StyleSheet.absoluteFill}
-      >
-        <View style={styles.sheetContainer}>
-          <GlassCard
-            intensity="heavy"
-            radius="lg"
-            style={{
-              borderBottomLeftRadius: 0,
-              borderBottomRightRadius: 0,
-              padding: theme.spacing(3)
-            }}
-          >
-            {/* Handle */}
-            <View
-              style={[
-                styles.sheetHandle,
-                {
-                  backgroundColor: theme.colors.border,
-                  width: 40,
-                  height: 4,
-                  borderRadius: 2,
-                  marginBottom: theme.spacing(3)
-                }
-              ]}
-            />
-            
-            <Text
-              style={[
-                styles.sheetTitle,
-                {
-                  color: theme.colors.text,
-                  fontSize: theme.typography.subheading,
-                  marginBottom: theme.spacing(2.5)
-                }
-              ]}
-            >
-              Add Context
-            </Text>
-            
-            {/* Image Input Section */}
-            <View style={{ marginBottom: theme.spacing(2) }}>
-              {selectedImage ? (
-                <View style={{ position: "relative", marginBottom: theme.spacing(2) }}>
-                  <Image
-                    source={{ uri: selectedImage }}
-                    style={{
-                      width: "100%",
-                      height: 200,
-                      borderRadius: theme.radii.md,
-                      resizeMode: "cover"
-                    }}
-                  />
-                  <TouchableOpacity
-                    onPress={onImageRemove}
-                    style={{
-                      position: "absolute",
-                      top: theme.spacing(1),
-                      right: theme.spacing(1),
-                      backgroundColor: theme.colors.danger,
-                      borderRadius: theme.radii.pill,
-                      width: 32,
-                      height: 32,
-                      alignItems: "center",
-                      justifyContent: "center"
-                    }}
-                  >
-                    <Ionicons name="close" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
+    <SafeAreaView style={styles.container}>
+      <TouchableWithoutFeedback onPress={() => {
+        Keyboard.dismiss();
+        setIsInputFocused(false);
+        if (!input && !selectedImage) reset();
+      }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.content}
+        >
+          <View style={styles.lensContainer}>
+            <View style={{ width: 360, height: 360, alignItems: 'center', justifyContent: 'center' }}>
+              {lensState === "loading" ? (
+                <AnimatedLens size={360} />
               ) : (
-                <TouchableOpacity
-                  onPress={showImageOptions}
-                  style={[
-                    {
-                      borderRadius: theme.radii.md,
-                      borderWidth: 2,
-                      borderColor: theme.colors.border,
-                      borderStyle: "dashed",
-                      padding: theme.spacing(3),
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: theme.colors.card,
-                      marginBottom: theme.spacing(2)
-                    }
-                  ]}
-                >
-                  <Ionicons name="image-outline" size={32} color={theme.colors.textSecondary} />
-                  <Text
-                    style={[
-                      {
-                        color: theme.colors.textSecondary,
-                        fontSize: theme.typography.body,
-                        marginTop: theme.spacing(1)
-                      }
-                    ]}
-                  >
-                    Add Image (Optional)
-                  </Text>
-                </TouchableOpacity>
+                <LensMotif size={360} />
               )}
-            </View>
-
-            <TextInput
-              multiline
-              value={input}
-              onChangeText={onChange}
-              placeholder={selectedImage ? "Add description or context (optional)…" : "Paste any link, transcription, or description…"}
-              placeholderTextColor={theme.colors.textTertiary}
-              style={[
-                styles.textInput,
-                {
-                  minHeight: selectedImage ? 80 : 120,
-                  borderRadius: theme.radii.md,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  padding: theme.spacing(2),
-                  color: theme.colors.text,
-                  backgroundColor: theme.colors.card,
-                  fontSize: theme.typography.body,
-                  lineHeight: theme.typography.body * theme.typography.lineHeight.normal
-                }
-              ]}
-              textAlignVertical="top"
-            />
-            
-            {errorMessage && (
-              <View
-                style={[
-                  styles.errorContainer,
-                  {
-                    backgroundColor: theme.colors.danger + "20",
-                    borderRadius: theme.radii.sm,
-                    padding: theme.spacing(1.5),
-                    marginTop: theme.spacing(2)
-                  }
-                ]}
-              >
-                <Text style={{ color: theme.colors.danger, fontSize: theme.typography.caption }}>
-                  {errorMessage}
-                </Text>
+              
+              {/* Overlay Content */}
+              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', zIndex: 10 }]}>
+                {lensState === "loading" ? (
+                  <View style={{ alignItems: 'center', paddingHorizontal: 40 }}>
+                    <Text style={styles.loadingText}>Analyzing claim...</Text>
+                    {input ? (
+                      <Text style={styles.claimPreview} numberOfLines={2}>
+                        "{input}"
+                      </Text>
+                    ) : selectedImage ? (
+                      <Text style={styles.claimPreview}>Analyzing image...</Text>
+                    ) : null}
+                  </View>
+                ) : (
+                  <View style={{ alignItems: 'center', width: '100%' }}>
+                    {isInputFocused || input || selectedImage ? (
+                      <View style={{ width: "100%", alignItems: "center" }}>
+                        <ClaimInput
+                          value={input}
+                          onChangeText={(text) => setInput(text)}
+                          onSubmitEditing={handleSubmit}
+                          returnKeyType="go"
+                          isFocused={isInputFocused}
+                          onFocus={() => setIsInputFocused(true)}
+                          onBlur={() => setIsInputFocused(false)}
+                          placeholder="Paste a claim..."
+                          style={{ marginTop: 0, color: "#FFFFFF", textAlign: "center" }}
+                          placeholderTextColor="rgba(255,255,255,0.5)"
+                        />
+                        {selectedImage && (
+                          <View style={styles.imagePreview}>
+                            <Text style={styles.imageText}>Image Selected</Text>
+                            <TouchableOpacity onPress={() => setSelectedImage(null)}>
+                              <Ionicons name="close-circle" size={20} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        <TouchableOpacity 
+                          onPress={handleSubmit} 
+                          style={[styles.submitButton, mutation.isPending && { opacity: 0.5 }]}
+                          disabled={mutation.isPending}
+                        >
+                          <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity onPress={() => {
+                        setIsInputFocused(true);
+                        toInput();
+                      }}>
+                        <Text style={styles.promptText}>
+                          Paste a claim to verify
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </View>
-            )}
-            
-            <TouchableOpacity
-              onPress={onAnalyze}
-              disabled={loading || (!input.trim().length && !selectedImage)}
-              activeOpacity={0.8}
-              style={[
-                styles.analyzeButton,
-                {
-                  borderRadius: theme.radii.pill,
-                  paddingVertical: theme.spacing(2),
-                  marginTop: theme.spacing(3),
-                  backgroundColor:
-                    loading || (!input.trim().length && !selectedImage)
-                      ? theme.colors.card
-                      : theme.colors.primary,
-                  opacity: loading || (!input.trim().length && !selectedImage) ? 0.5 : 1
-                }
-              ]}
-            >
-              <Text
-                style={[
-                  styles.analyzeButtonText,
-                  {
-                    color: loading || (!input.trim().length && !selectedImage) ? theme.colors.textTertiary : theme.colors.text,
-                    fontSize: theme.typography.body,
-                    fontWeight: "600"
-                  }
-                ]}
-              >
-                {loading ? "Analyzing..." : `Analyze • ${topic.toUpperCase()}`}
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={onClose}
-              style={[
-                styles.cancelButton,
-                {
-                  paddingVertical: theme.spacing(1.5),
-                  marginTop: theme.spacing(1.5)
-                }
-              ]}
-            >
-              <Text
-                style={[
-                  styles.cancelButtonText,
-                  {
-                    color: theme.colors.textSecondary,
-                    fontSize: theme.typography.body
-                  }
-                ]}
-              >
-                Cancel
-              </Text>
-            </TouchableOpacity>
-          </GlassCard>
-        </View>
-      </BlurView>
-    </Modal>
+            </View>
+          </View>
+
+          {/* Action Buttons (Image, etc) - visible when not loading */}
+          {lensState !== "loading" && !isInputFocused && !input && !selectedImage && (
+            <View style={styles.actions}>
+              <TouchableOpacity onPress={pickImage} style={styles.actionIcon}>
+                <Ionicons name="image-outline" size={24} color="#6B6B6B" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
+    backgroundColor: "#000000",
   },
   content: {
-    paddingHorizontal: 20,
-    gap: 24
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 100, // Visual offset
   },
-  header: {
+  lensContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  promptText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 16,
+    color: "#E5E5E5",
+    letterSpacing: 0.5,
+  },
+  loadingContainer: {
+    alignItems: "center",
+  },
+  loadingText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 16,
+    color: "#E5E5E5",
     marginBottom: 8,
+  },
+  claimPreview: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: "#A0A0A0",
+    maxWidth: 240,
+    textAlign: "center",
+  },
+  imagePreview: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%"
+    backgroundColor: "rgba(255,255,255,0.1)",
+    padding: 8,
+    borderRadius: 20,
+    marginTop: 10,
+    gap: 8,
   },
-  headerTitle: {
-    letterSpacing: -0.5
+  imageText: {
+    color: "#E5E5E5",
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
   },
-  mainCard: {
-    marginBottom: 8
-  },
-  mainCardGradient: {
-    width: "100%",
-    minHeight: 140,
-    position: "relative"
-  },
-  colorSpot: {
-    overflow: "hidden"
-  },
-  mainCardContent: {
-    padding: 24
-  },
-  mainCardHeader: {
-    flexDirection: "row",
+  submitButton: {
+    marginTop: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
-    gap: 16
+    justifyContent: "center",
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  mainCardText: {
-    flex: 1
-  },
-  mainCardTitle: {
-    fontWeight: "600",
-    letterSpacing: -0.5
-  },
-  mainCardSubtitle: {
-    letterSpacing: 0.2
-  },
-  section: {
-    marginTop: 8
-  },
-  sectionTitle: {
-    fontWeight: "600"
-  },
-  analysesList: {
-    gap: 16
-  },
-  proTierCard: {
-    marginBottom: 16
-  },
-  proTierGradient: {
-    position: "relative"
-  },
-  proTierContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start"
-  },
-  proTierLeft: {
-    flex: 1,
-    marginRight: 16
-  },
-  proTierTitle: {
-    letterSpacing: -0.3
-  },
-  proTierDescription: {
-    letterSpacing: 0.1
-  },
-  proTierPrice: {
-    letterSpacing: 0.2
-  },
-  proTierBadge: {
-    alignSelf: "flex-start"
-  },
-  proTierBadgeText: {
-    textTransform: "uppercase"
-  },
-  proTierChevron: {
+  actions: {
     position: "absolute",
-    bottom: 24,
-    right: 24
+    bottom: 40,
   },
-  sheetContainer: {
-    flex: 1,
-    justifyContent: "flex-end"
+  actionIcon: {
+    padding: 12,
   },
-  sheetHandle: {
-    alignSelf: "center"
-  },
-  sheetTitle: {
-    fontWeight: "600",
-    letterSpacing: -0.3
-  },
-  textInput: {
-    // Styled inline
-  },
-  errorContainer: {
-    // Styled inline
-  },
-  analyzeButton: {
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  analyzeButtonText: {
-    letterSpacing: 0.2
-  },
-  cancelButton: {
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  cancelButtonText: {
-    letterSpacing: 0.1
-  },
-  membershipBadge: {
-    borderRadius: 12,
-    overflow: "hidden"
-  },
-  membershipBadgeBlur: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    backgroundColor: "rgba(15, 15, 15, 0.6)"
-  },
-  membershipBadgeContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  membershipBadgeText: {
-    color: "#2EFAC0",
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.5,
-    textTransform: "uppercase"
-  },
-  membershipBadgeTextFree: {
-    color: "rgba(255, 255, 255, 0.6)",
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.5,
-    textTransform: "uppercase"
-  }
 });

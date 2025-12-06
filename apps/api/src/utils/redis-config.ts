@@ -1,5 +1,5 @@
 import IORedis, { type RedisOptions } from "ioredis";
-import { URL } from "node:url";
+  import { URL } from "node:url";
 
 /**
  * Normalize Redis URL for Upstash - converts redis:// to rediss:// if needed

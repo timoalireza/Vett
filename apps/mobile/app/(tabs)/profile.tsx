@@ -1,319 +1,135 @@
-import { Text, TouchableOpacity, View, StyleSheet, Platform, ScrollView, Linking, Alert } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, Pressable, Linking, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import { useUser } from "@clerk/clerk-expo";
-
-import { useTheme } from "../../src/hooks/use-theme";
-import { GradientBackground } from "../../src/components/GradientBackground";
-import { GlassCard } from "../../src/components/GlassCard";
-
-const settingsSections = [
-  {
-    title: "Account",
-    items: [
-      { label: "Profile", icon: "person-outline", route: "/settings/profile" },
-      { label: "Request Features", icon: "bulb-outline", action: "requestFeatures" }
-    ]
-  },
-  {
-    title: "Preferences",
-    items: [
-      { label: "Notifications", icon: "notifications-outline", route: "/settings/notifications" }
-    ]
-  },
-  {
-    title: "About",
-    items: [
-      { label: "About Vett", icon: "information-circle-outline", route: "/settings/about" },
-      { label: "Privacy Policy", icon: "shield-checkmark-outline", route: "/settings/privacy" },
-      { label: "Terms of Service", icon: "document-text-outline", route: "/settings/terms" }
-    ]
-  }
-];
+import { useAuth, useUser } from "@clerk/clerk-expo";
+import { LensMotif } from "../../src/components/Lens/LensMotif";
+import { SettingsRow } from "../../src/components/Common/SettingsRow";
 
 export default function ProfileScreen() {
-  const theme = useTheme();
   const router = useRouter();
+  const { signOut } = useAuth();
   const { user } = useUser();
-  
-  // Get user display name
-  const displayName = user 
-    ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.fullName || user.primaryEmailAddress?.emailAddress?.split("@")[0] || "User"
-    : "Guest Investigator";
-  
-  const userEmail = user?.primaryEmailAddress?.emailAddress || "guest@vett.app";
 
-  const handleRequestFeatures = () => {
-    const email = "support@vett.app";
-    const subject = "Feature Request";
-    const body = `Hi Vett Team,\n\nI'd like to request the following feature:\n\n[Describe your feature request here]\n\nThanks!`;
-    const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    
-    Linking.canOpenURL(mailtoUrl)
-      .then((supported) => {
-        if (supported) {
-          return Linking.openURL(mailtoUrl);
-        } else {
-          Alert.alert(
-            "Email Not Available",
-            `Please send your feature request to ${email}`,
-            [{ text: "OK" }]
-          );
-        }
-      })
-      .catch((err) => {
-        console.error("Error opening email:", err);
-        Alert.alert(
-          "Error",
-          `Please send your feature request to ${email}`,
-          [{ text: "OK" }]
-        );
-      });
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.replace("/signin");
+    } catch (error) {
+      console.error("Sign out error:", error);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+    }
   };
 
   return (
-    <GradientBackground>
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingTop: Platform.OS === "ios" ? 20 : 16,
-              paddingBottom: 120 // Space for tab bar
-            }
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Profile Header */}
-          <GlassCard radius="lg" intensity="medium" style={[styles.profileCard, { marginBottom: theme.spacing(1) }]}>
-            <View style={styles.profileContent}>
-              <View
-                style={[
-                  styles.avatarContainer,
-                  {
-                    backgroundColor: theme.colors.primary + "30",
-                    borderRadius: theme.radii.lg,
-                    width: 72,
-                    height: 72,
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }
-                ]}
-              >
-                <Ionicons name="person" size={36} color={theme.colors.primary} />
-              </View>
-              <View style={styles.profileInfo}>
-                <Text
-                  style={[
-                    styles.profileName,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.subheading,
-                      lineHeight: theme.typography.subheading * theme.typography.lineHeight.tight
-                    }
-                  ]}
-                >
-                  {displayName}
-                </Text>
-                <Text
-                  style={[
-                    styles.profileEmail,
-                    {
-                      color: theme.colors.textSecondary,
-                      fontSize: theme.typography.body,
-                      marginTop: theme.spacing(0.5)
-                    }
-                  ]}
-                >
-                  {userEmail}
-                </Text>
-              </View>
-            </View>
-          </GlassCard>
+    <SafeAreaView style={styles.container}>
+      <ScrollView>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Profile</Text>
+        </View>
 
-          {/* Settings Sections */}
-          {settingsSections.map((section, sectionIndex) => (
-            <View key={section.title} style={styles.section}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: theme.colors.textTertiary,
-                    fontSize: theme.typography.caption,
-                    letterSpacing: 0.5,
-                    textTransform: "uppercase",
-                    marginBottom: theme.spacing(1.5),
-                    marginTop: sectionIndex > 0 ? theme.spacing(3) : 0
-                  }
-                ]}
-              >
-                {section.title}
-              </Text>
-              <GlassCard radius="md" intensity="light">
-                {section.items.map((item, itemIndex) => (
-                  <View key={item.label}>
-                    {itemIndex > 0 && (
-                      <View
-                        style={[
-                          styles.divider,
-                          {
-                            backgroundColor: theme.colors.borderLight,
-                            height: 1,
-                            marginLeft: theme.spacing(3)
-                          }
-                        ]}
-                      />
-                    )}
-                    <TouchableOpacity
-                        style={[
-                          styles.settingItem,
-                          {
-                            paddingVertical: theme.spacing(2.5),
-                            paddingHorizontal: theme.spacing(3),
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "space-between"
-                          }
-                        ]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          if (item.route) {
-                            router.push(item.route as any);
-                          } else if (item.action === "requestFeatures") {
-                            handleRequestFeatures();
-                          }
-                        }}
-                      >
-                        <View style={styles.settingLeft}>
-                          <View
-                            style={[
-                              styles.settingIcon,
-                              {
-                                backgroundColor: theme.colors.card,
-                                borderRadius: theme.radii.sm,
-                                width: 36,
-                                height: 36,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                marginRight: theme.spacing(2.5)
-                              }
-                            ]}
-                          >
-                            <Ionicons
-                              name={item.icon as keyof typeof Ionicons.glyphMap}
-                              size={20}
-                              color={theme.colors.textSecondary}
-                            />
-                          </View>
-                          <Text
-                            style={[
-                              styles.settingLabel,
-                              {
-                                color: theme.colors.text,
-                                fontSize: theme.typography.body
-                              }
-                            ]}
-                          >
-                            {item.label}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
-                      </TouchableOpacity>
-                  </View>
-                ))}
-              </GlassCard>
-            </View>
-          ))}
+        {/* User section */}
+        <View style={styles.userSection}>
+          <LensMotif size={64} />
+          <Text style={styles.userEmail}>
+            {user?.primaryEmailAddress?.emailAddress || "user@vett.app"}
+          </Text>
+        </View>
 
-          {/* Version Info */}
-          <View style={styles.versionContainer}>
-            <Text
-              style={[
-                styles.versionText,
-                {
-                  color: theme.colors.textTertiary,
-                  fontSize: theme.typography.small,
-                  textAlign: "center"
-                }
-              ]}
-            >
-              v0.1.0 • Internal build
-            </Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </GradientBackground>
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Settings list */}
+        <View style={styles.settingsList}>
+          <SettingsRow 
+            icon="settings-outline" 
+            label="Settings" 
+            onPress={() => router.push("/settings")} 
+          />
+          <SettingsRow 
+            icon="notifications-outline" 
+            label="Notifications" 
+            onPress={() => router.push("/settings/notifications")} 
+          />
+          <SettingsRow 
+            icon="color-palette-outline" 
+            label="Appearance" 
+            onPress={() => {}} 
+            value="Dark"
+          />
+          <SettingsRow 
+            icon="help-circle-outline" 
+            label="Help & Support" 
+            onPress={() => Linking.openURL("mailto:support@vett.app")} 
+          />
+          <SettingsRow 
+            icon="document-text-outline" 
+            label="Terms & Privacy" 
+            onPress={() => router.push("/settings/terms")} 
+          />
+        </View>
+
+        {/* Sign out */}
+        <View style={styles.signOutContainer}>
+          <Pressable onPress={handleSignOut} style={styles.signOutButton}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
+    backgroundColor: "#000000",
   },
-  scrollView: {
-    flex: 1
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
-  content: {
-    paddingHorizontal: 20,
-    gap: 20
+  title: {
+    fontFamily: "Inter_200ExtraLight",
+    fontSize: 28,
+    color: "#FFFFFF",
   },
-  profileCard: {
-    marginBottom: 4
-  },
-  profileContent: {
-    flexDirection: "row",
+  userSection: {
     alignItems: "center",
-    gap: 16,
-    padding: 24
+    paddingVertical: 32,
   },
-  avatarContainer: {
-    // Styled inline
-  },
-  profileInfo: {
-    flex: 1
-  },
-  profileName: {
-    fontWeight: "600",
-    letterSpacing: -0.3
-  },
-  profileEmail: {
-    letterSpacing: 0.1
-  },
-  section: {
-    // Container for section
-  },
-  sectionTitle: {
-    fontWeight: "600"
+  userEmail: {
+    marginTop: 16,
+    fontFamily: "Inter_400Regular",
+    fontSize: 16,
+    color: "#E5E5E5",
   },
   divider: {
-    // Styled inline
+    height: 1,
+    backgroundColor: "#1A1A1A",
+    marginHorizontal: 16,
   },
-  settingItem: {
-    // Styled inline
+  settingsList: {
+    paddingTop: 24,
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  settingLeft: {
-    flexDirection: "row",
+  signOutContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 32,
+    paddingBottom: 40,
+  },
+  signOutButton: {
+    backgroundColor: "#0A0A0A",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1A1A1A",
+    paddingVertical: 16,
     alignItems: "center",
-    flex: 1
   },
-  settingIcon: {
-    // Styled inline
+  signOutText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: "#EF4444",
   },
-  settingLabel: {
-    fontWeight: "500",
-    letterSpacing: 0.1
-  },
-  settingSubtext: {
-    letterSpacing: 0.1
-  },
-  versionContainer: {
-    paddingVertical: 24,
-    alignItems: "center"
-  },
-  versionText: {
-    letterSpacing: 0.2
-  }
 });

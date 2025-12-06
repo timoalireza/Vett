@@ -1,30 +1,34 @@
 import { darkPalette } from "./dark";
 import { lightPalette } from "./light";
+import { colors } from "../styles/colors";
 
 export type ThemeMode = "dark" | "light";
 
 function createTheme(palette: typeof darkPalette) {
+  // Use new colors for dark theme, fall back to palette for light (if we supported it, but we're going dark-only basically)
+  // Actually, let's just map the new colors to the theme structure
+  
   return {
     colors: {
-      background: palette.background,
-      backgroundSecondary: palette.backgroundSecondary,
-      backgroundTertiary: palette.backgroundTertiary,
-      text: palette.textPrimary,
-      textSecondary: palette.textSecondary,
-      textTertiary: palette.textTertiary,
-      textMuted: palette.textQuaternary,
-      subtitle: palette.textSecondary,
-      card: palette.glassLight,
-      surface: palette.glassMedium,
-      border: palette.border,
-      borderLight: palette.borderLight,
-      borderHeavy: palette.borderHeavy,
-      primary: palette.accent.blue,
-      secondary: palette.accent.purple,
-      highlight: palette.accent.teal,
-      warning: palette.warning,
-      danger: palette.error,
-      success: palette.success
+      background: colors.void, // Pure black
+      backgroundSecondary: colors.surface,
+      backgroundTertiary: colors.border,
+      text: colors.secondary, // #E5E5E5 (Off White)
+      textSecondary: colors.muted, // #8A8A8A (Gray)
+      textTertiary: colors.subtle,
+      textMuted: colors.muted,
+      subtitle: colors.secondary,
+      card: colors.surface, // #0A0A0A
+      surface: colors.surface,
+      border: colors.border, // #1A1A1A
+      borderLight: colors.border,
+      borderHeavy: colors.border,
+      primary: colors.brand,
+      secondary: colors.brand,
+      highlight: colors.brand, // #2EFAC0
+      warning: colors.warning,
+      danger: colors.danger,
+      success: colors.success
     },
     spacing: (factor: number) => factor * 8,
     radii: {
@@ -48,7 +52,7 @@ function createTheme(palette: typeof darkPalette) {
         relaxed: 1.6
       }
     },
-    // Glass effects
+    // Glass effects (keeping existing values for compatibility if used elsewhere, but new UI doesn't use glass much)
     glass: {
       blur: {
         light: 20,
