@@ -303,7 +303,7 @@ export const UnicornStudioScene: React.FC<UnicornStudioSceneProps> = ({
         onMessage={handleMessage}
         onError={handleError}
         onLoadStart={() => {
-          console.log('[UnicornStudio] WebView started loading:', embedUrl);
+          console.log('[UnicornStudio] WebView started loading');
         }}
         onLoadEnd={() => {
           console.log('[UnicornStudio] WebView finished loading');
@@ -338,9 +338,9 @@ export const UnicornStudioScene: React.FC<UnicornStudioSceneProps> = ({
           // If direct URL fails (404), the embed URL format might be wrong
           // Log this for debugging
           if (nativeEvent.statusCode === 404) {
-            console.error('[UnicornStudio] Embed URL returned 404. URL format might be incorrect:', embedUrl);
+            console.error('[UnicornStudio] HTTP 404 error:', nativeEvent.url);
             setHasError(true);
-            onError?.(new Error(`Embed URL not found (404). Please verify the project ID: ${projectId}`));
+            onError?.(new Error(`Failed to load resource (404). Please verify the project ID: ${projectId}`));
           }
         }}
       />
