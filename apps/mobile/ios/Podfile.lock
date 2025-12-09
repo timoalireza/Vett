@@ -3,6 +3,9 @@ PODS:
   - DoubleConversion (1.1.6)
   - EXApplication (5.8.4):
     - ExpoModulesCore
+  - EXAV (14.0.7):
+    - ExpoModulesCore
+    - ReactCommon/turbomodule/core
   - EXConstants (16.0.2):
     - ExpoModulesCore
   - EXImageLoader (4.7.0):
@@ -1431,6 +1434,7 @@ DEPENDENCIES:
   - boost (from `../node_modules/react-native/third-party-podspecs/boost.podspec`)
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
   - "EXApplication (from `../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_la45dcnx66ri5zt3al6i6dt2k4/node_modules/expo-application/ios`)"
+  - "EXAV (from `../../../node_modules/.pnpm/expo-av@14.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__r_dklrz7hlp6kd3rfjoaehkiv45u/node_modules/expo-av/ios`)"
   - "EXConstants (from `../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._2jychxn4k2ccyjqq6n7kbbl3su/node_modules/expo-constants/ios`)"
   - "EXImageLoader (from `../../../node_modules/.pnpm/expo-image-loader@4.7.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_emra54r7qifkn64cohup4vewti/node_modules/expo-image-loader/ios`)"
   - "Expo (from `../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__react-native@0.7_4sqmg62d3cixomcpejaycasmxy/node_modules/expo`)"
@@ -1537,6 +1541,8 @@ EXTERNAL SOURCES:
     :podspec: "../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec"
   EXApplication:
     :path: "../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_la45dcnx66ri5zt3al6i6dt2k4/node_modules/expo-application/ios"
+  EXAV:
+    :path: "../../../node_modules/.pnpm/expo-av@14.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__r_dklrz7hlp6kd3rfjoaehkiv45u/node_modules/expo-av/ios"
   EXConstants:
     :path: "../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._2jychxn4k2ccyjqq6n7kbbl3su/node_modules/expo-constants/ios"
   EXImageLoader:
@@ -1717,6 +1723,7 @@ SPEC CHECKSUMS:
   boost: d3f49c53809116a5d38da093a8aa78bf551aed09
   DoubleConversion: 76ab83afb40bddeeee456813d9c04f67f78771b5
   EXApplication: d62cd534090692cbf538ea15f69f829b517a40b1
+  EXAV: 64e72329d2f8c2ba13608fed4a713af4e793242d
   EXConstants: 89d35611505a8ce02550e64e43cd05565da35f9a
   EXImageLoader: 1fe96c70cdc78bedc985ec4b1fab5dd8e67dc38b
   Expo: ed0a748eb6be0efd2c3df7f6de3f3158a14464c9
