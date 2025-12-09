@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { StyleSheet, View, Pressable, ViewStyle, StyleProp } from 'react-native';
-import Animated, { useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
+import { StyleSheet, View, Pressable, ViewStyle, StyleProp, Dimensions } from 'react-native';
 
 // Dynamically import expo-av to handle cases where native module isn't available
 let Video: any;
@@ -26,6 +25,7 @@ interface VideoAnimationProps {
   loopFromSeconds?: number;
   isLooping?: boolean; // If true, loops normally. If false, we handle custom loop logic.
   onError?: () => void;
+  onLoad?: (loadedSource: any) => void; // Callback when video is loaded and ready, passes the source that loaded
 }
 
 export const VideoAnimation: React.FC<VideoAnimationProps> = ({
@@ -36,12 +36,12 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
   resizeMode,
   loopFromSeconds = 5,
   isLooping = false,
-  onError
+  onError,
+  onLoad
 }) => {
   const videoRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const opacity = useSharedValue(0);
   
   // Default resize mode if available
   const defaultResizeMode = ResizeMode ? ResizeMode.COVER : undefined;
@@ -56,12 +56,6 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       }
     }
   }, [onError]);
-
-  useEffect(() => {
-    if (isLoaded) {
-      opacity.value = withTiming(1, { duration: 300 });
-    }
-  }, [isLoaded, opacity]);
 
   // Handle custom looping logic and errors
   const handlePlaybackStatusUpdate = useCallback((status: any) => {
@@ -93,10 +87,6 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
     }
   }, [shouldPlay]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
   // If Video component is not available or error occurred, return empty view
   // Parent component should handle fallback
   if (!Video || hasError) {
@@ -110,16 +100,24 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
         style={[StyleSheet.absoluteFill, { zIndex: 10 }]} 
         disabled={!onSkip}
       >
-        <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
+        <View style={StyleSheet.absoluteFill}>
           <Video
             ref={videoRef}
             style={StyleSheet.absoluteFill}
             source={source}
             useNativeControls={false}
             resizeMode={finalResizeMode}
-            isLooping={isLooping} // Use native looping if strictly looping from start
+            isLooping={isLooping}
             onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-            onLoad={() => setIsLoaded(true)}
+            onLoad={() => {
+              setIsLoaded(true);
+              // Ensure video plays immediately after loading
+              if (shouldPlay) {
+                videoRef.current?.playAsync();
+              }
+              // Notify parent that video is loaded, passing the source that just loaded
+              onLoad?.(source);
+            }}
             onError={() => {
               setHasError(true);
               if (onError) {
@@ -128,10 +126,8 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
             }}
             shouldPlay={shouldPlay}
           />
-        </Animated.View>
+        </View>
       </Pressable>
-      
-      {/* Optional: Add loading indicator here if needed, but opacity fade handles it nicely */}
     </View>
   );
 };
@@ -141,5 +137,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000000', // Black background to prevent any gaps
   },
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
   Keyboard,
   Alert,
   SafeAreaView,
-  Pressable
+  Pressable,
+  Dimensions
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -66,19 +67,56 @@ export default function AnalyzeScreen() {
 
   // Video source state
   const [videoSource, setVideoSource] = useState(VIDEO_IDLE);
+  const [previousVideoSource, setPreviousVideoSource] = useState<typeof VIDEO_IDLE | null>(null);
+  // Ref to track current video source for comparison in async callbacks
+  const videoSourceRef = useRef(videoSource);
+  // Ref to track which video is currently displayed as the previous frame hold
+  // This ensures we only clear the correct previous video when it finishes loading
+  const displayedPreviousVideoRef = useRef<typeof VIDEO_IDLE | null>(null);
 
   useEffect(() => {
+    let newSource = VIDEO_IDLE;
     if (lensState === 'loading') {
-      setVideoSource(VIDEO_LOADING);
+      newSource = VIDEO_LOADING;
       registerVideo('loading');
     } else if (isInputFocused || input || selectedImage) {
-      setVideoSource(VIDEO_TYPING);
+      newSource = VIDEO_TYPING;
       registerVideo('home-typing');
     } else {
-      setVideoSource(VIDEO_IDLE);
+      newSource = VIDEO_IDLE;
       registerVideo('home-idle');
     }
-  }, [lensState, isInputFocused, input, selectedImage, registerVideo]);
+
+    // If source is changing, keep previous video visible
+    if (newSource !== videoSource) {
+      setPreviousVideoSource(videoSource);
+      displayedPreviousVideoRef.current = videoSource; // Track which video is now displayed as previous
+      setVideoSource(newSource);
+      videoSourceRef.current = newSource;
+    }
+  }, [lensState, isInputFocused, input, selectedImage, registerVideo, videoSource]);
+
+  const handleNewVideoLoad = useCallback((loadedSource: typeof VIDEO_IDLE) => {
+    // Clear previous video after a small delay to ensure smooth transition
+    // The loadedSource is the current video that just finished loading (from VideoAnimation onLoad)
+    setTimeout(() => {
+      // Read current video source from ref to check if we're still on the same video
+      const currentSource = videoSourceRef.current;
+      
+      setPreviousVideoSource((prev: typeof VIDEO_IDLE | null) => {
+        // Only clear if:
+        // 1. There is a previous video displayed
+        // 2. The loaded source matches the current video source (we're still on the same video)
+        // This ensures we only clear the previous video when the current video finishes loading,
+        // and prevents clearing if the user rapidly switched to a different video
+        if (prev && loadedSource === currentSource) {
+          displayedPreviousVideoRef.current = null;
+          return null;
+        }
+        return prev;
+      });
+    }, 100);
+  }, []);
 
   useEffect(() => {
     if (isInputFocused || input || selectedImage) {
@@ -88,7 +126,7 @@ export default function AnalyzeScreen() {
       actionRowOpacity.value = 0;
       actionRowTranslateY.value = 20;
     }
-  }, [isInputFocused, input, selectedImage]);
+  }, [isInputFocused, input, selectedImage, actionRowOpacity, actionRowTranslateY]);
 
   const actionRowStyle = useAnimatedStyle(() => ({
     opacity: actionRowOpacity.value,
@@ -261,21 +299,60 @@ export default function AnalyzeScreen() {
 
   // Fallback to old components if video fails
   const [videoError, setVideoError] = useState(false);
+  
+  // Get screen dimensions for proper video sizing
+  const screenDimensions = Dimensions.get('window');
+  const screenWidth = screenDimensions.width;
+  const screenHeight = screenDimensions.height;
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Unicorn Studio Scene as Background - kept as requested, but video might overlay */}
-      <View style={[StyleSheet.absoluteFill, { zIndex: 0, backgroundColor: '#000000' }]}>
-        <UnicornStudioScene
-          projectId="uGUCLWyldMKQb0JBP7yQ"
-          width="100%"
-          height="100%"
-          scale={1} // Full scale for better visibility
-          fps={60}
-          showLoading={false} 
-          pointerEvents="none" 
-        />
-      </View>
+      {/* Video Background - Full Screen */}
+      {!videoError && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 0, width: screenWidth, height: screenHeight }]}>
+          {/* Previous video as frame hold layer */}
+          {previousVideoSource && previousVideoSource !== videoSource && (
+            <View style={[StyleSheet.absoluteFill, { zIndex: 1 }]}>
+              <VideoAnimation 
+                source={previousVideoSource}
+                shouldPlay={false}
+                style={StyleSheet.absoluteFill}
+                resizeMode={ResizeMode.COVER}
+                loopFromSeconds={5}
+                onError={() => {}}
+              />
+            </View>
+          )}
+          
+          {/* Current video on top */}
+          <View style={[StyleSheet.absoluteFill, { zIndex: 2 }]}>
+            <VideoAnimation 
+              source={videoSource}
+              shouldPlay={true}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.COVER}
+              loopFromSeconds={5}
+              onError={() => setVideoError(true)}
+              onLoad={handleNewVideoLoad}
+            />
+          </View>
+        </View>
+      )}
+      
+      {/* Unicorn Studio Scene as Fallback Background */}
+      {videoError && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 0, backgroundColor: '#000000' }]}>
+          <UnicornStudioScene
+            projectId="uGUCLWyldMKQb0JBP7yQ"
+            width="100%"
+            height="100%"
+            scale={1}
+            fps={60}
+            showLoading={false} 
+            pointerEvents="none" 
+          />
+        </View>
+      )}
 
       <TouchableWithoutFeedback onPress={() => {
         Keyboard.dismiss();
@@ -290,56 +367,57 @@ export default function AnalyzeScreen() {
             {/* Animated Lens Container */}
             <Animated.View>
                 <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', position: 'relative' }}>
-                  {videoError ? (
-                      // Fallback to original components
-                      <>
-                        {lensState === "loading" ? (
-                            <AnimatedLens size={420} claimText={getClaimTextForLoading()} />
-                        ) : (
-                            <LensMotif 
-                                size={420} 
-                                showPrompt={!(isInputFocused || input || selectedImage)}
-                            />
-                        )}
-                      </>
-                  ) : (
-                      // Video Animation
-                      <VideoAnimation 
-                        source={videoSource}
-                        shouldPlay={true}
-                        style={{ width: 420, height: 420 }}
-                        resizeMode={ResizeMode.COVER}
-                        loopFromSeconds={5}
-                        onError={() => setVideoError(true)}
-                        onSkip={videoSource === VIDEO_IDLE ? handleLensPress : undefined}
-                      />
-                  )}
+                  <View style={{ width: 420, height: 420, position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+                    {videoError ? (
+                        // Fallback to original components
+                        <>
+                          {lensState === "loading" ? (
+                              <AnimatedLens size={420} claimText={getClaimTextForLoading()} />
+                          ) : (
+                              <LensMotif 
+                                  size={420} 
+                                  showPrompt={!(isInputFocused || input || selectedImage)}
+                              />
+                          )}
+                        </>
+                    ) : (
+                        // Circular mask overlay for video (creates lens effect)
+                        <View style={{ width: 420, height: 420, borderRadius: 210, overflow: 'hidden', position: 'absolute' }}>
+                          <Pressable 
+                            onPress={videoSource === VIDEO_IDLE ? handleLensPress : undefined}
+                            style={StyleSheet.absoluteFill}
+                          >
+                            <View style={StyleSheet.absoluteFill} />
+                          </Pressable>
+                        </View>
+                    )}
 
-                  {/* Input Overlay inside Lens - only show when user is typing (not loading) */}
-                  {(isInputFocused || input || selectedImage) && lensState !== 'loading' && (
-                    <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]} pointerEvents="box-none">
-                      <ClaimInput
-                        value={input}
-                        onChangeText={(text) => setInput(text)}
-                        onSubmitEditing={handleSubmit}
-                        returnKeyType="go"
-                        isFocused={isInputFocused}
-                        onFocus={() => setIsInputFocused(true)}
-                        onBlur={() => setIsInputFocused(false)}
-                        placeholder="Paste a claim..."
-                        editable={true}
-                        style={{ 
-                          marginTop: 0, 
-                          color: "#FFFFFF", 
-                          textAlign: "center",
-                          width: 315, // Constrain width inside lens (420px * 0.75)
-                          fontSize: 13,
-                          fontFamily: "Inter_400Regular",
-                        }}
-                        placeholderTextColor="rgba(255,255,255,0.5)"
-                      />
-                    </View>
-                  )}
+                    {/* Input Overlay inside Lens - only show when user is typing (not loading) */}
+                    {(isInputFocused || input || selectedImage) && lensState !== 'loading' && (
+                      <View style={{ position: 'absolute', width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }} pointerEvents="box-none">
+                        <ClaimInput
+                          value={input}
+                          onChangeText={(text) => setInput(text)}
+                          onSubmitEditing={handleSubmit}
+                          returnKeyType="go"
+                          isFocused={isInputFocused}
+                          onFocus={() => setIsInputFocused(true)}
+                          onBlur={() => setIsInputFocused(false)}
+                          placeholder="Paste a claim..."
+                          editable={true}
+                          style={{ 
+                            marginTop: 0, 
+                            color: "#FFFFFF", 
+                            textAlign: "center",
+                            width: 315, // Constrain width inside lens (420px * 0.75)
+                            fontSize: 13,
+                            fontFamily: "Inter_400Regular",
+                          }}
+                          placeholderTextColor="rgba(255,255,255,0.5)"
+                        />
+                      </View>
+                    )}
+                  </View>
                   
                   {/* Claim Text Overlay during Loading (on top of video) */}
                   {lensState === "loading" && (

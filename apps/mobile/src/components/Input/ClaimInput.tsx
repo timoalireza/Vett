@@ -39,8 +39,8 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({
         placeholder="Paste a claim..."
         placeholderTextColor="#4A4A4A" // Muted color
         multiline
-        selectionColor="#2EFAC0" // Brand color for selection
-        cursorColor="#2EFAC0" // Android cursor color
+        selectionColor="#FFFFFF" // White accent color for selection
+        cursorColor="#FFFFFF" // White cursor color
         autoCapitalize="sentences"
         autoCorrect
         {...props}
