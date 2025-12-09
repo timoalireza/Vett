@@ -22,8 +22,8 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
   size = 200,
   strokeWidth = 4,
 }) => {
-  // Sphere is 62% of the total lens size
-  const sphereSize = size * 0.62;
+  // Sphere matches LensMotif size (0.65 of actual size)
+  const sphereSize = size * 0.65;
   const radius = (sphereSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -32,15 +32,15 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
   useEffect(() => {
     // Reset progress
     progress.value = 0;
-    // Animate to score
+    // Animate to score - delay 400ms after lens transition completes
     progress.value = withDelay(
-      600, // Wait for lens transition (approx)
+      400,
       withTiming(score / 100, {
         duration: 1000,
         easing: Easing.out(Easing.ease),
       })
     );
-  }, [score, progress]);
+  }, [score]); // Only include actual dependencies, not shared values
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - progress.value),

@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -9,37 +9,79 @@ import Animated, {
   Easing,
   interpolate,
 } from "react-native-reanimated";
-import Svg, { Defs, RadialGradient, Stop, Circle } from "react-native-svg";
+import Svg, { Defs, RadialGradient, Stop, Circle, Pattern, Rect, LinearGradient } from "react-native-svg";
 
 interface AnimatedLensProps {
   size?: number;
+  claimText?: string;
 }
 
-export const AnimatedLens: React.FC<AnimatedLensProps> = ({ size = 240 }) => {
+export const AnimatedLens: React.FC<AnimatedLensProps> = ({ size = 240, claimText }) => {
+  const id = React.useId();
   const pulseAnim = useSharedValue(1);
+  const rotationAnim = useSharedValue(0);
+  const gradientXAnim = useSharedValue(0);
+  const gradientYAnim = useSharedValue(0);
+  const sphereSize = size * 0.65;
+  const sphereRadius = sphereSize / 2;
 
   useEffect(() => {
+    // Pulse animation: scale 1.0 → 1.15 → 1.0, opacity 0.4 → 0.6 → 0.4
     pulseAnim.value = withRepeat(
       withSequence(
-        withTiming(1.1, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) })
+        withTiming(1.15, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.0, { duration: 1000, easing: Easing.inOut(Easing.ease) })
       ),
       -1,
       true
     );
-  }, [pulseAnim]);
 
-  // Dimensions matching LensMotif
-  const glowSize = size * 1.0;
-  const glowRadius = glowSize / 2;
-  const sphereSize = size * 0.62;
-  const sphereRadius = sphereSize / 2;
+    // Rotating gradient animation - creates loading circle effect
+    // Rotates continuously to create dynamic loading appearance
+    rotationAnim.value = withRepeat(
+      withTiming(360, { duration: 3000, easing: Easing.linear }),
+      -1,
+      false
+    );
+
+    // Animate gradient center position in a circle
+    const animateGradient = () => {
+      gradientXAnim.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(-1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+      gradientYAnim.value = withRepeat(
+        withSequence(
+          withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(-1, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+    };
+    animateGradient();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty array - animations should run once on mount, shared values are stable references
 
   const animatedGlowStyle = useAnimatedStyle(() => {
     return {
       transform: [{ scale: pulseAnim.value }],
-      // Interpolate opacity slightly to create breathing effect
-      opacity: interpolate(pulseAnim.value, [1, 1.1], [1, 0.8]), 
+      opacity: interpolate(pulseAnim.value, [1.0, 1.15], [0.4, 0.6]),
+    };
+  });
+
+  const animatedGradientStyle = useAnimatedStyle(() => {
+    const rotation = rotationAnim.value;
+    return {
+      transform: [{ rotate: `${rotation}deg` }],
     };
   });
 
@@ -49,80 +91,162 @@ export const AnimatedLens: React.FC<AnimatedLensProps> = ({ size = 240 }) => {
       <Animated.View
         style={[
           {
-            position: "absolute",
-            width: glowSize,
-            height: glowSize,
-            alignItems: "center",
-            justifyContent: "center",
-            // Shadows for iOS
-            shadowColor: "#FFFFFF",
+            position: 'absolute',
+            width: sphereSize,
+            height: sphereSize,
+            borderRadius: sphereSize / 2,
+            left: (size - sphereSize) / 2,
+            top: (size - sphereSize) / 2,
+            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            shadowColor: '#FFFFFF',
             shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.3,
-            shadowRadius: 20,
-            // Elevation for Android
-            elevation: 10,
+            shadowOpacity: 0.6,
+            shadowRadius: 50,
+            elevation: 25,
+            overflow: 'hidden',
           },
           animatedGlowStyle,
         ]}
       >
-        <Svg height={glowSize} width={glowSize}>
+        {/* Subtle noise overlay using SVG pattern */}
+        <Svg width={sphereSize} height={sphereSize} style={StyleSheet.absoluteFill}>
           <Defs>
-            <RadialGradient
-              id="glowGradientAnim"
-              cx="54%"
-              cy="56%"
-              rx="50%"
-              ry="50%"
-              fx="54%"
-              fy="56%"
-              gradientUnits="userSpaceOnUse"
-            >
-              {/* Matched to LensMotif new values */}
-              <Stop offset="0%" stopColor="rgba(170,170,170,0.7)" stopOpacity="0.7" />
-              <Stop offset="35%" stopColor="rgba(130,130,130,0.4)" stopOpacity="0.4" />
-              <Stop offset="55%" stopColor="rgba(90,90,90,0.2)" stopOpacity="0.2" />
-              <Stop offset="75%" stopColor="rgba(50,50,50,0.1)" stopOpacity="0.1" />
-              <Stop offset="100%" stopColor="transparent" stopOpacity="0" />
-            </RadialGradient>
+            <Pattern id={`noisePatternAnim-${id}`} x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse">
+              <Circle cx="1" cy="1" r="0.5" fill="rgba(255,255,255,0.03)" />
+              <Circle cx="3" cy="3" r="0.5" fill="rgba(255,255,255,0.03)" />
+              <Circle cx="1" cy="3" r="0.3" fill="rgba(0,0,0,0.05)" />
+              <Circle cx="3" cy="1" r="0.3" fill="rgba(0,0,0,0.05)" />
+            </Pattern>
           </Defs>
-          <Circle cx={glowRadius} cy={glowRadius} r={glowRadius} fill="url(#glowGradientAnim)" />
+          <Rect width={sphereSize} height={sphereSize} fill={`url(#noisePatternAnim-${id})`} opacity={0.4} />
         </Svg>
       </Animated.View>
 
-      {/* Static Sphere */}
-      <View
-        style={{
-          position: "absolute",
-          width: sphereSize,
-          height: sphereSize,
-          borderRadius: sphereRadius,
-          overflow: "hidden",
-        }}
-      >
-        <Svg height={sphereSize} width={sphereSize}>
+      {/* Base sphere with gradient */}
+      <View style={{
+        position: 'absolute',
+        width: sphereSize,
+        height: sphereSize,
+        left: (size - sphereSize) / 2,
+        top: (size - sphereSize) / 2,
+      }}>
+        <Svg 
+          width={sphereSize} 
+          height={sphereSize}
+          style={StyleSheet.absoluteFill}
+        >
           <Defs>
             <RadialGradient
-              id="sphereGradientAnim"
-              cx="38%"
+              id={`sphereGradAnim-${id}`}
+              cx="35%"
               cy="50%"
-              rx="50%"
-              ry="50%"
-              fx="38%"
-              fy="50%"
-              gradientUnits="userSpaceOnUse"
+              rx="90%"
+              ry="90%"
             >
-              <Stop offset="0%" stopColor="rgba(0,0,0,1)" />
-              <Stop offset="30%" stopColor="rgba(15,15,15,1)" />
-              <Stop offset="47%" stopColor="rgba(35,35,35,1)" />
-              <Stop offset="63%" stopColor="rgba(70,70,70,1)" />
-              <Stop offset="77%" stopColor="rgba(115,115,115,1)" />
-              <Stop offset="90%" stopColor="rgba(165,165,165,1)" />
-              <Stop offset="100%" stopColor="rgba(210,210,210,1)" />
+              <Stop offset="0%" stopColor="#0a0a0a" />
+              <Stop offset="20%" stopColor="#1a1a1a" />
+              <Stop offset="40%" stopColor="#3a3a3a" />
+              <Stop offset="60%" stopColor="#707070" />
+              <Stop offset="80%" stopColor="#b0b0b0" />
+              <Stop offset="100%" stopColor="#f5f5f5" />
             </RadialGradient>
+            {/* Rotating loading gradient overlay */}
+            <LinearGradient
+              id={`loadingGradAnim-${id}`}
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <Stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
+              <Stop offset="50%" stopColor="rgba(255,255,255,0.05)" />
+              <Stop offset="100%" stopColor="rgba(255,255,255,0.1)" />
+            </LinearGradient>
           </Defs>
-          <Circle cx={sphereRadius} cy={sphereRadius} r={sphereRadius} fill="url(#sphereGradientAnim)" />
+          <Circle
+            cx={sphereRadius}
+            cy={sphereRadius}
+            r={sphereRadius}
+            fill={`url(#sphereGradAnim-${id})`}
+          />
         </Svg>
       </View>
+
+      {/* Rotating loading overlay - creates dynamic loading effect */}
+      <Animated.View 
+        style={[
+          {
+            position: 'absolute',
+            width: sphereSize,
+            height: sphereSize,
+            left: (size - sphereSize) / 2,
+            top: (size - sphereSize) / 2,
+            borderRadius: sphereSize / 2,
+            overflow: 'hidden',
+          },
+          animatedGradientStyle,
+        ]}
+      >
+        <Svg 
+          width={sphereSize} 
+          height={sphereSize}
+          style={StyleSheet.absoluteFill}
+        >
+          <Defs>
+            {/* Rotating radial gradient for loading effect - center moves */}
+            <RadialGradient
+              id={`rotatingGradAnim-${id}`}
+              cx="50%"
+              cy="50%"
+              r="60%"
+            >
+              <Stop offset="0%" stopColor="rgba(255,255,255,0.35)" />
+              <Stop offset="40%" stopColor="rgba(255,255,255,0.2)" />
+              <Stop offset="70%" stopColor="rgba(255,255,255,0.05)" />
+              <Stop offset="100%" stopColor="transparent" />
+            </RadialGradient>
+          </Defs>
+          {/* Rotating overlay - creates sweeping effect */}
+          <Circle 
+            cx={sphereRadius} 
+            cy={sphereRadius} 
+            r={sphereRadius} 
+            fill={`url(#rotatingGradAnim-${id})`} 
+            opacity={0.9}
+          />
+        </Svg>
+      </Animated.View>
+
+      {/* Claim text overlay during loading */}
+      {claimText ? (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: size,
+          height: size,
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 100,
+        }}>
+          <Text 
+            style={{
+              fontFamily: 'Inter_400Regular',
+              fontSize: 14,
+              color: '#FFFFFF',
+              textAlign: 'center',
+              paddingHorizontal: 32,
+              maxWidth: sphereSize * 0.85,
+              textShadowColor: 'rgba(0, 0, 0, 0.5)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 2,
+            }}
+            numberOfLines={4}
+          >
+            {claimText}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 };

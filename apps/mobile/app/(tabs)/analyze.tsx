@@ -10,6 +10,7 @@ import {
   Keyboard,
   Alert,
   SafeAreaView,
+  Pressable
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,15 @@ import { useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useShareIntent } from "expo-share-intent";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  withDelay,
+  Easing,
+} from "react-native-reanimated";
 
 import { tokenProvider } from "../../src/api/token-provider";
 import { submitAnalysis } from "../../src/api/analysis";
@@ -25,13 +35,21 @@ import { LensMotif } from "../../src/components/Lens/LensMotif";
 import { AnimatedLens } from "../../src/components/Lens/AnimatedLens";
 import { ClaimInput } from "../../src/components/Input/ClaimInput";
 import { useLensState } from "../../src/hooks/useLensState";
+import { UnicornStudioScene } from "../../src/components/UnicornStudio/UnicornStudioScene";
+import { VideoAnimation } from "../../src/components/Video/VideoAnimation";
+import { useVideoAnimationState } from "../../src/components/Video/VideoAnimationProvider";
+import { ResizeMode } from "expo-av";
+
+// Video Assets
+const VIDEO_IDLE = require("../../assets/animations/home-idle.mp4");
+const VIDEO_TYPING = require("../../assets/animations/home-typing.mp4");
+const VIDEO_LOADING = require("../../assets/animations/loading.mp4");
 
 export default function AnalyzeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isSignedIn, getToken } = useAuth();
-  const params = useLocalSearchParams<{ openSheet?: string }>();
   
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -40,8 +58,43 @@ export default function AnalyzeScreen() {
   const { state: lensState, toInput, toLoading, reset } = useLensState();
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
   const [permissionStatus, requestPermission] = ImagePicker.useMediaLibraryPermissions();
+  const { registerVideo } = useVideoAnimationState();
 
-  // Reset state on focus
+  // Action row animation
+  const actionRowOpacity = useSharedValue(0);
+  const actionRowTranslateY = useSharedValue(20);
+
+  // Video source state
+  const [videoSource, setVideoSource] = useState(VIDEO_IDLE);
+
+  useEffect(() => {
+    if (lensState === 'loading') {
+      setVideoSource(VIDEO_LOADING);
+      registerVideo('loading');
+    } else if (isInputFocused || input || selectedImage) {
+      setVideoSource(VIDEO_TYPING);
+      registerVideo('home-typing');
+    } else {
+      setVideoSource(VIDEO_IDLE);
+      registerVideo('home-idle');
+    }
+  }, [lensState, isInputFocused, input, selectedImage, registerVideo]);
+
+  useEffect(() => {
+    if (isInputFocused || input || selectedImage) {
+      actionRowOpacity.value = withDelay(50, withTiming(1, { duration: 500, easing: Easing.out(Easing.exp) }));
+      actionRowTranslateY.value = withDelay(50, withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) }));
+    } else {
+      actionRowOpacity.value = 0;
+      actionRowTranslateY.value = 20;
+    }
+  }, [isInputFocused, input, selectedImage]);
+
+  const actionRowStyle = useAnimatedStyle(() => ({
+    opacity: actionRowOpacity.value,
+    transform: [{ translateY: actionRowTranslateY.value }],
+  }));
+
   useFocusEffect(
     useCallback(() => {
       reset();
@@ -51,7 +104,6 @@ export default function AnalyzeScreen() {
     }, [reset])
   );
 
-  // Update token provider
   useEffect(() => {
     const updateToken = async () => {
       if (isSignedIn && getToken) {
@@ -69,7 +121,6 @@ export default function AnalyzeScreen() {
     updateToken();
   }, [isSignedIn, getToken]);
 
-  // Handle Share Intent
   useEffect(() => {
     if (hasShareIntent && shareIntent) {
       let handled = false;
@@ -98,7 +149,6 @@ export default function AnalyzeScreen() {
     }
   }, [hasShareIntent, shareIntent, toInput, resetShareIntent]);
 
-  // Submit Mutation
   const mutation = useMutation({
     mutationFn: async (data: { text?: string; imageUri?: string }) => {
       const mediaType = data.imageUri ? "IMAGE" : "TEXT";
@@ -114,7 +164,12 @@ export default function AnalyzeScreen() {
     onSuccess: (data) => {
       console.log("[Analyze] Submission success, job ID:", data.analysisId);
       queryClient.invalidateQueries({ queryKey: ["analyses"] });
-      router.push(`/result/${data.analysisId}`);
+      // Pass claim text to result screen for smooth transition
+      const claimText = getClaimTextForLoading();
+      router.push({
+        pathname: `/result/${data.analysisId}`,
+        params: { claimText: claimText || input || "" }
+      });
     },
     onError: (error: any) => {
       console.error("[Analyze] Submission error:", error);
@@ -133,6 +188,21 @@ export default function AnalyzeScreen() {
       text: trimmedInput || undefined,
       imageUri: selectedImage || undefined,
     });
+  };
+
+  const handlePaste = async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (text) {
+        setInput(text);
+        toInput();
+        setIsInputFocused(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      console.error("Failed to paste from clipboard:", error);
+      // Optional: show alert or just log, typically silent failure is better for paste unless user initiated
+    }
   };
 
   const pickImage = async () => {
@@ -156,8 +226,57 @@ export default function AnalyzeScreen() {
     }
   };
 
+  const handleLensPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (lensState === "idle" || lensState === "input") {
+      toInput();
+      setIsInputFocused(true);
+    }
+  };
+
+  // Helper to detect if input is a URL
+  const isUrl = (text: string): boolean => {
+    try {
+      const url = new URL(text);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      // Check for common URL patterns
+      return /^(https?:\/\/|www\.)/i.test(text.trim());
+    }
+  };
+
+  // Get claim text to display during loading
+  const getClaimTextForLoading = (): string => {
+    if (selectedImage) {
+      return "Analyzing image...";
+    }
+    if (input && input.trim()) {
+      if (isUrl(input.trim())) {
+        return "Extracting claim...";
+      }
+      return input.trim();
+    }
+    return "Analyzing...";
+  };
+
+  // Fallback to old components if video fails
+  const [videoError, setVideoError] = useState(false);
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Unicorn Studio Scene as Background - kept as requested, but video might overlay */}
+      <View style={[StyleSheet.absoluteFill, { zIndex: 0, backgroundColor: '#000000' }]}>
+        <UnicornStudioScene
+          projectId="uGUCLWyldMKQb0JBP7yQ"
+          width="100%"
+          height="100%"
+          scale={1} // Full scale for better visibility
+          fps={60}
+          showLoading={false} 
+          pointerEvents="none" 
+        />
+      </View>
+
       <TouchableWithoutFeedback onPress={() => {
         Keyboard.dismiss();
         setIsInputFocused(false);
@@ -165,85 +284,133 @@ export default function AnalyzeScreen() {
       }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.content}
+          style={[styles.content, { zIndex: 10, backgroundColor: 'transparent' }]}
         >
           <View style={styles.lensContainer}>
-            <View style={{ width: 360, height: 360, alignItems: 'center', justifyContent: 'center' }}>
-              {lensState === "loading" ? (
-                <AnimatedLens size={360} />
-              ) : (
-                <LensMotif size={360} />
-              )}
-              
-              {/* Overlay Content */}
-              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', zIndex: 10 }]}>
-                {lensState === "loading" ? (
-                  <View style={{ alignItems: 'center', paddingHorizontal: 40 }}>
-                    <Text style={styles.loadingText}>Analyzing claim...</Text>
-                    {input ? (
-                      <Text style={styles.claimPreview} numberOfLines={2}>
-                        "{input}"
-                      </Text>
-                    ) : selectedImage ? (
-                      <Text style={styles.claimPreview}>Analyzing image...</Text>
-                    ) : null}
-                  </View>
-                ) : (
-                  <View style={{ alignItems: 'center', width: '100%' }}>
-                    {isInputFocused || input || selectedImage ? (
-                      <View style={{ width: "100%", alignItems: "center" }}>
-                        <ClaimInput
-                          value={input}
-                          onChangeText={(text) => setInput(text)}
-                          onSubmitEditing={handleSubmit}
-                          returnKeyType="go"
-                          isFocused={isInputFocused}
-                          onFocus={() => setIsInputFocused(true)}
-                          onBlur={() => setIsInputFocused(false)}
-                          placeholder="Paste a claim..."
-                          style={{ marginTop: 0, color: "#FFFFFF", textAlign: "center" }}
-                          placeholderTextColor="rgba(255,255,255,0.5)"
-                        />
-                        {selectedImage && (
-                          <View style={styles.imagePreview}>
-                            <Text style={styles.imageText}>Image Selected</Text>
-                            <TouchableOpacity onPress={() => setSelectedImage(null)}>
-                              <Ionicons name="close-circle" size={20} color="#EF4444" />
-                            </TouchableOpacity>
-                          </View>
+            {/* Animated Lens Container */}
+            <Animated.View>
+                <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', position: 'relative' }}>
+                  {videoError ? (
+                      // Fallback to original components
+                      <>
+                        {lensState === "loading" ? (
+                            <AnimatedLens size={420} claimText={getClaimTextForLoading()} />
+                        ) : (
+                            <LensMotif 
+                                size={420} 
+                                showPrompt={!(isInputFocused || input || selectedImage)}
+                            />
                         )}
+                      </>
+                  ) : (
+                      // Video Animation
+                      <VideoAnimation 
+                        source={videoSource}
+                        shouldPlay={true}
+                        style={{ width: 420, height: 420 }}
+                        resizeMode={ResizeMode.COVER}
+                        loopFromSeconds={5}
+                        onError={() => setVideoError(true)}
+                        onSkip={videoSource === VIDEO_IDLE ? handleLensPress : undefined}
+                      />
+                  )}
+
+                  {/* Input Overlay inside Lens - only show when user is typing (not loading) */}
+                  {(isInputFocused || input || selectedImage) && lensState !== 'loading' && (
+                    <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]} pointerEvents="box-none">
+                      <ClaimInput
+                        value={input}
+                        onChangeText={(text) => setInput(text)}
+                        onSubmitEditing={handleSubmit}
+                        returnKeyType="go"
+                        isFocused={isInputFocused}
+                        onFocus={() => setIsInputFocused(true)}
+                        onBlur={() => setIsInputFocused(false)}
+                        placeholder="Paste a claim..."
+                        editable={true}
+                        style={{ 
+                          marginTop: 0, 
+                          color: "#FFFFFF", 
+                          textAlign: "center",
+                          width: 315, // Constrain width inside lens (420px * 0.75)
+                          fontSize: 13,
+                          fontFamily: "Inter_400Regular",
+                        }}
+                        placeholderTextColor="rgba(255,255,255,0.5)"
+                      />
+                    </View>
+                  )}
+                  
+                  {/* Claim Text Overlay during Loading (on top of video) */}
+                  {lensState === "loading" && (
+                    <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]} pointerEvents="none">
+                         <Text 
+                            style={{
+                              fontFamily: 'Inter_400Regular',
+                              fontSize: 14,
+                              color: '#FFFFFF',
+                              textAlign: 'center',
+                              paddingHorizontal: 32,
+                              maxWidth: 360,
+                              textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                              textShadowOffset: { width: 0, height: 1 },
+                              textShadowRadius: 2,
+                            }}
+                            numberOfLines={4}
+                          >
+                            {getClaimTextForLoading()}
+                          </Text>
+                    </View>
+                  )}
+                </View>
+            </Animated.View>
+              
+            {/* Content Below Lens */}
+            <View style={{ marginTop: isInputFocused ? -32 : 24, width: '100%', alignItems: 'center', paddingHorizontal: 20 }}>
+              {lensState === "loading" ? (
+                // Loading text is now inside the lens/video overlay, but we might want status text below too?
+                // The original design had text below. But "Loading animation" video might cover it.
+                // Keeping it simple for now.
+                null
+              ) : (
+                <View style={{ alignItems: 'center', width: '100%' }}>
+                  {(isInputFocused || input || selectedImage) && (
+                    <View style={{ width: "100%", alignItems: "center" }}>
+                      {/* Image Preview */}
+                      {selectedImage && (
+                        <View style={styles.imagePreview}>
+                          <Text style={styles.imageText}>Image Selected</Text>
+                          <TouchableOpacity onPress={() => setSelectedImage(null)}>
+                            <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {/* Action Row: Image, Paste, Submit */}
+                      <Animated.View style={[styles.actionRow, actionRowStyle]}>
+                        <TouchableOpacity onPress={pickImage} style={styles.circleButton}>
+                          <Ionicons name="image-outline" size={24} color="#FFF" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={handlePaste} style={styles.circleButton}>
+                          <Ionicons name="clipboard-outline" size={24} color="#FFF" />
+                        </TouchableOpacity>
+
                         <TouchableOpacity 
                           onPress={handleSubmit} 
-                          style={[styles.submitButton, mutation.isPending && { opacity: 0.5 }]}
-                          disabled={mutation.isPending}
+                          style={[styles.pillButton, ((!input.trim() && !selectedImage) || mutation.isPending) && { opacity: 0.5 }]}
+                          disabled={(!input.trim() && !selectedImage) || mutation.isPending}
                         >
-                          <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+                          <Text style={styles.pillButtonText}>Analyze</Text>
+                          <Ionicons name="arrow-forward" size={20} color="#000" />
                         </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity onPress={() => {
-                        setIsInputFocused(true);
-                        toInput();
-                      }}>
-                        <Text style={styles.promptText}>
-                          Paste a claim to verify
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-              </View>
+                      </Animated.View>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           </View>
-
-          {/* Action Buttons (Image, etc) - visible when not loading */}
-          {lensState !== "loading" && !isInputFocused && !input && !selectedImage && (
-            <View style={styles.actions}>
-              <TouchableOpacity onPress={pickImage} style={styles.actionIcon}>
-                <Ionicons name="image-outline" size={24} color="#6B6B6B" />
-              </TouchableOpacity>
-            </View>
-          )}
 
         </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
@@ -260,17 +427,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingBottom: 100, // Visual offset
+    paddingBottom: Platform.OS === "ios" ? 120 : 100, // Space for tab bar
+    width: "100%",
   },
   lensContainer: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  promptText: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 16,
-    color: "#E5E5E5",
-    letterSpacing: 0.5,
+    width: "100%",
+    position: "relative",
   },
   loadingContainer: {
     alignItems: "center",
@@ -294,7 +458,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
     padding: 8,
     borderRadius: 20,
-    marginTop: 10,
+    marginBottom: 16,
     gap: 8,
   },
   imageText: {
@@ -302,20 +466,32 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 12,
   },
-  submitButton: {
-    marginTop: 20,
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 0,
+  },
+  circleButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  actions: {
-    position: "absolute",
-    bottom: 40,
+  pillButton: {
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 8,
   },
-  actionIcon: {
-    padding: 12,
+  pillButtonText: {
+    color: '#000000',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
 });

@@ -300,7 +300,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     corpusSegments
       .filter((segment) => typeof segment === "string" && segment.trim().length > 0)
       .join("\n\n") || context.normalizedText;
-  
+
   const hasUrl = /https?:\/\/[^\s]+/.test(analysisCorpus);
   const hasAttachments = context.attachments.length > 0;
 
@@ -321,8 +321,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const classificationStart = Date.now();
   const [classification, claimExtraction] = await Promise.all([
     classifyTopicWithOpenAI({
-      ...payload.input,
-      text: analysisCorpus
+    ...payload.input,
+    text: analysisCorpus
     }),
     extractClaimsWithOpenAI(analysisCorpus)
   ]);
@@ -492,9 +492,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ...verdictData,
     verdict: validateVerdict(verdictData.verdict),
     score:
-      verdictData.verdict === "False" && verdictData.confidence >= 0.9
+    verdictData.verdict === "False" && verdictData.confidence >= 0.9
         ? 0
-        : verdictData.verdict === "Verified"
+      : verdictData.verdict === "Verified"
           ? 100
           : verdictData.score
   };

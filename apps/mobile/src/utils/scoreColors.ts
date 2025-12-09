@@ -1,9 +1,15 @@
 import { colors } from "../styles/colors";
 
+/**
+ * Maps score to color based on ranges:
+ * - ≥70: Green (success)
+ * - 45-69: Amber (warning)
+ * - <45: Red (danger)
+ */
 export function getScoreColor(score: number): string {
-  if (score >= 70) return colors.success;
-  if (score >= 45) return colors.warning;
-  return colors.danger;
+  if (score >= 70) return colors.success; // Green
+  if (score >= 45) return colors.warning; // Amber (45-69)
+  return colors.danger; // Red (<45)
 }
 
 // Keeping compatibility with existing code if needed, but updated to use new palette

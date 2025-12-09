@@ -20,6 +20,6 @@ export const colors = {
   verified: '#22C55E',
   uncertain: '#F59E0B',
   false: '#EF4444',
-  brand: '#2EFAC0',
+  brand: '#FFFFFF',
   white: '#FFFFFF',
 };

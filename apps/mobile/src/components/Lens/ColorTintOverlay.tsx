@@ -18,21 +18,22 @@ export const ColorTintOverlay: React.FC<ColorTintOverlayProps> = ({
   score,
   size = 200,
 }) => {
-  // Glow Dimensions: 100% of size (matched to LensMotif)
-  const glowSize = size * 1.0;
-  const glowRadius = glowSize / 2;
+  // Matches the glow size from LensMotif (0.65 of size)
+  const glowDiameter = size * 0.65;
+  const glowRadius = glowDiameter / 2;
 
   const opacity = useSharedValue(0);
 
   useEffect(() => {
     // Reset
     opacity.value = 0;
-    // Animate fade in after ring completes (approx 1000ms + 600ms delay = 1600ms)
+    // Animate fade in after ring completes - delay 1200ms from transition start (600ms lens + 400ms ring delay + 200ms buffer)
+    // Target opacity: 10-15% (0.1-0.15), using 0.75 multiplier on gradient stops to achieve ~15% at center
     opacity.value = withDelay(
-      1600,
-      withTiming(1, { duration: 400, easing: Easing.out(Easing.ease) })
+      1200,
+      withTiming(0.75, { duration: 400, easing: Easing.out(Easing.ease) })
     );
-  }, [score, opacity]);
+  }, [score]); // Only include actual dependencies, not shared values
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -51,8 +52,8 @@ export const ColorTintOverlay: React.FC<ColorTintOverlayProps> = ({
       style={[
         {
           position: "absolute",
-          width: glowSize,
-          height: glowSize,
+          width: glowDiameter,
+          height: glowDiameter,
           borderRadius: glowRadius,
           alignItems: "center",
           justifyContent: "center",
@@ -61,16 +62,16 @@ export const ColorTintOverlay: React.FC<ColorTintOverlayProps> = ({
       ]}
       pointerEvents="none"
     >
-      <Svg height={glowSize} width={glowSize}>
+      <Svg height={glowDiameter} width={glowDiameter}>
         <Defs>
           <RadialGradient
             id="tintGradient"
-            cx="54%"
-            cy="56%"
+            cx="50%"
+            cy="50%"
             rx="50%"
             ry="50%"
-            fx="54%"
-            fy="56%"
+            fx="50%"
+            fy="50%"
             gradientUnits="userSpaceOnUse"
           >
             <Stop offset="0%" stopColor={scoreColor} stopOpacity="0.2" />

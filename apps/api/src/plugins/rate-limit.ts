@@ -12,7 +12,7 @@ const RATE_LIMITS_BY_TIER = {
   FREE: {
     global: 200, // 200 requests per window
     mutation: 30, // 30 mutations per window
-    upload: 10 // 10 uploads per window
+    upload: 30 // 30 uploads per window (increased from 10 for better UX)
   },
   PLUS: {
     global: 1000, // 1000 requests per window
@@ -53,13 +53,16 @@ async function getRateLimitForUser(userId: string | undefined, logger?: any): Pr
   }
 }
 
-async function getMutationLimitForUser(userId: string | undefined): Promise<number> {
-  if (!userId) {
+// Note: Mutation rate limiting is handled in the GraphQL plugin
+// This function is kept for potential future use
+// @ts-expect-error - Intentionally unused, kept for future use
+async function getMutationLimitForUser(_userId: string | undefined): Promise<number> {
+  if (!_userId) {
     return Math.floor(env.RATE_LIMIT_MUTATION_MAX / 2); // Half limit for anonymous
   }
 
   try {
-    const dbUserId = await userService.getOrCreateUser(userId);
+    const dbUserId = await userService.getOrCreateUser(_userId);
     const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
     // Fallback to FREE tier if plan is not recognized
     const planLimits = RATE_LIMITS_BY_TIER[subscription.plan as keyof typeof RATE_LIMITS_BY_TIER];
@@ -149,42 +152,49 @@ export default fp(async (fastify: FastifyInstance) => {
   // This allows for stricter limits on mutations (submitAnalysis, deleteAnalysis, etc.)
 
   // Rate limit for file uploads
-  await fastify.register(rateLimit, {
-    max: async (request: FastifyRequest) => {
-      const userId = (request as any).userId;
-      return getUploadLimitForUser(userId);
-    },
-    timeWindow: env.RATE_LIMIT_GLOBAL_WINDOW,
-    route: "/uploads",
-    redis: redisClient,
-    skipOnError: true,
-    keyGenerator: (request) => {
-      const userId = (request as any).userId;
-      if (userId) {
-        return `upload:user:${userId}`;
+  // Register on /uploads prefix - prefix automatically limits scope
+  await fastify.register(async (fastify) => {
+    await fastify.register(rateLimit, {
+      max: async (request: FastifyRequest) => {
+        const userId = (request as any).userId;
+        return getUploadLimitForUser(userId);
+      },
+      timeWindow: env.RATE_LIMIT_GLOBAL_WINDOW,
+      redis: redisClient,
+      skipOnError: true,
+      keyGenerator: (request: FastifyRequest) => {
+        const userId = (request as any).userId;
+        if (userId) {
+          return `upload:user:${userId}`;
+        }
+        return `upload:ip:${request.ip || request.socket.remoteAddress || "unknown"}`;
+      },
+      errorResponseBuilder: (_request, context) => {
+        return {
+          error: "Too Many Requests",
+          message: `Upload rate limit exceeded. Maximum ${context.max} uploads per ${env.RATE_LIMIT_GLOBAL_WINDOW}.`,
+          retryAfter: Math.ceil(context.ttl / 1000)
+        };
       }
-      return `upload:ip:${request.ip || request.socket.remoteAddress || "unknown"}`;
-    },
-    errorResponseBuilder: (_request, context) => {
-      return {
-        error: "Too Many Requests",
-        message: `Upload rate limit exceeded. Maximum ${context.max} uploads per ${env.RATE_LIMIT_GLOBAL_WINDOW}.`,
-        retryAfter: Math.ceil(context.ttl / 1000)
-      };
-    }
-  });
+    });
+  }, { prefix: "/uploads" });
 
   // More lenient rate limit for health endpoints
-  await fastify.register(rateLimit, {
-    max: 60, // 60 requests per minute for health checks
-    timeWindow: "1 minute",
-    route: ["/health", "/live", "/ready"],
-    redis: redisClient,
-    skipOnError: true,
-    keyGenerator: (request) => {
-      return `health:${request.ip || request.socket.remoteAddress || "unknown"}`;
-    }
-  });
+  // Register separately for each health route
+  const healthRoutes = ["/health", "/live", "/ready"];
+  for (const route of healthRoutes) {
+    await fastify.register(async (fastify) => {
+      await fastify.register(rateLimit, {
+        max: 60, // 60 requests per minute for health checks
+        timeWindow: "1 minute",
+        redis: redisClient,
+        skipOnError: true,
+        keyGenerator: (request: FastifyRequest) => {
+          return `health:${request.ip || request.socket.remoteAddress || "unknown"}`;
+        }
+      });
+    }, { prefix: route });
+  }
 
   fastify.log.info(`✅ Rate limiting enabled (global: ${env.RATE_LIMIT_GLOBAL_MAX}/${env.RATE_LIMIT_GLOBAL_WINDOW}, anonymous: ${env.RATE_LIMIT_ANONYMOUS_MAX}/${env.RATE_LIMIT_GLOBAL_WINDOW})`);
 

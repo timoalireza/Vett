@@ -19,6 +19,7 @@ import Constants from "expo-constants";
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import { AppStateProvider, useAppState } from "../src/state/app-state";
+import { VideoAnimationProvider } from "../src/components/Video/VideoAnimationProvider";
 import { CrashBoundary } from "../src/components/CrashBoundary";
 import { theme } from "../src/theme";
 import { queryClient } from "../src/state/query-client";
@@ -199,15 +200,16 @@ export default function RootLayout() {
     <ClerkProvider
       publishableKey={clerkPublishableKey}
       tokenCache={tokenCache}
-      fallbackRedirectUrl="/(tabs)/analyze"
     >
       <QueryClientProvider client={queryClient}>
         <AppStateProvider>
-          <RevenueCatAuthSync />
-          <CrashBoundary>
-            <StatusBar style="light" translucent />
-            <NavigationGate />
-          </CrashBoundary>
+          <VideoAnimationProvider>
+            <RevenueCatAuthSync />
+            <CrashBoundary>
+              <StatusBar style="light" translucent />
+              <NavigationGate />
+            </CrashBoundary>
+          </VideoAnimationProvider>
         </AppStateProvider>
       </QueryClientProvider>
     </ClerkProvider>

@@ -35,6 +35,12 @@
           },
           "androidIntentFilters": ["text/plain", "image/*"]
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Vett to access your microphone for audio analysis."
+        }
       ]
     ],
     "extra": {

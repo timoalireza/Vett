@@ -14,6 +14,8 @@ PODS:
     - ExpoModulesCore
   - ExpoBlur (13.0.3):
     - ExpoModulesCore
+  - ExpoClipboard (5.0.1):
+    - ExpoModulesCore
   - ExpoCrypto (13.0.2):
     - ExpoModulesCore
   - ExpoFileSystem (17.0.1):
@@ -1091,6 +1093,27 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - react-native-webview (13.16.0):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.01.01.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Codegen
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - React-nativeconfig (0.74.5)
   - React-NativeModulesApple (0.74.5):
     - glog
@@ -1413,6 +1436,7 @@ DEPENDENCIES:
   - "Expo (from `../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__react-native@0.7_4sqmg62d3cixomcpejaycasmxy/node_modules/expo`)"
   - "ExpoAsset (from `../../../node_modules/.pnpm/expo-asset@10.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._neshkv55xdscizaxot3o4ifhzi/node_modules/expo-asset/ios`)"
   - "ExpoBlur (from `../../../node_modules/.pnpm/expo-blur@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__gvsav7gyzug4y5qz4gyrxofbke/node_modules/expo-blur/ios`)"
+  - "ExpoClipboard (from `../../../node_modules/.pnpm/expo-clipboard@5.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_jpegkocnpzjwq7xec5bo2qauva/node_modules/expo-clipboard/ios`)"
   - "ExpoCrypto (from `../../../node_modules/.pnpm/expo-crypto@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._gjemitc46gmob7znl65ooi7rbe/node_modules/expo-crypto/ios`)"
   - "ExpoFileSystem (from `../../../node_modules/.pnpm/expo-file-system@17.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_6kegb5gdhamigighzntehimsxe/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../../../node_modules/.pnpm/expo-font@12.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5_d6hcoyja6a5pu4gkidx5kvmdze/node_modules/expo-font/ios`)"
@@ -1462,6 +1486,7 @@ DEPENDENCIES:
   - react-native-pager-view (from `../node_modules/react-native-pager-view`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
+  - react-native-webview (from `../node_modules/react-native-webview`)
   - React-nativeconfig (from `../node_modules/react-native/ReactCommon`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-perflogger (from `../node_modules/react-native/ReactCommon/reactperflogger`)
@@ -1522,6 +1547,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/expo-asset@10.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._neshkv55xdscizaxot3o4ifhzi/node_modules/expo-asset/ios"
   ExpoBlur:
     :path: "../../../node_modules/.pnpm/expo-blur@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__gvsav7gyzug4y5qz4gyrxofbke/node_modules/expo-blur/ios"
+  ExpoClipboard:
+    :path: "../../../node_modules/.pnpm/expo-clipboard@5.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_jpegkocnpzjwq7xec5bo2qauva/node_modules/expo-clipboard/ios"
   ExpoCrypto:
     :path: "../../../node_modules/.pnpm/expo-crypto@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._gjemitc46gmob7znl65ooi7rbe/node_modules/expo-crypto/ios"
   ExpoFileSystem:
@@ -1617,6 +1644,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-slider:
     :path: "../node_modules/@react-native-community/slider"
+  react-native-webview:
+    :path: "../node_modules/react-native-webview"
   React-nativeconfig:
     :path: "../node_modules/react-native/ReactCommon"
   React-NativeModulesApple:
@@ -1693,6 +1722,7 @@ SPEC CHECKSUMS:
   Expo: ed0a748eb6be0efd2c3df7f6de3f3158a14464c9
   ExpoAsset: 286fee7ba711ce66bf20b315e68106b13b8629fc
   ExpoBlur: 99901a4531f5d3ac4a19b362907b8f75da4ed9c8
+  ExpoClipboard: 24cc2b881ab6ca2e5b431b1f6d9d4a302adbf9d0
   ExpoCrypto: c5c052d5f9f668c21975cb4caf072cec23c823fa
   ExpoFileSystem: 2988caaf68b7cb706e36d382829d99811d9d76a5
   ExpoFont: 38dddf823e32740c2a9f37c926a33aeca736b5c4
@@ -1743,6 +1773,7 @@ SPEC CHECKSUMS:
   react-native-pager-view: 0f50eef500ef15dfae1f95a1c945f3d2a5ec5ade
   react-native-safe-area-context: df9763c5de6fa38883028e243a0b60123acb8858
   react-native-slider: 2f40d233a8e04d2659116389a2c7a531ee2f651c
+  react-native-webview: b836f1f162b87b5b8351611b5d5299f2b699360a
   React-nativeconfig: ba9a2e54e2f0882cf7882698825052793ed4c851
   React-NativeModulesApple: 84aaad2b0e546d7b839837ca537f6e72804a4cad
   React-perflogger: ed4e0c65781521e0424f2e5e40b40cc7879d737e

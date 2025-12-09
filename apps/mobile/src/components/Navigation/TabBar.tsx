@@ -1,19 +1,24 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Defs, RadialGradient, Stop, Circle } from "react-native-svg";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
+import { LensMotif } from "../Lens/LensMotif";
+
 export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
+  const id = React.useId();
   
   const tabs = [
     { key: "analyze", label: "Analyze", icon: "scan-outline", activeIcon: "scan" },
-    { key: "collections", label: "History", icon: "layers-outline", activeIcon: "layers" },
+    { key: "collections", label: "History", icon: "time-outline", activeIcon: "time" },
     { key: "profile", label: "Profile", icon: "person-outline", activeIcon: "person" },
   ] as const;
 
   return (
-    <View style={styles.container}>
-      {tabs.map((tab) => {
+    <View style={styles.wrapper}>
+      <View style={styles.container}>
+        {tabs.map((tab) => {
         // Find corresponding route
         const route = state.routes.find((r) => r.name === tab.key);
         if (!route) return null;
@@ -47,42 +52,82 @@ export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, naviga
             onLongPress={onLongPress}
             style={styles.tab}
           >
-            <Ionicons
-              name={isFocused ? (tab.activeIcon as any) : (tab.icon as any)}
-              size={24}
-              color={isFocused ? "#FFFFFF" : "#6B6B6B"}
-            />
-            <Text
-              style={[
-                styles.label,
-                { color: isFocused ? "#FFFFFF" : "#6B6B6B" },
-              ]}
-            >
-              {tab.label}
-            </Text>
+            <View style={styles.iconContainer}>
+              {isFocused && (
+                <View style={styles.glow}>
+                  <Svg height={50} width={50}>
+                    <Defs>
+                      <RadialGradient
+                        id={`glow-${id}-${tab.key}`}
+                        cx="50%"
+                        cy="50%"
+                        rx="50%"
+                        ry="50%"
+                      >
+                        <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.2" />
+                        <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+                      </RadialGradient>
+                    </Defs>
+                    <Circle cx={25} cy={25} r={25} fill={`url(#glow-${id}-${tab.key})`} />
+                  </Svg>
+                </View>
+              )}
+              {tab.key === "analyze" ? (
+                <LensMotif size={28} showPrompt={false} />
+              ) : (
+                <Ionicons
+                  name={isFocused ? (tab.activeIcon as any) : (tab.icon as any)}
+                  size={24}
+                  color={isFocused ? "#FFFFFF" : "#6B6B6B"}
+                />
+              )}
+            </View>
           </Pressable>
         );
       })}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  wrapper: {
+    backgroundColor: "#000000",
+    paddingBottom: Platform.OS === "ios" ? 8 : 0,
+  },
   container: {
     flexDirection: "row",
-    backgroundColor: "#0A0A0A",
-    borderTopWidth: 1,
-    borderTopColor: "#1A1A1A",
-    paddingBottom: Platform.OS === "ios" ? 34 : 16, // Safe area padding
-    paddingTop: 12,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginBottom: Platform.OS === "ios" ? 34 : 24,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "space-around",
   },
   tab: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     gap: 4,
   },
-  label: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 10,
+  iconContainer: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 40,
+    height: 40,
+  },
+  glow: {
+    position: "absolute",
+    width: 50,
+    height: 50,
+    top: -5,
+    left: -5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

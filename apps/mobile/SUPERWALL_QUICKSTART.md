@@ -98,7 +98,7 @@ Make sure your product IDs in App Store Connect **exactly match** the ones in Su
 ✅ Superwall service (`src/services/superwall.ts`)
 ✅ Paywall hook (`src/hooks/use-paywall.ts`)
 ✅ App layout integration (`app/_layout.tsx`)
-✅ User identification sync (`app/_layout-superwall.tsx`)
+✅ User identification sync (implemented in `src/services/superwall.ts`)
 ✅ Subscription modal integration (`app/modals/subscription.tsx`)
 
 ## 🔧 Next Steps
