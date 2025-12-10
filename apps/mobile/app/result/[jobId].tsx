@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, BackHandler } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useEffect, useState, useRef } from "react";
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, BackHandler, Dimensions, Image } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,8 @@ import Animated, {
   withTiming,
   withDelay,
   Easing,
+  useAnimatedScrollHandler,
+  interpolate,
 } from "react-native-reanimated";
 
 import { fetchAnalysis } from "../../src/api/analysis";
@@ -24,6 +26,7 @@ import { tokenProvider } from "../../src/api/token-provider";
 import { getScoreColor } from "../../src/utils/scoreColors";
 import { VideoAnimation } from "../../src/components/Video/VideoAnimation";
 import { useVideoAnimationState } from "../../src/components/Video/VideoAnimationProvider";
+import { ResizeMode } from "expo-av";
 
 // Define video assets
 const VIDEO_ASSETS = {
@@ -47,6 +50,10 @@ export default function ResultScreen() {
   const { getToken } = useAuth();
   const { registerVideo } = useVideoAnimationState();
   const [videoError, setVideoError] = useState(false);
+  const [sourcesExpanded, setSourcesExpanded] = useState(false);
+  const [contextExpanded, setContextExpanded] = useState(false);
+  const sourcesChevronRotation = useSharedValue(0);
+  const insets = useSafeAreaInsets();
 
   // Ensure token is set
   useEffect(() => {
@@ -106,6 +113,9 @@ export default function ResultScreen() {
   const lensTranslateY = useSharedValue(0);
   const lensScale = useSharedValue(1);
   
+  // Claim text animation: fade in at 3.5 seconds
+  const claimTextOpacity = useSharedValue(0);
+  
   // Card animations: fade in with stagger
   const card1Opacity = useSharedValue(0);
   const card1TranslateY = useSharedValue(30);
@@ -127,19 +137,23 @@ export default function ResultScreen() {
         easing: Easing.out(Easing.ease),
       }));
 
-      // Cards fade in with stagger: delay 400ms, stagger 100ms
-      card1Opacity.value = withDelay(500, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
-      card1TranslateY.value = withDelay(500, withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) }));
+      // Claim text fades in at 2.5 seconds
+      claimTextOpacity.value = withDelay(2500, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
+
+      // Cards fade in with stagger: delay 2.5 seconds (2500ms), stagger 100ms
+      card1Opacity.value = withDelay(2500, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
+      card1TranslateY.value = withDelay(2500, withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) }));
       
-      card2Opacity.value = withDelay(600, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
-      card2TranslateY.value = withDelay(600, withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) }));
+      card2Opacity.value = withDelay(2600, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
+      card2TranslateY.value = withDelay(2600, withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) }));
       
-      card3Opacity.value = withDelay(700, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
-      card3TranslateY.value = withDelay(700, withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) }));
+      card3Opacity.value = withDelay(2700, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
+      card3TranslateY.value = withDelay(2700, withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) }));
     } else {
       // Keep lens in place during loading (no animation)
       lensTranslateY.value = 0;
       lensScale.value = 1;
+      claimTextOpacity.value = 0;
       card1Opacity.value = 0;
       card1TranslateY.value = 30;
       card2Opacity.value = 0;
@@ -154,6 +168,10 @@ export default function ResultScreen() {
       { translateY: lensTranslateY.value },
       { scale: lensScale.value },
     ],
+  }));
+
+  const claimTextAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: claimTextOpacity.value,
   }));
 
   const card1AnimatedStyle = useAnimatedStyle(() => ({
@@ -171,6 +189,10 @@ export default function ResultScreen() {
     transform: [{ translateY: card3TranslateY.value }],
   }));
 
+  const chevronAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${sourcesChevronRotation.value}deg` }],
+  }));
+
   const getVerdictLabel = (s: number) => {
     if (s >= 90) return 'True';
     if (s >= 70) return 'Mostly True';
@@ -180,6 +202,30 @@ export default function ResultScreen() {
     return 'Completely False';
   };
 
+  // Truncate claim text if over 65 characters
+  const truncateClaimText = (text: string): string => {
+    if (text.length <= 65) return text;
+    return text.slice(0, 62) + '...';
+  };
+
+  // Calculate dynamic font size based on text length
+  const getClaimFontSize = (text: string): number => {
+    const length = text.length;
+    if (length <= 20) return 58;
+    if (length <= 35) return 48;
+    if (length <= 50) return 40;
+    return 34;
+  };
+
+  // Get claim text for display
+  const displayClaimText = isCompleted 
+    ? (analysis?.rawInput || analysis?.claims?.[0]?.text || claimText || "No claim text detected")
+    : "";
+  
+  const truncatedClaimText = truncateClaimText(displayClaimText);
+  const claimFontSize = getClaimFontSize(truncatedClaimText);
+  const claimLineHeight = claimFontSize * 1.2;
+
   // Video selection matches color mapping: ≥70=green, 45-69=amber, <45=red
   const getResultVideo = (s: number) => {
     if (s >= 70) return VIDEO_ASSETS.resultGreen;
@@ -187,81 +233,244 @@ export default function ResultScreen() {
     return VIDEO_ASSETS.resultRed;
   };
 
+  // Get screen dimensions for proper video sizing
+  const screenDimensions = Dimensions.get('window');
+  const screenWidth = screenDimensions.width;
+  const screenHeight = screenDimensions.height;
+
+  // Scroll handler - lock at top, consistent scroll speed
+  const scrollY = useSharedValue(0);
+  const scrollViewRef = useRef<any>(null);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      // Clamp scroll to prevent negative values (scrolling up past top)
+      const offsetY = Math.max(0, event.contentOffset.y);
+      scrollY.value = offsetY;
+    },
+  });
+
+  // Animated style for background - moves at same speed as scroll (1:1 ratio)
+  const backgroundScrollStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: -scrollY.value }],
+    };
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Header with lens and score */}
-        <View style={styles.header}>
-          <Animated.View style={[
-            { position: 'relative', alignItems: 'center', justifyContent: 'center' },
-            isCompleted ? lensAnimatedStyle : { transform: [{ translateY: 0 }, { scale: 1 }] }
-          ]}>
-            {isCompleted ? (
-              videoError ? (
-                <>
-                  <LensMotif size={420} />
-                  <ScoreRing score={score} size={420} />
-                  <ColorTintOverlay score={score} size={420} />
-                </>
-              ) : (
+    <View style={styles.container}>
+      {/* Full-screen video background - fixed position, moves with scroll at 1:1 ratio */}
+      {!videoError && (
+        <Animated.View style={[
+          StyleSheet.absoluteFill,
+          { 
+            zIndex: 0,
+            width: screenWidth, 
+            height: screenHeight,
+            overflow: 'hidden',
+            backgroundColor: '#000000',
+          },
+          backgroundScrollStyle
+        ]}>
+              {isCompleted ? (
                 <VideoAnimation
                   source={getResultVideo(score)}
                   shouldPlay={true}
-                  loopFromSeconds={5}
-                  style={{ width: 420, height: 420 }}
+                  loopFromSeconds={4}
+                  isLooping={false}
+                  freezeAtSeconds={6}
+                  style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
+                  resizeMode={ResizeMode.COVER}
                   onError={() => setVideoError(true)}
                 />
-              )
-            ) : (
-              videoError ? (
-                <AnimatedLens size={420} claimText={claimText || "Analyzing..."} />
               ) : (
-                <View style={{ width: 420, height: 420 }}>
-                  <VideoAnimation
-                    source={VIDEO_ASSETS.loading}
-                    shouldPlay={true}
-                    loopFromSeconds={5}
-                    style={{ width: '100%', height: '100%' }}
-                    onError={() => setVideoError(true)}
-                  />
-                  <View style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: 420,
-                    height: 420,
+                <VideoAnimation
+                  source={VIDEO_ASSETS.loading}
+                  shouldPlay={true}
+                  loopFromSeconds={4}
+                  isLooping={false}
+                  style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
+                  resizeMode={ResizeMode.COVER}
+                  onError={() => setVideoError(true)}
+                />
+              )}
+            </Animated.View>
+          )}
+
+      {/* Fallback to animated lens if video fails */}
+      {videoError && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 0, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }]}>
+          {isCompleted ? (
+            <>
+              <LensMotif size={420} />
+              <ScoreRing score={score} size={420} />
+              <ColorTintOverlay score={score} size={420} />
+            </>
+          ) : (
+            <AnimatedLens size={420} claimText={claimText || "Analyzing..."} />
+          )}
+        </View>
+      )}
+
+      <SafeAreaView style={{ flex: 1, zIndex: 10 }}>
+        <Animated.ScrollView 
+          ref={scrollViewRef}
+          style={{ flex: 1 }} 
+          contentContainerStyle={{ paddingBottom: 40 }}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={true}
+          contentOffset={{ x: 0, y: 0 }}
+        >
+          {/* Header with lens and score */}
+          <View style={[styles.header, { minHeight: screenHeight }]}>
+            <Animated.View style={[
+              { position: 'relative', alignItems: 'center', justifyContent: 'center', width: 420, height: 420 },
+              isCompleted ? lensAnimatedStyle : { transform: [{ translateY: 0 }, { scale: 1 }] }
+            ]}>
+              {/* Claim text overlay inside orb - properly centered - only show when completed */}
+              {isCompleted && (
+                <Animated.View style={[
+                  {
+                    width: '100%',
+                    height: '100%',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    zIndex: 100,
-                  }}>
-                    <Text 
-                      style={{
-                        fontFamily: 'Inter_400Regular',
-                        fontSize: 14,
-                        color: '#FFFFFF',
-                        textAlign: 'center',
-                        paddingHorizontal: 32,
-                        maxWidth: 420 * 0.85,
-                        textShadowColor: 'rgba(0, 0, 0, 0.5)',
-                        textShadowOffset: { width: 0, height: 1 },
-                        textShadowRadius: 2,
-                      }}
-                      numberOfLines={4}
-                    >
-                      {claimText || "Analyzing..."}
-                    </Text>
-                  </View>
-                </View>
-              )
-            )}
-          </Animated.View>
+                    paddingHorizontal: 40,
+                    transform: [{ translateY: 80 }], // Move text down so center aligns with cursor
+                  },
+                  claimTextAnimatedStyle
+                ]}>
+                  <Text 
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: claimFontSize,
+                      color: '#FFFFFF',
+                      textAlign: 'center',
+                      maxWidth: 420 * 0.85,
+                      textShadowColor: 'rgba(0, 0, 0, 0.8)',
+                      textShadowOffset: { width: 0, height: 2 },
+                      textShadowRadius: 6,
+                      lineHeight: claimLineHeight,
+                    }}
+                    numberOfLines={3}
+                  >
+                    "{truncatedClaimText}"
+                  </Text>
+                </Animated.View>
+              )}
+            </Animated.View>
           
           {isCompleted ? (
             <>
-              <Text style={styles.scoreValue}>{score}</Text>
-              <Text style={[styles.verdictLabel, { color: scoreColor }]}>
-                {getVerdictLabel(score)}
-              </Text>
+              {/* Verdict and Score side-by-side boxes */}
+              <View style={[styles.verdictScoreRow, { marginTop: -140 }]}>
+                <Animated.View style={[card1AnimatedStyle, styles.verdictBox]}>
+                  <Text style={styles.verdictScoreLabel}>Verdict:</Text>
+                  <Text style={[styles.verdictScoreValue, { color: scoreColor, textAlign: 'center' }]}>
+                    {getVerdictLabel(score)}
+                  </Text>
+                </Animated.View>
+                <Animated.View style={[card1AnimatedStyle, styles.scoreBox]}>
+                  <Text style={styles.verdictScoreLabel}>Score:</Text>
+                  <Text style={[styles.verdictScoreValue, { color: scoreColor, fontSize: 36, textAlign: 'center' }]}>
+                    {score}
+                  </Text>
+                </Animated.View>
+              </View>
+
+              {/* Summary Card */}
+              <Animated.View style={[card2AnimatedStyle, { marginTop: 16 }]}>
+                <Card label="Summary">
+                  <Text style={styles.cardText}>
+                    {analysis?.summary || "No summary available."}
+                  </Text>
+                </Card>
+              </Animated.View>
+
+              {/* Context Card */}
+              <Animated.View style={[card3AnimatedStyle, { marginTop: 16 }]}>
+                <Card label="Context">
+                  <Text style={styles.cardText}>
+                    {(() => {
+                      const fullText = analysis?.recommendation || analysis?.reasoning || "No additional context available.";
+                      if (!contextExpanded) {
+                        // Limit to 150 words
+                        const words = fullText.split(' ');
+                        if (words.length > 150) {
+                          const truncated = words.slice(0, 150).join(' ');
+                          // Find the last complete word boundary to avoid cutting mid-word
+                          const lastSpaceIndex = truncated.lastIndexOf(' ');
+                          return lastSpaceIndex > 0 ? truncated.substring(0, lastSpaceIndex) : truncated;
+                        }
+                        return fullText;
+                      }
+                      return fullText;
+                    })()}
+                  </Text>
+                  {(() => {
+                    const fullText = analysis?.recommendation || analysis?.reasoning || "No additional context available.";
+                    const words = fullText.split(' ');
+                    if (words.length > 150) {
+                      return (
+                        <TouchableOpacity
+                          onPress={() => setContextExpanded(!contextExpanded)}
+                          style={styles.readMoreButton}
+                        >
+                          <Text style={styles.readMoreText}>
+                            {contextExpanded ? 'Read less' : 'Read more'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }
+                    return null;
+                  })()}
+                </Card>
+              </Animated.View>
+
+              {/* Sources Card */}
+              {analysis?.sources && analysis.sources.length > 0 && (
+                <Animated.View style={[card3AnimatedStyle, { marginTop: 16 }]}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={{ width: '100%' }}
+                    onPress={() => {
+                      const newExpanded = !sourcesExpanded;
+                      setSourcesExpanded(newExpanded);
+                      sourcesChevronRotation.value = withTiming(newExpanded ? 90 : 0, {
+                        duration: 200,
+                        easing: Easing.out(Easing.ease),
+                      });
+                    }}
+                  >
+                    <View style={styles.card}>
+                      <View style={styles.sourcesHeader}>
+                        <Text style={styles.cardLabel}>Sources</Text>
+                        <View style={styles.sourcesHeaderRight}>
+                          <View style={styles.sourcesBadge}>
+                            <Text style={styles.sourcesBadgeText}>{analysis.sources.length}</Text>
+                          </View>
+                          <Animated.View style={chevronAnimatedStyle}>
+                            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                          </Animated.View>
+                        </View>
+                      </View>
+                      {sourcesExpanded && (
+                        <View style={styles.sourcesList}>
+                          {analysis.sources.map((source: any, index: number) => (
+                            <View key={index} style={styles.sourceItem}>
+                              <Text style={styles.sourceText}>
+                                {source.url || source.title || `Source ${index + 1}`}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
             </>
           ) : (
             <View style={styles.loadingContainer}>
@@ -272,52 +481,12 @@ export default function ResultScreen() {
             </View>
           )}
         </View>
+        </Animated.ScrollView>
+      </SafeAreaView>
 
-        {isCompleted && (
-          <View style={styles.cardsContainer}>
-            {/* CLAIM CARD */}
-            <Animated.View style={card1AnimatedStyle}>
-              <Card label="CLAIM">
-                <Text style={styles.cardText}>
-                  "{analysis?.rawInput || analysis?.claims?.[0]?.text || "No claim text detected"}"
-                </Text>
-              </Card>
-            </Animated.View>
-
-            {/* SUMMARY CARD */}
-            <Animated.View style={card2AnimatedStyle}>
-              <Card label="SUMMARY">
-                <Text style={styles.cardText}>
-                  {analysis?.summary || "No summary available."}
-                </Text>
-              </Card>
-            </Animated.View>
-
-            {/* SOURCES CARD */}
-            {analysis?.sources && analysis.sources.length > 0 && (
-              <Animated.View style={card3AnimatedStyle}>
-                <SourcesCard sources={analysis.sources} />
-              </Animated.View>
-            )}
-
-            {/* Verify Another Claim Button */}
-            <Animated.View style={[card3AnimatedStyle, { marginTop: 8 }]}>
-              <TouchableOpacity
-                style={styles.resetButton}
-                onPress={() => {
-                  router.replace("/(tabs)/analyze");
-                }}
-              >
-                <Text style={styles.resetButtonText}>Verify Another Claim</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Back Button */}
+      {/* Back Button - positioned outside SafeAreaView to ensure proper placement */}
       <TouchableOpacity 
-        style={styles.backButton} 
+        style={[styles.backButton, { top: insets.top + 50 }]} 
         onPress={() => {
           if (router.canGoBack()) {
             router.back();
@@ -326,10 +495,11 @@ export default function ResultScreen() {
           }
         }}
         activeOpacity={0.7}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
         <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -337,11 +507,86 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+    overflow: 'hidden',
   },
   header: {
     alignItems: 'center',
     paddingTop: 40,
     marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  verdictScoreRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 20,
+  },
+  verdictBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  scoreBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  verdictScoreLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#6B6B6B',
+    letterSpacing: 1,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  verdictScoreValue: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  sourcesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sourcesHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sourcesBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  sourcesBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  sourcesList: {
+    marginTop: 16,
+    gap: 12,
+  },
+  sourceItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  sourceText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: '#E5E5E5',
+    lineHeight: 20,
   },
   loadingContainer: {
     marginTop: 20,
@@ -377,6 +622,16 @@ const styles = StyleSheet.create({
     color: '#E5E5E5',
     lineHeight: 22,
   },
+  readMoreButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  readMoreText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: '#FFFFFF',
+    textDecorationLine: 'underline',
+  },
   scoreValue: {
     marginTop: 16,
     fontFamily: 'Inter_200ExtraLight',
@@ -392,7 +647,6 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: "absolute",
-    top: 20, // Adjusted for SafeAreaView
     left: 20,
     padding: 8,
     zIndex: 1000,

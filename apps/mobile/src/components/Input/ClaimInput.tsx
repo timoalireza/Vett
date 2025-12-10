@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import {
   TextInput,
   View,
@@ -12,14 +12,28 @@ interface ClaimInputProps extends TextInputProps {
   onRequestFocus?: () => void;
 }
 
-export const ClaimInput: React.FC<ClaimInputProps> = ({
+export interface ClaimInputRef {
+  focus: () => void;
+  blur: () => void;
+}
+
+export const ClaimInput = forwardRef<ClaimInputRef, ClaimInputProps>(({
   onPaste,
   isFocused,
   onRequestFocus,
   style,
   ...props
-}) => {
+}, ref) => {
   const inputRef = useRef<TextInput>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      inputRef.current?.focus();
+    },
+    blur: () => {
+      inputRef.current?.blur();
+    },
+  }));
 
   useEffect(() => {
     if (isFocused && inputRef.current) {
@@ -47,7 +61,7 @@ export const ClaimInput: React.FC<ClaimInputProps> = ({
       />
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

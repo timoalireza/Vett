@@ -4,14 +4,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
   Alert,
-  SafeAreaView,
   Pressable,
-  Dimensions
+  Dimensions,
+  Image
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,7 +33,7 @@ import { submitAnalysis } from "../../src/api/analysis";
 import { useTheme } from "../../src/hooks/use-theme";
 import { LensMotif } from "../../src/components/Lens/LensMotif";
 import { AnimatedLens } from "../../src/components/Lens/AnimatedLens";
-import { ClaimInput } from "../../src/components/Input/ClaimInput";
+import { ClaimInput, ClaimInputRef } from "../../src/components/Input/ClaimInput";
 import { useLensState } from "../../src/hooks/useLensState";
 import { UnicornStudioScene } from "../../src/components/UnicornStudio/UnicornStudioScene";
 import { VideoAnimation } from "../../src/components/Video/VideoAnimation";
@@ -46,6 +45,9 @@ const VIDEO_IDLE = require("../../assets/animations/home-idle.mp4");
 const VIDEO_TYPING = require("../../assets/animations/home-typing.mp4");
 const VIDEO_LOADING = require("../../assets/animations/loading.mp4");
 
+// Still image for home-idle (frame hold to prevent flicker)
+const HOME_IDLE_STILL = require("../../assets/animations/home-idle-still.png");
+
 export default function AnalyzeScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -55,8 +57,16 @@ export default function AnalyzeScreen() {
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const inputRef = useRef<ClaimInputRef>(null);
   
   const { state: lensState, toInput, toLoading, reset } = useLensState();
+  
+  // Animation for input text fade-in
+  const inputOpacity = useSharedValue(0);
+  const inputScale = useSharedValue(1);
+  const inputWasVisibleRef = useRef(false); // Track if input was previously visible to detect transitions
+  const actionRowWasVisibleRef = useRef(false); // Track if action row was previously visible to detect transitions
+  const isTransitioningToInputRef = useRef(false); // Track if we're in the middle of transitioning to input mode
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
   const [permissionStatus, requestPermission] = ImagePicker.useMediaLibraryPermissions();
   const { registerVideo } = useVideoAnimationState();
@@ -65,21 +75,22 @@ export default function AnalyzeScreen() {
   const actionRowOpacity = useSharedValue(0);
   const actionRowTranslateY = useSharedValue(20);
 
-  // Video source state
-  const [videoSource, setVideoSource] = useState(VIDEO_IDLE);
-  const [previousVideoSource, setPreviousVideoSource] = useState<typeof VIDEO_IDLE | null>(null);
-  // Ref to track current video source for comparison in async callbacks
-  const videoSourceRef = useRef(videoSource);
-  // Ref to track which video is currently displayed as the previous frame hold
-  // This ensures we only clear the correct previous video when it finishes loading
-  const displayedPreviousVideoRef = useRef<typeof VIDEO_IDLE | null>(null);
+  // Video source state - track which video should be active
+  const [activeVideoSource, setActiveVideoSource] = useState(VIDEO_IDLE);
+  // Track loaded state for each video to know when they're ready
+  const [loadedVideos, setLoadedVideos] = useState<Set<typeof VIDEO_IDLE>>(new Set());
+  // Opacity values for each video (all videos stay mounted)
+  const idleOpacity = useSharedValue(1);
+  const typingOpacity = useSharedValue(0);
+  const loadingOpacity = useSharedValue(0);
 
   useEffect(() => {
     let newSource = VIDEO_IDLE;
     if (lensState === 'loading') {
       newSource = VIDEO_LOADING;
       registerVideo('loading');
-    } else if (isInputFocused || input || selectedImage) {
+    } else if (lensState === 'input' || isInputFocused || input || selectedImage) {
+      // Switch to typing video immediately when lensState is 'input' (not waiting for isInputFocused)
       newSource = VIDEO_TYPING;
       registerVideo('home-typing');
     } else {
@@ -87,50 +98,85 @@ export default function AnalyzeScreen() {
       registerVideo('home-idle');
     }
 
-    // If source is changing, keep previous video visible
-    if (newSource !== videoSource) {
-      setPreviousVideoSource(videoSource);
-      displayedPreviousVideoRef.current = videoSource; // Track which video is now displayed as previous
-      setVideoSource(newSource);
-      videoSourceRef.current = newSource;
-    }
-  }, [lensState, isInputFocused, input, selectedImage, registerVideo, videoSource]);
-
-  const handleNewVideoLoad = useCallback((loadedSource: typeof VIDEO_IDLE) => {
-    // Clear previous video after a small delay to ensure smooth transition
-    // The loadedSource is the current video that just finished loading (from VideoAnimation onLoad)
-    setTimeout(() => {
-      // Read current video source from ref to check if we're still on the same video
-      const currentSource = videoSourceRef.current;
+    if (newSource !== activeVideoSource) {
+      setActiveVideoSource(newSource);
       
-      setPreviousVideoSource((prev: typeof VIDEO_IDLE | null) => {
-        // Only clear if:
-        // 1. There is a previous video displayed
-        // 2. The loaded source matches the current video source (we're still on the same video)
-        // This ensures we only clear the previous video when the current video finishes loading,
-        // and prevents clearing if the user rapidly switched to a different video
-        if (prev && loadedSource === currentSource) {
-          displayedPreviousVideoRef.current = null;
-          return null;
-        }
-        return prev;
-      });
-    }, 100);
+      // Instant opacity switch - no fade to prevent flicker
+      // Ensure videos reset to position 0 when they become active
+      if (newSource === VIDEO_IDLE) {
+        idleOpacity.value = 1;
+        typingOpacity.value = 0;
+        loadingOpacity.value = 0;
+      } else if (newSource === VIDEO_TYPING) {
+        idleOpacity.value = 0;
+        typingOpacity.value = 1;
+        loadingOpacity.value = 0;
+      } else if (newSource === VIDEO_LOADING) {
+        idleOpacity.value = 0;
+        typingOpacity.value = 0;
+        loadingOpacity.value = 1;
+      }
+    }
+  }, [lensState, isInputFocused, input, selectedImage, registerVideo, activeVideoSource, idleOpacity, typingOpacity, loadingOpacity]);
+
+  const handleVideoLoad = useCallback((loadedSource: typeof VIDEO_IDLE) => {
+    setLoadedVideos((prev) => new Set(prev).add(loadedSource));
   }, []);
 
   useEffect(() => {
-    if (isInputFocused || input || selectedImage) {
-      actionRowOpacity.value = withDelay(50, withTiming(1, { duration: 500, easing: Easing.out(Easing.exp) }));
-      actionRowTranslateY.value = withDelay(50, withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) }));
+    const isInputVisible = isInputFocused || input || selectedImage;
+    
+    if (isInputVisible) {
+      // Clear transition flag once input becomes visible
+      isTransitioningToInputRef.current = false;
+      
+      // Action buttons fade-in with 750ms delay to match input text - only when transitioning from hidden to visible
+      if (!actionRowWasVisibleRef.current) {
+        actionRowOpacity.value = withDelay(750, withTiming(1, { duration: 500, easing: Easing.out(Easing.exp) }));
+        actionRowTranslateY.value = withDelay(750, withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) }));
+        actionRowWasVisibleRef.current = true;
+      }
+      // Start input fade-in with delay only when transitioning from hidden to visible
+      if (!inputWasVisibleRef.current) {
+        inputOpacity.value = withDelay(750, withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) }));
+        inputWasVisibleRef.current = true;
+      }
     } else {
-      actionRowOpacity.value = 0;
-      actionRowTranslateY.value = 20;
+      // Don't reset animations if we're in the middle of transitioning to input mode
+      if (!isTransitioningToInputRef.current) {
+        actionRowOpacity.value = 0;
+        actionRowTranslateY.value = 20;
+        inputOpacity.value = 0;
+        inputWasVisibleRef.current = false;
+        actionRowWasVisibleRef.current = false;
+      }
     }
-  }, [isInputFocused, input, selectedImage, actionRowOpacity, actionRowTranslateY]);
+  }, [isInputFocused, input, selectedImage, actionRowOpacity, actionRowTranslateY, inputOpacity]);
 
   const actionRowStyle = useAnimatedStyle(() => ({
     opacity: actionRowOpacity.value,
     transform: [{ translateY: actionRowTranslateY.value }],
+  }));
+
+  const inputStyle = useAnimatedStyle(() => ({
+    opacity: inputOpacity.value,
+    transform: [
+      { translateY: -50 }, // Preserve the vertical offset
+      { scale: inputScale.value },
+    ],
+  }));
+
+  // Animated styles for video layers
+  const idleVideoStyle = useAnimatedStyle(() => ({
+    opacity: idleOpacity.value,
+  }));
+
+  const typingVideoStyle = useAnimatedStyle(() => ({
+    opacity: typingOpacity.value,
+  }));
+
+  const loadingVideoStyle = useAnimatedStyle(() => ({
+    opacity: loadingOpacity.value,
   }));
 
   useFocusEffect(
@@ -139,7 +185,15 @@ export default function AnalyzeScreen() {
       setInput("");
       setSelectedImage(null);
       setIsInputFocused(false);
-    }, [reset])
+      // Reset input opacity animated value to match UI state
+      inputOpacity.value = 0;
+      inputScale.value = 1;
+      actionRowOpacity.value = 0;
+      actionRowTranslateY.value = 20;
+      inputWasVisibleRef.current = false; // Reset visibility tracking
+      actionRowWasVisibleRef.current = false; // Reset action row visibility tracking
+      isTransitioningToInputRef.current = false; // Reset transition flag
+    }, [reset, inputOpacity, inputScale, actionRowOpacity, actionRowTranslateY])
   );
 
   useEffect(() => {
@@ -167,7 +221,14 @@ export default function AnalyzeScreen() {
         if (content && typeof content === "string") {
           setInput(content);
           toInput();
+          // Mark that we're transitioning to input mode to prevent useEffect from resetting animations
+          isTransitioningToInputRef.current = true;
+          // Set focused state immediately so useEffect can handle animation (prevents double animation)
           setIsInputFocused(true);
+          // Set focused state and focus input after delay to trigger keyboard consistently
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 750);
           handled = true;
         }
       } else if (shareIntent.files && shareIntent.files.length > 0) {
@@ -176,6 +237,14 @@ export default function AnalyzeScreen() {
         if (uri && typeof uri === "string") {
           setSelectedImage(uri);
           toInput();
+          // Mark that we're transitioning to input mode to prevent useEffect from resetting animations
+          isTransitioningToInputRef.current = true;
+          // Set focused state immediately so useEffect can handle animation (prevents double animation)
+          setIsInputFocused(true);
+          // Focus input after delay to trigger keyboard consistently
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 750);
           handled = true;
         }
       }
@@ -221,11 +290,23 @@ export default function AnalyzeScreen() {
     if (!trimmedInput && !selectedImage) return;
     
     Keyboard.dismiss();
+    // Set transition flag to prevent useEffect from resetting animations during fade-out
+    isTransitioningToInputRef.current = true;
     setIsInputFocused(false);
-    mutation.mutate({
-      text: trimmedInput || undefined,
-      imageUri: selectedImage || undefined,
-    });
+    
+    // Animate claim text to fade and shrink into orb before submitting
+    inputOpacity.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.ease) });
+    inputScale.value = withTiming(0.3, { duration: 400, easing: Easing.out(Easing.ease) });
+    
+    // Wait for animation to complete before submitting
+    setTimeout(() => {
+      mutation.mutate({
+        text: trimmedInput || undefined,
+        imageUri: selectedImage || undefined,
+      });
+      // Clear transition flag after submission completes
+      isTransitioningToInputRef.current = false;
+    }, 400);
   };
 
   const handlePaste = async () => {
@@ -234,7 +315,14 @@ export default function AnalyzeScreen() {
       if (text) {
         setInput(text);
         toInput();
+        // Mark that we're transitioning to input mode to prevent useEffect from resetting animations
+        isTransitioningToInputRef.current = true;
+        // Set focused state immediately so useEffect can handle animation (prevents double animation)
         setIsInputFocused(true);
+        // Set focused state and focus input after delay to trigger keyboard consistently
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 750);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (error) {
@@ -261,6 +349,14 @@ export default function AnalyzeScreen() {
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setSelectedImage(result.assets[0].uri);
       toInput();
+      // Mark that we're transitioning to input mode to prevent useEffect from resetting animations
+      isTransitioningToInputRef.current = true;
+      // Set focused state immediately so useEffect can handle animation (prevents double animation)
+      setIsInputFocused(true);
+      // Focus input after delay to trigger keyboard consistently
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 750);
     }
   };
 
@@ -268,7 +364,14 @@ export default function AnalyzeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (lensState === "idle" || lensState === "input") {
       toInput();
+      // Mark that we're transitioning to input mode to prevent useEffect from resetting animations
+      isTransitioningToInputRef.current = true;
+      // Set focused state immediately so useEffect can handle animation (prevents double animation)
       setIsInputFocused(true);
+      // Focus input after delay to trigger keyboard consistently
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 750);
     }
   };
 
@@ -306,36 +409,59 @@ export default function AnalyzeScreen() {
   const screenHeight = screenDimensions.height;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Video Background - Full Screen */}
       {!videoError && (
-        <View style={[StyleSheet.absoluteFill, { zIndex: 0, width: screenWidth, height: screenHeight }]}>
-          {/* Previous video as frame hold layer */}
-          {previousVideoSource && previousVideoSource !== videoSource && (
-            <View style={[StyleSheet.absoluteFill, { zIndex: 1 }]}>
-              <VideoAnimation 
-                source={previousVideoSource}
-                shouldPlay={false}
-                style={StyleSheet.absoluteFill}
-                resizeMode={ResizeMode.COVER}
-                loopFromSeconds={5}
-                onError={() => {}}
-              />
-            </View>
-          )}
+        <View style={[StyleSheet.absoluteFill, { zIndex: 0, top: 0, left: 0, right: 0, bottom: 0, width: screenWidth, height: screenHeight, overflow: 'hidden' }]}>
+          {/* Still image layer for home-idle (always visible underneath to prevent flicker) */}
+          <Image 
+            source={HOME_IDLE_STILL}
+            style={[StyleSheet.absoluteFill, { zIndex: 0, top: 0, left: 0, right: 0, bottom: 0, width: screenWidth, height: screenHeight }]}
+            resizeMode="cover"
+          />
           
-          {/* Current video on top */}
-          <View style={[StyleSheet.absoluteFill, { zIndex: 2 }]}>
+          {/* All videos mounted simultaneously - visibility controlled by opacity */}
+          {/* Home Idle Video */}
+          <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 1, top: 0, left: 0, right: 0, bottom: 0, width: screenWidth, height: screenHeight }, idleVideoStyle]} pointerEvents="none">
             <VideoAnimation 
-              source={videoSource}
-              shouldPlay={true}
-              style={StyleSheet.absoluteFill}
+              source={VIDEO_IDLE}
+              shouldPlay={activeVideoSource === VIDEO_IDLE}
+              style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
               resizeMode={ResizeMode.COVER}
-              loopFromSeconds={5}
+              loopFromSeconds={4}
+              isLooping={false}
               onError={() => setVideoError(true)}
-              onLoad={handleNewVideoLoad}
+              onLoad={handleVideoLoad}
             />
-          </View>
+          </Animated.View>
+
+          {/* Typing Video */}
+          <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 2, top: 0, left: 0, right: 0, bottom: 0, width: screenWidth, height: screenHeight }, typingVideoStyle]} pointerEvents="none">
+            <VideoAnimation 
+              source={VIDEO_TYPING}
+              shouldPlay={activeVideoSource === VIDEO_TYPING}
+              style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
+              resizeMode={ResizeMode.COVER}
+              loopFromSeconds={4}
+              isLooping={false}
+              onError={() => setVideoError(true)}
+              onLoad={handleVideoLoad}
+            />
+          </Animated.View>
+
+          {/* Loading Video */}
+          <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 3, top: 0, left: 0, right: 0, bottom: 0, width: screenWidth, height: screenHeight }, loadingVideoStyle]} pointerEvents="none">
+            <VideoAnimation 
+              source={VIDEO_LOADING}
+              shouldPlay={activeVideoSource === VIDEO_LOADING}
+              style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
+              resizeMode={ResizeMode.COVER}
+              loopFromSeconds={4}
+              isLooping={false}
+              onError={() => setVideoError(true)}
+              onLoad={handleVideoLoad}
+            />
+          </Animated.View>
         </View>
       )}
       
@@ -359,8 +485,7 @@ export default function AnalyzeScreen() {
         setIsInputFocused(false);
         if (!input && !selectedImage) reset();
       }}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <View
           style={[styles.content, { zIndex: 10, backgroundColor: 'transparent' }]}
         >
           <View style={styles.lensContainer}>
@@ -384,7 +509,7 @@ export default function AnalyzeScreen() {
                         // Circular mask overlay for video (creates lens effect)
                         <View style={{ width: 420, height: 420, borderRadius: 210, overflow: 'hidden', position: 'absolute' }}>
                           <Pressable 
-                            onPress={videoSource === VIDEO_IDLE ? handleLensPress : undefined}
+                            onPress={activeVideoSource === VIDEO_IDLE ? handleLensPress : undefined}
                             style={StyleSheet.absoluteFill}
                           >
                             <View style={StyleSheet.absoluteFill} />
@@ -394,8 +519,9 @@ export default function AnalyzeScreen() {
 
                     {/* Input Overlay inside Lens - only show when user is typing (not loading) */}
                     {(isInputFocused || input || selectedImage) && lensState !== 'loading' && (
-                      <View style={{ position: 'absolute', width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }} pointerEvents="box-none">
+                      <Animated.View style={[{ position: 'absolute', width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }, inputStyle]} pointerEvents="box-none">
                         <ClaimInput
+                          ref={inputRef}
                           value={input}
                           onChangeText={(text) => setInput(text)}
                           onSubmitEditing={handleSubmit}
@@ -409,13 +535,15 @@ export default function AnalyzeScreen() {
                             marginTop: 0, 
                             color: "#FFFFFF", 
                             textAlign: "center",
-                            width: 315, // Constrain width inside lens (420px * 0.75)
+                            width: 240, // Narrower width aligned with action buttons
+                            maxWidth: 240,
                             fontSize: 13,
                             fontFamily: "Inter_400Regular",
+                            textAlignVertical: "center",
                           }}
                           placeholderTextColor="rgba(255,255,255,0.5)"
                         />
-                      </View>
+                      </Animated.View>
                     )}
                   </View>
                   
@@ -444,7 +572,7 @@ export default function AnalyzeScreen() {
             </Animated.View>
               
             {/* Content Below Lens */}
-            <View style={{ marginTop: isInputFocused ? -32 : 24, width: '100%', alignItems: 'center', paddingHorizontal: 20 }}>
+            <View style={{ marginTop: isInputFocused ? -80 : -40, width: '100%', alignItems: 'center', paddingHorizontal: 20 }}>
               {lensState === "loading" ? (
                 // Loading text is now inside the lens/video overlay, but we might want status text below too?
                 // The original design had text below. But "Loading animation" video might cover it.
@@ -490,9 +618,9 @@ export default function AnalyzeScreen() {
             </View>
           </View>
 
-        </KeyboardAvoidingView>
+        </View>
       </TouchableWithoutFeedback>
-    </SafeAreaView>
+    </View>
   );
 }
 
