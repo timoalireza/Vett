@@ -306,7 +306,7 @@ export default function ResultScreen() {
               <ColorTintOverlay score={score} size={420} />
             </>
           ) : (
-            <AnimatedLens size={420} claimText={claimText || "Analyzing..."} />
+            <AnimatedLens size={420} claimText={claimText || analysis?.rawInput || analysis?.claims?.[0]?.text || "Analyzing..."} />
           )}
         </View>
       )}

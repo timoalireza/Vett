@@ -1,14 +1,92 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, Pressable, Linking, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { LensMotif } from "../../src/components/Lens/LensMotif";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAnalyses } from "../../src/api/analysis";
 import { SettingsRow } from "../../src/components/Common/SettingsRow";
+
+// Time saved calculation based on complexity
+const COMPLEXITY_TIMES = {
+  simple: 30, // seconds
+  medium: 60, // seconds
+  complex: 120, // seconds
+};
+
+function formatTimeSaved(totalSeconds: number): string {
+  if (totalSeconds < 60) {
+    return "<1 min";
+  }
+  
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    return `${totalMinutes} min`;
+  }
+  
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours} hr ${minutes} min`;
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
   const { user } = useUser();
+
+  // Fetch all analyses for statistics
+  const { data: analysesData } = useQuery({
+    queryKey: ["analyses", "all"],
+    queryFn: async () => {
+      let allAnalyses: any[] = [];
+      let hasNextPage = true;
+      let after: string | undefined = undefined;
+      
+      while (hasNextPage) {
+        const result = await fetchAnalyses(100, after);
+        allAnalyses = [...allAnalyses, ...result.edges.map(edge => edge.node)];
+        hasNextPage = result.pageInfo.hasNextPage;
+        after = result.pageInfo.endCursor || undefined;
+      }
+      
+      return allAnalyses;
+    },
+    enabled: !!user,
+  });
+
+  // Calculate statistics
+  const statistics = useMemo(() => {
+    if (!analysesData || analysesData.length === 0) {
+      return {
+        analysesRun: 0,
+        averageScore: 0,
+        timeSaved: 0,
+      };
+    }
+
+    const completedAnalyses = analysesData.filter(
+      (analysis) => analysis.status === "COMPLETED" && analysis.score !== null
+    );
+
+    const analysesRun = completedAnalyses.length;
+    
+    const averageScore = completedAnalyses.length > 0
+      ? Math.round(
+          completedAnalyses.reduce((sum, a) => sum + (a.score || 0), 0) / completedAnalyses.length
+        )
+      : 0;
+
+    const totalSeconds = completedAnalyses.reduce((sum, analysis) => {
+      const complexity = (analysis.complexity || "medium").toLowerCase() as keyof typeof COMPLEXITY_TIMES;
+      const timeForAnalysis = COMPLEXITY_TIMES[complexity] || COMPLEXITY_TIMES.medium;
+      return sum + timeForAnalysis;
+    }, 0);
+
+    return {
+      analysesRun,
+      averageScore,
+      timeSaved: totalSeconds,
+    };
+  }, [analysesData]);
 
   const handleSignOut = async () => {
     try {
@@ -30,7 +108,21 @@ export default function ProfileScreen() {
 
         {/* User section */}
         <View style={styles.userSection}>
-          <LensMotif size={64} />
+          {/* Statistics */}
+          <View style={styles.statisticsContainer}>
+            <View style={styles.statisticItem}>
+              <Text style={styles.statisticValue}>{statistics.analysesRun}</Text>
+              <Text style={styles.statisticLabel}>Analyses Run</Text>
+            </View>
+            <View style={styles.statisticItem}>
+              <Text style={styles.statisticValue}>{statistics.averageScore}</Text>
+              <Text style={styles.statisticLabel}>Average Score</Text>
+            </View>
+            <View style={styles.statisticItem}>
+              <Text style={styles.statisticValue}>{formatTimeSaved(statistics.timeSaved)}</Text>
+              <Text style={styles.statisticLabel}>Time Saved</Text>
+            </View>
+          </View>
           <Text style={styles.userEmail}>
             {user?.primaryEmailAddress?.emailAddress || "user@vett.app"}
           </Text>
@@ -98,8 +190,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 32,
   },
+  statisticsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
+    paddingHorizontal: 32,
+    marginBottom: 24,
+  },
+  statisticItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statisticValue: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 24,
+    color: "#FFFFFF",
+    marginBottom: 4,
+  },
+  statisticLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#8A8A8A",
+    textAlign: "center",
+  },
   userEmail: {
-    marginTop: 16,
+    marginTop: 0,
     fontFamily: "Inter_400Regular",
     fontSize: 16,
     color: "#E5E5E5",

@@ -33,6 +33,7 @@ export interface AnalysisSummary {
   summary?: string | null;
   recommendation?: string | null;
   rawInput?: string | null;
+  complexity?: string | null;
   hasWatermark: boolean;
   claims: ClaimSummary[];
   sources: AnalysisSourceSummary[];
@@ -583,6 +584,7 @@ class AnalysisService {
       summary: record.summary ?? null,
       recommendation: record.recommendation ?? null,
       rawInput: rawInputText,
+      complexity: record.complexity ?? null,
       hasWatermark,
       claims: claimsSummary,
       sources: sourcesSummary,

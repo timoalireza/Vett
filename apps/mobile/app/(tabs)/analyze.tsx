@@ -99,22 +99,37 @@ export default function AnalyzeScreen() {
     }
 
     if (newSource !== activeVideoSource) {
+      const previousSource = activeVideoSource;
       setActiveVideoSource(newSource);
       
-      // Instant opacity switch - no fade to prevent flicker
-      // Ensure videos reset to position 0 when they become active
-      if (newSource === VIDEO_IDLE) {
-        idleOpacity.value = 1;
-        typingOpacity.value = 0;
+      // Subtle crossfade when transitioning from idle to typing
+      if (previousSource === VIDEO_IDLE && newSource === VIDEO_TYPING) {
+        // Crossfade: fade out idle, fade in typing
+        idleOpacity.value = withTiming(0, {
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+        });
+        typingOpacity.value = withTiming(1, {
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+        });
         loadingOpacity.value = 0;
-      } else if (newSource === VIDEO_TYPING) {
-        idleOpacity.value = 0;
-        typingOpacity.value = 1;
-        loadingOpacity.value = 0;
-      } else if (newSource === VIDEO_LOADING) {
-        idleOpacity.value = 0;
-        typingOpacity.value = 0;
-        loadingOpacity.value = 1;
+      } else {
+        // Instant opacity switch for other transitions to prevent flicker
+        // Ensure videos reset to position 0 when they become active
+        if (newSource === VIDEO_IDLE) {
+          idleOpacity.value = 1;
+          typingOpacity.value = 0;
+          loadingOpacity.value = 0;
+        } else if (newSource === VIDEO_TYPING) {
+          idleOpacity.value = 0;
+          typingOpacity.value = 1;
+          loadingOpacity.value = 0;
+        } else if (newSource === VIDEO_LOADING) {
+          idleOpacity.value = 0;
+          typingOpacity.value = 0;
+          loadingOpacity.value = 1;
+        }
       }
     }
   }, [lensState, isInputFocused, input, selectedImage, registerVideo, activeVideoSource, idleOpacity, typingOpacity, loadingOpacity]);

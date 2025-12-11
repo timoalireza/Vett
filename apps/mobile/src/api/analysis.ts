@@ -108,6 +108,7 @@ export interface AnalysisSummary {
   createdAt: string;
   summary?: string | null;
   recommendation?: string | null;
+  complexity?: string | null;
   claims?: Array<{ text: string }>;
 }
 
@@ -140,6 +141,7 @@ const ANALYSES_QUERY = `
           createdAt
           summary
           recommendation
+          complexity
           claims {
             text
           }

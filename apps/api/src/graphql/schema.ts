@@ -16,6 +16,7 @@ export const schema = `
     summary: String
     recommendation: String
     rawInput: String
+    complexity: String
     hasWatermark: Boolean!
     claims: [Claim!]!
     sources: [AnalysisSource!]!

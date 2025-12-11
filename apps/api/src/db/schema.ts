@@ -48,6 +48,12 @@ export const socialPlatformEnum = pgEnum("social_platform", [
   "INSTAGRAM"
 ]);
 
+export const analysisComplexityEnum = pgEnum("analysis_complexity", [
+  "simple",
+  "medium",
+  "complex"
+]);
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   externalId: text("external_id").notNull().unique(), // Clerk/Firebase ID
@@ -75,6 +81,7 @@ export const analyses = pgTable("analyses", {
   verdict: analysisVerdictEnum("verdict"),
   confidence: numeric("confidence", { precision: 4, scale: 2 }),
   bias: biasSpectrumEnum("bias"),
+  complexity: analysisComplexityEnum("complexity"), // simple, medium, complex
   summary: text("summary"),
   recommendation: text("recommendation"),
   rawInput: text("raw_input"),
