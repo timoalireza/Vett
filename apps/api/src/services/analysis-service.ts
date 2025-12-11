@@ -30,6 +30,7 @@ export interface AnalysisSummary {
   topic?: string | null;
   createdAt: string;
   status: string;
+  title?: string | null;
   summary?: string | null;
   recommendation?: string | null;
   rawInput?: string | null;
@@ -581,6 +582,7 @@ class AnalysisService {
       topic: record.topic ?? null,
       createdAt: record.createdAt ? record.createdAt.toISOString() : new Date(0).toISOString(),
       status: record.status,
+      title: record.title ?? null,
       summary: record.summary ?? null,
       recommendation: record.recommendation ?? null,
       rawInput: rawInputText,

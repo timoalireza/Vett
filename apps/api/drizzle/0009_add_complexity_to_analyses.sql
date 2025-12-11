@@ -1,4 +1,4 @@
--- Add complexity enum and column to analyses table
+-- Add complexity enum and column, and title column to analyses table
 
 -- Step 1: Create the complexity enum if it doesn't exist
 DO $$ 
@@ -19,5 +19,19 @@ BEGIN
   ) THEN
     ALTER TABLE "public"."analyses" 
     ADD COLUMN "complexity" "public"."analysis_complexity";
+  END IF;
+END $$;
+
+-- Step 3: Add title column to analyses table if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name = 'analyses'
+    AND column_name = 'title'
+  ) THEN
+    ALTER TABLE "public"."analyses"
+    ADD COLUMN "title" text;
   END IF;
 END $$;

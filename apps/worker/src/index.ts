@@ -432,8 +432,10 @@ function createWorker(): Worker {
             score: pipelineResult.score,
             verdict: validatedVerdict as any,
             confidence: pipelineResult.confidence.toFixed(2),
+            title: pipelineResult.title,
             summary: pipelineResult.summary,
             recommendation: pipelineResult.recommendation,
+            complexity: pipelineResult.complexity,
             resultJson: JSON.stringify(pipelineResult.resultJson),
             updatedAt: new Date()
           })

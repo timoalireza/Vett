@@ -106,6 +106,7 @@ export interface AnalysisSummary {
   topic?: string | null;
   status: string;
   createdAt: string;
+  title?: string | null;
   summary?: string | null;
   recommendation?: string | null;
   complexity?: string | null;
@@ -139,6 +140,7 @@ const ANALYSES_QUERY = `
           topic
           status
           createdAt
+          title
           summary
           recommendation
           complexity

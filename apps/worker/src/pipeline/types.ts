@@ -90,8 +90,10 @@ export type PipelineResult = {
   score: number;
   verdict: "Verified" | "Mostly Accurate" | "Partially Accurate" | "False" | "Opinion";
   confidence: number;
+  title: string; // 3-10 word summary title for history display
   summary: string;
   recommendation: string;
+  complexity: "simple" | "medium" | "complex"; // Analysis complexity level
   sources: PipelineSource[];
   claims: PipelineClaim[];
   explanationSteps: PipelineExplanationStep[];

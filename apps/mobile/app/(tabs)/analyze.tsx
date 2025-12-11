@@ -26,6 +26,8 @@ import Animated, {
   withTiming,
   withDelay,
   Easing,
+  cancelAnimation,
+  runOnJS,
 } from "react-native-reanimated";
 
 import { tokenProvider } from "../../src/api/token-provider";
@@ -83,6 +85,15 @@ export default function AnalyzeScreen() {
   const idleOpacity = useSharedValue(1);
   const typingOpacity = useSharedValue(0);
   const loadingOpacity = useSharedValue(0);
+  // Track if we're currently animating to prevent interruption
+  const isAnimatingRef = useRef(false);
+  const animationTargetRef = useRef<typeof VIDEO_IDLE | null>(null);
+
+  // Create stable callback function for animation completion (must be outside worklet)
+  const resetAnimationFlags = useCallback(() => {
+    isAnimatingRef.current = false;
+    animationTargetRef.current = null;
+  }, []);
 
   useEffect(() => {
     let newSource = VIDEO_IDLE;
@@ -98,12 +109,31 @@ export default function AnalyzeScreen() {
       registerVideo('home-idle');
     }
 
+    // Skip if we're already animating to the same target AND the source has already changed
+    // Only skip if activeVideoSource has actually reached the target to prevent blocking transitions
+    if (isAnimatingRef.current && animationTargetRef.current === newSource && activeVideoSource === newSource) {
+      return;
+    }
+
     if (newSource !== activeVideoSource) {
       const previousSource = activeVideoSource;
+      
+      // Cancel any ongoing animations if transitioning to a different state
+      if (isAnimatingRef.current && animationTargetRef.current !== newSource) {
+        cancelAnimation(idleOpacity);
+        cancelAnimation(typingOpacity);
+        isAnimatingRef.current = false;
+        animationTargetRef.current = null;
+      }
+      
       setActiveVideoSource(newSource);
       
       // Subtle crossfade when transitioning from idle to typing
       if (previousSource === VIDEO_IDLE && newSource === VIDEO_TYPING) {
+        // Mark that we're animating
+        isAnimatingRef.current = true;
+        animationTargetRef.current = newSource;
+        
         // Crossfade: fade out idle, fade in typing
         idleOpacity.value = withTiming(0, {
           duration: 400,
@@ -112,6 +142,11 @@ export default function AnalyzeScreen() {
         typingOpacity.value = withTiming(1, {
           duration: 400,
           easing: Easing.out(Easing.ease),
+        }, (finished) => {
+          // Reset animation flag when animation completes
+          if (finished) {
+            runOnJS(resetAnimationFlags)();
+          }
         });
         loadingOpacity.value = 0;
       } else {
@@ -132,7 +167,7 @@ export default function AnalyzeScreen() {
         }
       }
     }
-  }, [lensState, isInputFocused, input, selectedImage, registerVideo, activeVideoSource, idleOpacity, typingOpacity, loadingOpacity]);
+  }, [lensState, isInputFocused, input, selectedImage, registerVideo, activeVideoSource, idleOpacity, typingOpacity, loadingOpacity, resetAnimationFlags]);
 
   const handleVideoLoad = useCallback((loadedSource: typeof VIDEO_IDLE) => {
     setLoadedVideos((prev) => new Set(prev).add(loadedSource));

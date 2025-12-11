@@ -7,6 +7,7 @@ interface HistoryItemProps {
   item: {
     id: string;
     score: number | null;
+    title?: string | null;
     claims?: Array<{ text: string }>;
     createdAt: string;
   };
@@ -17,21 +18,22 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item, onPress }) => {
   const scoreColor = getScoreColor(item.score || 0);
   const date = new Date(item.createdAt);
   const timeAgo = getTimeAgo(date);
-  const claimText = item.claims && item.claims.length > 0 ? item.claims[0].text : "Analyzed Claim";
+  // Use title if available, otherwise fall back to first claim text
+  const displayText = item.title || (item.claims && item.claims.length > 0 ? item.claims[0].text : "Analyzed Claim");
 
   return (
     <Pressable onPress={onPress} style={styles.container}>
       {/* Mini score indicator */}
       <View style={[styles.scoreBadge, { borderColor: scoreColor }]}>
         <Text style={[styles.scoreText, { color: scoreColor }]}>
-          {Math.round(item.score || 0)}%
+          {Math.round(item.score || 0)}
         </Text>
       </View>
 
       {/* Content */}
       <View style={styles.content}>
         <Text numberOfLines={1} style={styles.claimText}>
-          {claimText}
+          {displayText}
         </Text>
         <Text style={styles.timeText}>{timeAgo}</Text>
       </View>
@@ -79,7 +81,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   scoreText: {
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 12,
   },
   content: {

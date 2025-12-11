@@ -82,6 +82,7 @@ export const analyses = pgTable("analyses", {
   confidence: numeric("confidence", { precision: 4, scale: 2 }),
   bias: biasSpectrumEnum("bias"),
   complexity: analysisComplexityEnum("complexity"), // simple, medium, complex
+  title: text("title"), // 3-10 word summary title for history display
   summary: text("summary"),
   recommendation: text("recommendation"),
   rawInput: text("raw_input"),

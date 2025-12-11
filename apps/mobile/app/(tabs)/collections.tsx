@@ -6,7 +6,6 @@ import { useAuth } from "@clerk/clerk-expo";
 import { fetchAnalyses } from "../../src/api/analysis";
 import { tokenProvider } from "../../src/api/token-provider";
 import { HistoryItem } from "../../src/components/Common/HistoryItem";
-import { LensMotif } from "../../src/components/Lens/LensMotif";
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -52,9 +51,8 @@ export default function HistoryScreen() {
 
       {historyItems.length === 0 && !isLoading ? (
         <View style={styles.emptyContainer}>
-          <LensMotif size={80} style={{ opacity: 0.3 }} />
           <Text style={styles.emptyTitle}>No claims analyzed yet</Text>
-          <Text style={styles.emptySubtitle}>Paste a claim to get started</Text>
+          <Text style={styles.emptySubtitle}>Submit one to get started</Text>
         </View>
       ) : (
         <FlatList

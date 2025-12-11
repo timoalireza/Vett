@@ -13,6 +13,7 @@ export const schema = `
     topic: String
     status: String!
     createdAt: String!
+    title: String
     summary: String
     recommendation: String
     rawInput: String

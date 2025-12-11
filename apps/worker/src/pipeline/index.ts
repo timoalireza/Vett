@@ -16,6 +16,7 @@ import { evaluateEvidenceForClaim } from "./evidence/evaluator.js";
 import { reasonVerdict, VERDICT_MODEL, type ReasonerVerdictOutput } from "./reasoners/verdict.js";
 import { adjustReliability } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
+import { openai } from "../clients/openai.js";
 
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
 
@@ -548,14 +549,120 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ingestion: ingestion.metadata
   };
 
+  // Calculate complexity based on claims count, sources count, and attachments
+  const calculateComplexity = (): "simple" | "medium" | "complex" => {
+    const claimsCount = claims.length;
+    const sourcesCount = sources.length;
+    const attachmentsCount = context.attachments.length;
+    
+    // Complex: 3+ claims OR 5+ sources OR multiple attachments
+    if (claimsCount >= 3 || sourcesCount >= 5 || attachmentsCount > 1) {
+      return "complex";
+    }
+    
+    // Medium: 2 claims OR 3-4 sources OR has attachments
+    if (claimsCount === 2 || (sourcesCount >= 3 && sourcesCount <= 4) || attachmentsCount === 1) {
+      return "medium";
+    }
+    
+    // Simple: 1 claim, <= 2 sources, no attachments
+    return "simple";
+  };
+
+  const complexity = calculateComplexity();
+
+  // Generate title from claims (3-10 words)
+  // Helper function to ensure title meets 3-10 word constraint
+  const ensureTitleConstraint = (text: string): string => {
+    const words = text.split(" ").filter(w => w.length > 0);
+    
+    // If no words, use first claim as fallback
+    if (words.length === 0) {
+      const fallbackWords = claims[0]?.text?.split(" ").filter(w => w.length > 0) || [];
+      if (fallbackWords.length === 0) {
+        return "Analysis";
+      }
+      // Ensure 3-10 words from fallback
+      if (fallbackWords.length < 3) {
+        // Pad with "Analysis" to reach minimum 3 words
+        return [...fallbackWords, ...Array(3 - fallbackWords.length).fill("Analysis")].slice(0, 10).join(" ");
+      }
+      return fallbackWords.slice(0, 10).join(" ");
+    }
+    
+    // Truncate if more than 10 words
+    if (words.length > 10) {
+      return words.slice(0, 10).join(" ");
+    }
+    
+    // Ensure minimum 3 words
+    if (words.length < 3) {
+      // Try to get additional words from first claim
+      if (claims[0]?.text) {
+        const claimWords = claims[0].text.split(" ").filter(w => w.length > 0);
+        const neededWords = 3 - words.length;
+        // Take words from claim that aren't already in the title (avoid duplicates)
+        const existingLower = new Set(words.map(w => w.toLowerCase()));
+        const additionalWords = claimWords.filter(w => !existingLower.has(w.toLowerCase())).slice(0, neededWords);
+        const combined = [...words, ...additionalWords];
+        
+        if (combined.length >= 3) {
+          return combined.slice(0, 10).join(" ");
+        }
+        // If still not enough, pad with "Analysis"
+        while (combined.length < 3 && combined.length < 10) {
+          combined.push("Analysis");
+        }
+        return combined.join(" ");
+      }
+      // Last resort: pad with "Analysis"
+      const padded = [...words];
+      while (padded.length < 3 && padded.length < 10) {
+        padded.push("Analysis");
+      }
+      return padded.join(" ");
+    }
+    
+    return words.join(" ");
+  };
+
+  let title: string;
+  try {
+    const claimsText = claims.map(c => c.text).join(" ");
+    const titleResponse = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a title generator. Generate a concise, informative title (3-10 words) that summarizes the main claim being analyzed. Return only the title, no quotes or extra text."
+        },
+        {
+          role: "user",
+          content: `Generate a 3-10 word title for this analysis:\n\n${claimsText.substring(0, 500)}`
+        }
+      ],
+      max_tokens: 20,
+      temperature: 0.7
+    });
+    const rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";
+    title = ensureTitleConstraint(rawTitle || claims[0]?.text || "Analysis");
+  } catch (error) {
+    console.warn("[Pipeline] Failed to generate title, using fallback", error);
+    // Fallback: use first claim text, ensuring 3-10 words
+    const fallbackText = claims[0]?.text || "Analysis";
+    title = ensureTitleConstraint(fallbackText);
+  }
+
   return {
     topic: classification.topic,
     bias: classification.bias,
     score: adjustedVerdictData.score,
     verdict: adjustedVerdictData.verdict,
     confidence: adjustedVerdictData.confidence,
+    title,
     summary: adjustedVerdictData.summary,
     recommendation: adjustedVerdictData.recommendation,
+    complexity,
     sources,
     claims,
     explanationSteps,
