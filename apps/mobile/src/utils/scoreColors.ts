@@ -1,15 +1,23 @@
 import { colors } from "../styles/colors";
 
 /**
- * Maps score to color based on verdict ranges:
- * - Unverified: Amber (separate category, no score - insufficient evidence)
- * - ≥85: Green (Verified - evidence overwhelmingly supports)
- * - 40-84: Amber (Disputed - evidence on both sides)
- * - <40: Red (False - evidence contradicts)
+ * Maps verdict to color, respecting server verdicts first before falling back to score
+ * Server verdicts: "Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion", "Unverified"
+ * - Verified: Green (evidence overwhelmingly supports)
+ * - Mostly Accurate/Partially Accurate/Opinion: Amber (mixed/partial/subjective)
+ * - False: Red (evidence contradicts)
+ * - Unverified: Amber (insufficient evidence, no score)
  */
 export function getScoreColor(score: number, verdict?: string | null): string {
-  // Unverified is a separate category without a score
-  if (verdict === "Unverified") return colors.warning; // Amber - Unverified
+  // Prioritize explicit verdict mappings over score-based logic
+  if (verdict === "Verified") return colors.success; // Green
+  if (verdict === "Mostly Accurate") return colors.warning; // Amber
+  if (verdict === "Partially Accurate") return colors.warning; // Amber
+  if (verdict === "Opinion") return colors.warning; // Amber
+  if (verdict === "False") return colors.danger; // Red
+  if (verdict === "Unverified") return colors.warning; // Amber
+  
+  // Fallback to score-based logic only if verdict is null/undefined
   if (score >= 85) return colors.success; // Green - Verified
   if (score >= 40) return colors.warning; // Amber - Disputed
   return colors.danger; // Red - False
