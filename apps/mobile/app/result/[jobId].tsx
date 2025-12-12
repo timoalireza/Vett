@@ -286,7 +286,7 @@ export default function ResultScreen() {
                 <VideoAnimation
                   source={VIDEO_ASSETS.loading}
                   shouldPlay={true}
-                  loopFromSeconds={4}
+                  loopFromSeconds={0}
                   isLooping={false}
                   style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
                   resizeMode={ResizeMode.COVER}

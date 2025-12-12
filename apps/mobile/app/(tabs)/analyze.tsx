@@ -506,7 +506,7 @@ export default function AnalyzeScreen() {
               shouldPlay={activeVideoSource === VIDEO_LOADING}
               style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
               resizeMode={ResizeMode.COVER}
-              loopFromSeconds={4}
+              loopFromSeconds={0}
               isLooping={false}
               onError={() => setVideoError(true)}
               onLoad={handleVideoLoad}

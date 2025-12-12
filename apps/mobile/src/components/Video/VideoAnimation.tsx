@@ -29,6 +29,8 @@ interface VideoAnimationProps {
   freezeAtSeconds?: number; // Freeze video at this time (in seconds) and show still frame
   stillFrameSource?: any; // Still image to show when frozen
   onFreeze?: () => void; // Callback when video freezes
+  isMuted?: boolean; // Whether video should be muted (default: true for silent animations)
+  volume?: number; // Volume level 0.0 to 1.0 (default: 0.0, only used if isMuted is false)
 }
 
 export const VideoAnimation: React.FC<VideoAnimationProps> = ({
@@ -43,7 +45,9 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
   onLoad,
   freezeAtSeconds,
   stillFrameSource,
-  onFreeze
+  onFreeze,
+  isMuted = true, // Default to muted for silent animations
+  volume = 0.0 // Default to 0 volume (only used if isMuted is false)
 }) => {
   const videoRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -171,13 +175,24 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
 
     // Handle looping logic (only if not frozen and not looping normally)
     // When freezeAtSeconds is set, we should loop until we reach the freeze point during playback
-    if (status.didJustFinish && !isLooping && !isFrozen) {
+    if (status.didJustFinish && !isLooping && !isFrozen && shouldPlay) {
       // Always loop normally - don't freeze early based on video duration
       // The freeze will happen naturally when total playback time reaches freezeAtSeconds
-      videoRef.current?.setPositionAsync(loopFromSeconds * 1000);
-      if (shouldPlay) {
-        videoRef.current?.playAsync();
-      }
+      // Immediately loop without delay to prevent frame holds
+      // Use a microtask to ensure the loop happens as soon as possible
+      Promise.resolve().then(() => {
+        videoRef.current?.setPositionAsync(loopFromSeconds * 1000).then(() => {
+          // Ensure video continues playing immediately after position change
+          videoRef.current?.playAsync().catch(() => {
+            // Ignore play errors - video might already be playing
+          });
+        }).catch(() => {
+          // If setPositionAsync fails, try playing anyway to prevent freeze
+          videoRef.current?.playAsync().catch(() => {
+            // Ignore play errors
+          });
+        });
+      });
     }
   }, [isLooping, loopFromSeconds, shouldPlay, onError, freezeAtSeconds, isFrozen, onFreeze]);
 
@@ -188,17 +203,24 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       // Use a small delay to ensure position is set before playing
       const resetAndPlay = async () => {
         try {
-          await videoRef.current?.setPositionAsync(0);
-          // Reset cumulative playback tracking when starting fresh
-          totalPlaybackTimeRef.current = 0;
-          lastPositionRef.current = 0;
-          isFirstPlayRef.current = true;
+          // Only reset position if video hasn't started playing yet or if it's a different source
+          if (!hasStartedPlayingRef.current || source !== previousSourceRef.current) {
+            await videoRef.current?.setPositionAsync(0);
+            // Reset cumulative playback tracking when starting fresh
+            totalPlaybackTimeRef.current = 0;
+            lastPositionRef.current = 0;
+            isFirstPlayRef.current = true;
+          }
           // Only unfreeze if freezeAtSeconds is not set - if it's set, we want to respect the freeze state
           if (!freezeAtSeconds) {
             setIsFrozen(false);
           }
-          // Small delay to ensure position is set
-          await new Promise(resolve => setTimeout(resolve, 16)); // ~1 frame at 60fps
+          // Small delay to ensure position is set (only if we reset)
+          if (!hasStartedPlayingRef.current || source !== previousSourceRef.current) {
+            await new Promise(resolve => setTimeout(resolve, 16)); // ~1 frame at 60fps
+          }
+          // Always ensure video is playing if shouldPlay is true
+          // Don't check status - just play to avoid delays
           await videoRef.current?.playAsync();
         } catch (error) {
           // If setPositionAsync fails, try playing anyway
@@ -210,7 +232,9 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       resetAndPlay();
       hasStartedPlayingRef.current = true;
     } else if (!shouldPlay || isFrozen) {
-      videoRef.current?.pauseAsync();
+      videoRef.current?.pauseAsync().catch(() => {
+        // Ignore pause errors - video might already be paused
+      });
       // Reset position to 0 when paused to ensure it's ready for next activation
       // This ensures videos always start from the same frame
       // Only unfreeze if freezeAtSeconds is not set - if it's set, preserve the freeze state
@@ -229,7 +253,7 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
         hasStartedPlayingRef.current = false;
       }
     }
-  }, [shouldPlay, isLoaded, isFrozen, freezeAtSeconds]);
+  }, [shouldPlay, isLoaded, isFrozen, freezeAtSeconds, source]);
 
   // If Video component is not available or error occurred, return empty view
   // Parent component should handle fallback
@@ -282,6 +306,8 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
               }
             }}
             shouldPlay={shouldPlay && !isFrozen}
+            isMuted={isMuted}
+            volume={isMuted ? 0.0 : volume}
           />
         </View>
       </Pressable>
