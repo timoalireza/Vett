@@ -204,6 +204,50 @@ class AnalysisService {
         ) {
           throw new Error("Database connection error. Please check your database configuration.");
         }
+        // Check for missing column/relation errors (schema mismatch)
+        if (
+          errorMsg.includes("does not exist") &&
+          (errorMsg.includes("column") || errorMsg.includes("relation") || errorMsg.includes("table"))
+        ) {
+          // Try to match column errors: column "column_name" of relation "table_name"
+          const columnMatch = errorMsg.match(/column "([^"]+)" of relation/);
+          if (columnMatch) {
+            const columnName = columnMatch[1];
+            console.error(
+              `[AnalysisService] Schema mismatch: Column '${columnName}' is missing from database. ` +
+              `Please run migrations. See docs/RAILWAY_MIGRATION_FIX.md for instructions.`
+            );
+            throw new Error(
+              `Database schema mismatch: Column '${columnName}' is missing. ` +
+              `Please run database migrations. See docs/RAILWAY_MIGRATION_FIX.md`
+            );
+          }
+          
+          // Try to match relation/table errors: relation "table_name" does not exist
+          const relationMatch = errorMsg.match(/(?:relation|table) "([^"]+)" does not exist/);
+          if (relationMatch) {
+            const tableName = relationMatch[1];
+            console.error(
+              `[AnalysisService] Schema mismatch: Table '${tableName}' is missing from database. ` +
+              `Please run migrations. See docs/RAILWAY_MIGRATION_FIX.md for instructions.`
+            );
+            throw new Error(
+              `Database schema mismatch: Table '${tableName}' is missing. ` +
+              `Please run database migrations. See docs/RAILWAY_MIGRATION_FIX.md`
+            );
+          }
+          
+          // Fallback: if condition matched but regex patterns didn't, still provide helpful error
+          console.error(
+            `[AnalysisService] Schema mismatch detected but couldn't extract specific details. ` +
+            `Original error: ${error.message}. Please run migrations. See docs/RAILWAY_MIGRATION_FIX.md for instructions.`
+          );
+          throw new Error(
+            `Database schema mismatch detected. The database schema is out of sync with the application code. ` +
+            `Please run database migrations. See docs/RAILWAY_MIGRATION_FIX.md for instructions. ` +
+            `Original error: ${error.message}`
+          );
+        }
       }
       throw error;
     }
