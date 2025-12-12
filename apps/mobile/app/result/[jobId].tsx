@@ -95,8 +95,28 @@ export default function ResultScreen() {
 
   const isCompleted = analysis?.status === "COMPLETED";
   const isFailed = analysis?.status === "FAILED";
+  const isQueued = analysis?.status === "QUEUED";
+  const isProcessing = analysis?.status === "PROCESSING";
   const score = analysis?.score || 0;
   const scoreColor = getScoreColor(score);
+
+  // Get loading text based on analysis status
+  const getLoadingText = (): string => {
+    if (isQueued) {
+      // Show initial extraction message
+      if (claimText) {
+        if (claimText.includes("http") || claimText.startsWith("www.")) {
+          return "Extracting claim...";
+        }
+        return claimText.length > 50 ? claimText.substring(0, 50) + "..." : claimText;
+      }
+      return "Extracting claim...";
+    }
+    if (isProcessing) {
+      return "Verifying facts...";
+    }
+    return "Analyzing...";
+  };
 
   // Update current video state
   useEffect(() => {
@@ -474,7 +494,7 @@ export default function ResultScreen() {
             </>
           ) : (
             <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Verifying facts...</Text>
+              <Text style={styles.loadingText}>{getLoadingText()}</Text>
               {isFailed && (
                 <Text style={{ color: '#EF4444', marginTop: 8 }}>Analysis Failed</Text>
               )}

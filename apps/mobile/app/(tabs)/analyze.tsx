@@ -596,28 +596,6 @@ export default function AnalyzeScreen() {
                       </Animated.View>
                     )}
                   </View>
-                  
-                  {/* Claim Text Overlay during Loading (on top of video) */}
-                  {lensState === "loading" && (
-                    <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]} pointerEvents="none">
-                         <Text 
-                            style={{
-                              fontFamily: 'Inter_400Regular',
-                              fontSize: 14,
-                              color: '#FFFFFF',
-                              textAlign: 'center',
-                              paddingHorizontal: 32,
-                              maxWidth: 360,
-                              textShadowColor: 'rgba(0, 0, 0, 0.5)',
-                              textShadowOffset: { width: 0, height: 1 },
-                              textShadowRadius: 2,
-                            }}
-                            numberOfLines={4}
-                          >
-                            {getClaimTextForLoading()}
-                          </Text>
-                    </View>
-                  )}
                 </View>
             </Animated.View>
               
