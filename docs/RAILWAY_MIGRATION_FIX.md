@@ -13,25 +13,32 @@ This happens because the migration `0009_add_complexity_to_analyses.sql` hasn't 
 
 ### Option 1: Run Migration via Railway CLI (Recommended)
 
-1. **Install Railway CLI** (if not already installed):
+**No installation needed** - use `npx` to run Railway CLI:
+
+1. **Login to Railway** (first time only):
    ```bash
-   npm i -g @railway/cli
-   railway login
+   npx @railway/cli login
    ```
 
 2. **Connect to your Railway project**:
    ```bash
-   railway link
+   npx @railway/cli link
    ```
 
 3. **Run the migration**:
    ```bash
-   # Set DATABASE_URL from Railway
-   railway variables
-   
-   # Run migration
-   railway run psql $DATABASE_URL -f apps/api/drizzle/0009_add_complexity_to_analyses.sql
+   # Run migration (Railway CLI will use your linked project's DATABASE_URL)
+   npx @railway/cli run psql $DATABASE_URL -f apps/api/drizzle/0009_add_complexity_to_analyses.sql
    ```
+
+**Alternative:** If you prefer global installation:
+```bash
+# Install globally (may require sudo on macOS/Linux)
+sudo npm i -g @railway/cli
+railway login
+railway link
+railway run psql $DATABASE_URL -f apps/api/drizzle/0009_add_complexity_to_analyses.sql
+```
 
 ### Option 2: Run Migration via Railway Dashboard
 
