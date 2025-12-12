@@ -14,12 +14,21 @@ SCORING GUIDELINES:
 - For claims that are MOSTLY ACCURATE with minor nuances or limitations, assign scores in the 61-75 range ("Mostly Accurate")
 - For claims that are PARTIALLY ACCURATE with significant limitations or mixed evidence, assign scores in the 41-60 range ("Partially Accurate")
 - For claims that are FALSE or contradicted by evidence, assign scores in the 0-40 range ("False")
+- For claims with INSUFFICIENT EVIDENCE (not enough information to verify or contradict), use "Unverified" (set score to null)
 
 Map scores to verdicts as follows (STRICTLY follow these ranges):
 - 0-40 => "False"
 - 41-60 => "Partially Accurate"
 - 61-75 => "Mostly Accurate"
 - 76-100 => "Verified"
+- INSUFFICIENT EVIDENCE => "Unverified" (score must be null, not 0)
+
+IMPORTANT: Use "Unverified" when:
+- There are very few or no reliable sources available
+- Sources have very low reliability or relevance
+- The evidence is too limited or ambiguous to support any conclusion
+- You cannot confidently determine if the claim is true, false, or partially accurate
+- When using "Unverified", ALWAYS set score to null
 
 IMPORTANT: If a claim is ACCURATE and well-supported by reliable sources, assign a score of 76 or higher to reflect its accuracy ("Verified"). For claims that are mostly accurate with minor limitations, assign scores in the 61-75 range ("Mostly Accurate"). Do not be overly conservative with scores for accurate claims.
 
@@ -40,21 +49,27 @@ FORBIDDEN patterns:
 - Any imperative verbs or commands
 - Telling the user what to do or think
 
-REQUIRED: Write like a Wikipedia article explaining the claim's background. Focus on:
+REQUIRED: Write in a clear, accessible tone - informative but conversational, like explaining something to a friend. Avoid academic jargon or overly formal language. Focus on:
 - What actually happened or what the evidence shows
 - Historical context or origin of the claim
 - Specific details that clarify or complicate the claim
 - Why this information is circulating
 
+TONE GUIDELINES:
+- Use simple, direct language
+- Avoid phrases like "it should be noted", "according to", "it is evident that"
+- Write naturally, as if explaining to someone in conversation
+- Keep it informative but approachable
+
 Examples:
 BAD: "Claim should be accepted as true."
-GOOD: "Multiple independent sources confirm this event occurred on [date]. The claim accurately reflects official records from [institution]."
+GOOD: "Multiple sources confirm this happened. The claim matches what we know from official records."
 
 BAD: "Do not share this misinformation."
-GOOD: "This claim originated from a satirical website in [year] and was later misattributed to a real news source. No such policy exists."
+GOOD: "This started as a joke on a satirical site and got mistaken for real news. There's no actual policy like this."
 
-BAD: "Verify with official sources."
-GOOD: "The claim references a policy that was proposed but never implemented. The actual current policy differs in [specific way]."
+BAD: "It should be noted that the claim references a policy that was proposed but never implemented."
+GOOD: "The claim talks about a policy that was suggested but never actually put in place. The real policy works differently."
 `;
 
 const JSON_SCHEMA = {
@@ -62,11 +77,20 @@ const JSON_SCHEMA = {
   properties: {
     verdict: {
       type: "string",
-      enum: ["Verified", "Mostly Accurate", "Partially Accurate", "False"]
+      enum: ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Unverified"]
     },
-    score: { type: "number", minimum: 0, maximum: 100 },
+    score: { 
+      type: ["number", "null"],
+      minimum: 0,
+      maximum: 100,
+      description: "Numeric score 0-100 for verdicts with evidence. MUST be null for 'Unverified' verdicts."
+    },
     confidence: { type: "number", minimum: 0, maximum: 1 },
-    summary: { type: "string", maxLength: 300 },
+    summary: { 
+      type: "string", 
+      maxLength: 300,
+      description: "A brief, conversational summary of what the evidence shows. Use simple, accessible language - avoid academic or overly formal phrasing."
+    },
     recommendation: { 
       type: "string", 
       maxLength: 300,
@@ -94,8 +118,8 @@ const JSON_SCHEMA = {
 } as const;
 
 export type ReasonerVerdictOutput = {
-  verdict: "Verified" | "Mostly Accurate" | "Partially Accurate" | "False";
-  score: number;
+  verdict: "Verified" | "Mostly Accurate" | "Partially Accurate" | "False" | "Unverified";
+  score: number | null; // null for "Unverified" verdicts
   confidence: number;
   summary: string;
   recommendation: string;

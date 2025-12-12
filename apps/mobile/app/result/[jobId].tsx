@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { View, StyleSheet, ScrollView, Text, TouchableOpacity, BackHandler, Dimensions, Image } from "react-native";
+import { View, StyleSheet, ScrollView, Text, TouchableOpacity, BackHandler, Dimensions, Image, Linking } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -98,7 +98,9 @@ export default function ResultScreen() {
   const isQueued = analysis?.status === "QUEUED";
   const isProcessing = analysis?.status === "PROCESSING";
   const score = analysis?.score || 0;
-  const scoreColor = getScoreColor(score);
+  const verdict = analysis?.verdict;
+  const isUnverified = verdict === "Unverified";
+  const scoreColor = getScoreColor(score, verdict);
 
   // Get loading text based on analysis status
   const getLoadingText = (): string => {
@@ -121,13 +123,19 @@ export default function ResultScreen() {
   // Update current video state
   useEffect(() => {
     if (isCompleted) {
-      if (score >= 70) registerVideo('result-green');
-      else if (score >= 45) registerVideo('result-amber');
-      else registerVideo('result-red');
+      if (isUnverified) {
+        registerVideo('result-amber');
+      } else if (score >= 85) {
+        registerVideo('result-green');
+      } else if (score >= 40) {
+        registerVideo('result-amber');
+      } else {
+        registerVideo('result-red');
+      }
     } else {
       registerVideo('loading');
     }
-  }, [isCompleted, score, registerVideo]);
+  }, [isCompleted, score, isUnverified, registerVideo]);
 
   // Lens animation: move up and scale down when results arrive
   const lensTranslateY = useSharedValue(0);
@@ -213,43 +221,109 @@ export default function ResultScreen() {
     transform: [{ rotate: `${sourcesChevronRotation.value}deg` }],
   }));
 
-  const getVerdictLabel = (s: number) => {
-    if (s >= 90) return 'True';
-    if (s >= 70) return 'Mostly True';
-    if (s >= 55) return 'Mixed';
-    if (s >= 45) return 'Mostly False';
-    if (s >= 25) return 'False';
-    return 'Completely False';
+  const getVerdictLabel = (s: number, v: string | null | undefined) => {
+    // Unverified: Not enough evidence to make a decision (separate category, no score)
+    if (v === "Unverified") return 'Unverified';
+    // Verified: Evidence overwhelmingly supports the claim (85-100)
+    if (s >= 85) return 'Verified';
+    // Disputed: Credible evidence exists on both sides (40-84)
+    if (s >= 40) return 'Disputed';
+    // False: Evidence contradicts the claim (0-39)
+    return 'False';
   };
 
-  // Truncate claim text if over 65 characters
+  // Extract publication name from URL (e.g., wsj.com -> WSJ, cnn.com -> CNN)
+  const getPublicationName = (url: string | null | undefined): string => {
+    if (!url) return '';
+    try {
+      const urlObj = new URL(url);
+      let hostname = urlObj.hostname.replace('www.', '').toLowerCase();
+      
+      // Remove common TLDs and get the main domain part
+      const parts = hostname.split('.');
+      let domain = parts[0];
+      
+      // Handle common publication domains
+      const publicationMap: Record<string, string> = {
+        'wsj': 'WSJ',
+        'forbes': 'Forbes',
+        'cnn': 'CNN',
+        'bbc': 'BBC',
+        'reuters': 'Reuters',
+        'nytimes': 'NY Times',
+        'theguardian': 'The Guardian',
+        'washingtonpost': 'Washington Post',
+        'theatlantic': 'The Atlantic',
+        'economist': 'The Economist',
+        'bloomberg': 'Bloomberg',
+        'ft': 'Financial Times',
+        'ap': 'AP News',
+        'npr': 'NPR',
+        'scientificamerican': 'Scientific American',
+        'nature': 'Nature',
+        'science': 'Science',
+        'wikipedia': 'Wikipedia',
+        'groundnews': 'Ground News',
+        'bravesearch': 'Brave Search',
+        'serper': 'Serper',
+      };
+      
+      // Check if we have a mapping
+      if (publicationMap[domain]) {
+        return publicationMap[domain];
+      }
+      
+      // If no mapping, capitalize first letter and return
+      return domain.charAt(0).toUpperCase() + domain.slice(1);
+    } catch {
+      // If parsing fails, try to extract from string
+      try {
+        const match = url.match(/(?:https?:\/\/)?(?:www\.)?([^\/]+)/);
+        if (match && match[1]) {
+          const domain = match[1].split('.')[0];
+          return domain.charAt(0).toUpperCase() + domain.slice(1);
+        }
+      } catch {}
+      return '';
+    }
+  };
+
+  // Truncate claim text if over 50 characters (tighter limit for ring display)
   const truncateClaimText = (text: string): string => {
-    if (text.length <= 65) return text;
-    return text.slice(0, 62) + '...';
+    if (text.length <= 50) return text;
+    // Try to cut at a word boundary
+    const truncated = text.slice(0, 47);
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace > 30) {
+      return truncated.slice(0, lastSpace) + '...';
+    }
+    return truncated + '...';
   };
 
   // Calculate dynamic font size based on text length
   const getClaimFontSize = (text: string): number => {
     const length = text.length;
-    if (length <= 20) return 58;
-    if (length <= 35) return 48;
-    if (length <= 50) return 40;
-    return 34;
+    if (length <= 20) return 52;
+    if (length <= 35) return 44;
+    if (length <= 50) return 36;
+    return 30;
   };
 
-  // Get claim text for display
+  // Get claim text for display inside the ring
+  // Prefer the short title generated by the worker, fall back to raw input/claim
   const displayClaimText = isCompleted 
-    ? (analysis?.rawInput || analysis?.claims?.[0]?.text || claimText || "No claim text detected")
+    ? (analysis?.title || analysis?.rawInput || analysis?.claims?.[0]?.text || claimText || "No claim text detected")
     : "";
   
   const truncatedClaimText = truncateClaimText(displayClaimText);
   const claimFontSize = getClaimFontSize(truncatedClaimText);
   const claimLineHeight = claimFontSize * 1.2;
 
-  // Video selection matches color mapping: ≥70=green, 45-69=amber, <45=red
-  const getResultVideo = (s: number) => {
-    if (s >= 70) return VIDEO_ASSETS.resultGreen;
-    if (s >= 45) return VIDEO_ASSETS.resultAmber;
+  // Video selection matches color mapping: Unverified=amber, ≥85=green, 40-84=amber, <40=red
+  const getResultVideo = (s: number, v: string | null | undefined) => {
+    if (v === "Unverified") return VIDEO_ASSETS.resultAmber;
+    if (s >= 85) return VIDEO_ASSETS.resultGreen;
+    if (s >= 40) return VIDEO_ASSETS.resultAmber;
     return VIDEO_ASSETS.resultRed;
   };
 
@@ -293,7 +367,7 @@ export default function ResultScreen() {
         ]}>
               {isCompleted ? (
                 <VideoAnimation
-                  source={getResultVideo(score)}
+                  source={getResultVideo(score, verdict)}
                   shouldPlay={true}
                   loopFromSeconds={4}
                   isLooping={false}
@@ -306,8 +380,7 @@ export default function ResultScreen() {
                 <VideoAnimation
                   source={VIDEO_ASSETS.loading}
                   shouldPlay={true}
-                  loopFromSeconds={0}
-                  isLooping={false}
+                  isLooping={true}
                   style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
                   resizeMode={ResizeMode.COVER}
                   onError={() => setVideoError(true)}
@@ -386,18 +459,22 @@ export default function ResultScreen() {
             <>
               {/* Verdict and Score side-by-side boxes */}
               <View style={[styles.verdictScoreRow, { marginTop: -140 }]}>
-                <Animated.View style={[card1AnimatedStyle, styles.verdictBox]}>
+                <Animated.View style={[card1AnimatedStyle, styles.verdictBox, isUnverified && { width: '100%' }]}>
                   <Text style={styles.verdictScoreLabel}>Verdict:</Text>
-                  <Text style={[styles.verdictScoreValue, { color: scoreColor, textAlign: 'center' }]}>
-                    {getVerdictLabel(score)}
-                  </Text>
+                  <View style={styles.verdictValueContainer}>
+                    <Text style={[styles.verdictScoreValue, { color: scoreColor }]}>
+                      {getVerdictLabel(score, verdict)}
+                    </Text>
+                  </View>
                 </Animated.View>
-                <Animated.View style={[card1AnimatedStyle, styles.scoreBox]}>
-                  <Text style={styles.verdictScoreLabel}>Score:</Text>
-                  <Text style={[styles.verdictScoreValue, { color: scoreColor, fontSize: 36, textAlign: 'center' }]}>
-                    {score}
-                  </Text>
-                </Animated.View>
+                {!isUnverified && (
+                  <Animated.View style={[card1AnimatedStyle, styles.scoreBox]}>
+                    <Text style={styles.verdictScoreLabel}>Score:</Text>
+                    <Text style={[styles.verdictScoreValue, { color: scoreColor, fontSize: 36, textAlign: 'center' }]}>
+                      {score}
+                    </Text>
+                  </Animated.View>
+                )}
               </View>
 
               {/* Summary Card */}
@@ -414,15 +491,33 @@ export default function ResultScreen() {
                 <Card label="Context">
                   <Text style={styles.cardText}>
                     {(() => {
-                      const fullText = analysis?.recommendation || analysis?.reasoning || "No additional context available.";
+                      const fullText = analysis?.recommendation || "No additional context available.";
                       if (!contextExpanded) {
-                        // Limit to 150 words
-                        const words = fullText.split(' ');
-                        if (words.length > 150) {
-                          const truncated = words.slice(0, 150).join(' ');
-                          // Find the last complete word boundary to avoid cutting mid-word
-                          const lastSpaceIndex = truncated.lastIndexOf(' ');
-                          return lastSpaceIndex > 0 ? truncated.substring(0, lastSpaceIndex) : truncated;
+                        // Limit to 500 characters, but ensure we don't cut mid-sentence
+                        const MAX_CHARS = 500;
+                        if (fullText.length > MAX_CHARS) {
+                          // Find the last sentence boundary (., !, or ?) before the character limit
+                          let truncated = fullText.substring(0, MAX_CHARS);
+                          const sentenceEnders = /[.!?]\s+/g;
+                          let lastMatch;
+                          let match;
+                          
+                          // Find all sentence endings before the truncation point
+                          while ((match = sentenceEnders.exec(fullText.substring(0, MAX_CHARS))) !== null) {
+                            lastMatch = match;
+                          }
+                          
+                          if (lastMatch) {
+                            // Cut at the last complete sentence
+                            truncated = fullText.substring(0, lastMatch.index + 1);
+                          } else {
+                            // If no sentence ending found, find the last space to avoid cutting mid-word
+                            const lastSpaceIndex = truncated.lastIndexOf(' ');
+                            if (lastSpaceIndex > MAX_CHARS * 0.8) { // Only use if we're not cutting too much
+                              truncated = truncated.substring(0, lastSpaceIndex);
+                            }
+                          }
+                          return truncated.trim();
                         }
                         return fullText;
                       }
@@ -430,9 +525,9 @@ export default function ResultScreen() {
                     })()}
                   </Text>
                   {(() => {
-                    const fullText = analysis?.recommendation || analysis?.reasoning || "No additional context available.";
-                    const words = fullText.split(' ');
-                    if (words.length > 150) {
+                    const fullText = analysis?.recommendation || "No additional context available.";
+                    const MAX_CHARS = 500;
+                    if (fullText.length > MAX_CHARS) {
                       return (
                         <TouchableOpacity
                           onPress={() => setContextExpanded(!contextExpanded)}
@@ -451,7 +546,7 @@ export default function ResultScreen() {
 
               {/* Sources Card */}
               {analysis?.sources && analysis.sources.length > 0 && (
-                <Animated.View style={[card3AnimatedStyle, { marginTop: 16 }]}>
+                <Animated.View style={[card3AnimatedStyle, { marginTop: 16, width: '100%' }]}>
                   <TouchableOpacity
                     activeOpacity={0.7}
                     style={{ width: '100%' }}
@@ -464,7 +559,7 @@ export default function ResultScreen() {
                       });
                     }}
                   >
-                    <View style={styles.card}>
+                    <View style={[styles.card, { width: '100%' }]}>
                       <View style={styles.sourcesHeader}>
                         <Text style={styles.cardLabel}>Sources</Text>
                         <View style={styles.sourcesHeaderRight}>
@@ -479,10 +574,27 @@ export default function ResultScreen() {
                       {sourcesExpanded && (
                         <View style={styles.sourcesList}>
                           {analysis.sources.map((source: any, index: number) => (
-                            <View key={index} style={styles.sourceItem}>
-                              <Text style={styles.sourceText}>
-                                {source.url || source.title || `Source ${index + 1}`}
-                              </Text>
+                            <View key={source.id || index} style={styles.sourceItem}>
+                              <View style={styles.sourceContent}>
+                                <Text style={styles.sourceTitle} numberOfLines={2}>
+                                  {source.title || `Source ${index + 1}`}
+                                </Text>
+                                {source.url && (
+                                  <Text style={styles.sourceProvider}>
+                                    {getPublicationName(source.url)}
+                                  </Text>
+                                )}
+                              </View>
+                              {source.url && (
+                                <TouchableOpacity
+                                  style={styles.sourceButton}
+                                  onPress={() => Linking.openURL(source.url)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Ionicons name="open-outline" size={18} color="#FFFFFF" />
+                                  <Text style={styles.sourceButtonText}>Open</Text>
+                                </TouchableOpacity>
+                              )}
                             </View>
                           ))}
                         </View>
@@ -549,6 +661,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
+  verdictValueContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scoreBox: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -562,12 +679,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#6B6B6B',
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 4,
     textTransform: 'uppercase',
   },
   verdictScoreValue: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 18,
+    fontSize: 28,
     color: '#FFFFFF',
     textAlign: 'center',
   },
@@ -575,6 +692,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 24, // Ensure consistent height for vertical alignment
   },
   sourcesHeaderRight: {
     flexDirection: 'row',
@@ -597,16 +715,46 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sourceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 12,
   },
-  sourceText: {
-    fontFamily: 'Inter_400Regular',
+  sourceContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+  sourceTitle: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
-    color: '#E5E5E5',
+    color: '#FFFFFF',
     lineHeight: 20,
+    marginBottom: 4,
+  },
+  sourceProvider: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#8A8A8A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sourceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  sourceButtonText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: '#FFFFFF',
   },
   loadingContainer: {
     marginTop: 20,

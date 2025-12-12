@@ -13,7 +13,8 @@ export const analysisVerdictEnum = pgEnum("analysis_verdict", [
   "Mostly Accurate",
   "Partially Accurate",
   "False",
-  "Opinion"
+  "Opinion",
+  "Unverified"
 ]);
 
 export const analysisAttachmentKindEnum = pgEnum("analysis_attachment_kind", ["link", "image", "document"]);

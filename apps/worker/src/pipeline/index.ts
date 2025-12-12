@@ -187,11 +187,11 @@ function synthesizeVerdict(claims: PipelineClaim[], sources: PipelineSource[]): 
   // Ensure Verified verdicts (facts) always have a score of 100
   const score = verdict === "Verified" ? 100 : calculatedScore;
 
-  const summary = `Evidence from ${sources.length} source${sources.length === 1 ? "" : "s"} indicates the information is ${verdict.toLowerCase()} with a Vett score of ${score}.`;
+  const summary = `Based on ${sources.length} source${sources.length === 1 ? "" : "s"}, this information appears to be ${verdict.toLowerCase()}.`;
   const recommendation =
     verdict === "Verified" || verdict === "Mostly Accurate"
-      ? "Share with confidence, noting any nuances mentioned."
-      : "Highlight areas that need additional corroboration before sharing widely.";
+      ? "Multiple reliable sources confirm this information. The claim aligns with established facts and credible reporting."
+      : "The available evidence is mixed or limited. Some sources support parts of this claim, while others contradict it or lack sufficient information to verify.";
 
   return {
     score,
@@ -210,7 +210,7 @@ function verdictFromScore(score: number): PipelineResult["verdict"] {
 }
 
 // Validate verdicts match database enum before saving
-const VALID_VERDICTS = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion"] as const;
+const VALID_VERDICTS = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion", "Unverified"] as const;
 
 function validateVerdict(verdict: string): PipelineResult["verdict"] {
   if (VALID_VERDICTS.includes(verdict as any)) {
@@ -362,8 +362,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   const evidenceResults: EvidenceResult[] = evidenceByClaim.flatMap((entry) => entry.evidence);
 
+  const hasRealSources = evidenceResults.length > 0;
   const sources =
-    evidenceResults.length > 0
+    hasRealSources
       ? evidenceResults.map((item, index) => ({
           key: `retrieved-${index}`,
           provider: item.provider,
@@ -431,12 +432,13 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       return !supportingSources || supportingSources.length === 0;
     });
     
-    if (unsupportedImageClaims.length > 0) {
+    if (unsupportedImageClaims.length > 0 && reasoned.score !== null) {
       // Store original values before modification for accurate logging
       const originalScore = reasoned.score;
       const originalConfidence = reasoned.confidence;
       
       // Reduce score and confidence for unsupported image identifications
+      // Only apply penalty if verdict is not already "Unverified" (which has null score)
       reasoned.score = Math.max(0, reasoned.score - 30);
       // Ensure confidence is reduced, not increased (use 0 as minimum, not 0.3)
       reasoned.confidence = Math.max(0, reasoned.confidence - 0.2);
@@ -458,6 +460,17 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     : buildExplanationSteps(claims);
   const verdictData = reasoned
     ? (() => {
+        // Handle Unverified verdicts which have null scores
+        if (reasoned.verdict === "Unverified" || reasoned.score === null) {
+          return {
+            score: null,
+            verdict: validateVerdict("Unverified"),
+            confidence: Number(reasoned.confidence.toFixed(2)),
+            summary: reasoned.summary,
+            recommendation: reasoned.recommendation
+          };
+        }
+        
         const rawScore = Math.round(Math.min(100, Math.max(0, reasoned.score)));
         const derivedVerdict = verdictFromScore(rawScore);
         const verdict = validateVerdict(reasoned.verdict || derivedVerdict);
@@ -476,7 +489,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         }
 
         const finalVerdict = validateVerdict(reasoned.verdict || derivedVerdict);
-        const finalScore = finalVerdict === "Verified" ? 100 : rawScore;
+        // Unverified verdicts don't have scores (already handled above, but double-check)
+        const finalScore = finalVerdict === "Unverified" ? null : (finalVerdict === "Verified" ? 100 : rawScore);
 
         return {
           score: finalScore,
@@ -488,16 +502,31 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       })()
     : synthesizeVerdict(claims, rankedSources);
 
+  // Check for insufficient evidence conditions
+  const avgSourceReliability = rankedSources.length > 0
+    ? rankedSources.reduce((sum, s) => sum + (s.reliability ?? 0), 0) / rankedSources.length
+    : 0;
+  const hasLowReliabilitySources = avgSourceReliability < 0.3;
+  const hasVeryLowConfidence = verdictData.confidence < 0.3;
+  const insufficientEvidence = !hasRealSources || (hasLowReliabilitySources && hasVeryLowConfidence);
+
   // Adjust scores: False with high confidence gets 0, Verified (facts) always gets 100
+  // Unverified verdicts don't have scores
+  const finalVerdict = insufficientEvidence && verdictData.verdict !== "Unverified"
+    ? validateVerdict("Unverified")
+    : validateVerdict(verdictData.verdict);
+  
   const adjustedVerdictData = {
     ...verdictData,
-    verdict: validateVerdict(verdictData.verdict),
+    verdict: finalVerdict,
     score:
-    verdictData.verdict === "False" && verdictData.confidence >= 0.9
-        ? 0
-      : verdictData.verdict === "Verified"
-          ? 100
-          : verdictData.score
+      finalVerdict === "Unverified"
+        ? null // Unverified has no score
+      : finalVerdict === "False" && verdictData.confidence >= 0.9
+          ? 0
+        : finalVerdict === "Verified"
+            ? 100
+            : verdictData.score
   };
 
   // Image generation removed - no longer using DALL-E 3 or Unsplash
@@ -634,22 +663,41 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       messages: [
         {
           role: "system",
-          content: "You are a title generator. Generate a concise, informative title (3-10 words) that summarizes the main claim being analyzed. Return only the title, no quotes or extra text."
+          content: "You are a title generator. Generate a very short, punchy title (3-7 words, MAX 40 characters) that captures the essence of the claim being analyzed. The title should fit inside a circular display. Return only the title, no quotes or extra text."
         },
         {
           role: "user",
-          content: `Generate a 3-10 word title for this analysis:\n\n${claimsText.substring(0, 500)}`
+          content: `Generate a short title (max 40 chars) for this claim:\n\n${claimsText.substring(0, 500)}`
         }
       ],
-      max_tokens: 20,
+      max_tokens: 15,
       temperature: 0.7
     });
-    const rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";
+    let rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";
+    // Enforce 40 character limit
+    if (rawTitle.length > 40) {
+      const words = rawTitle.split(" ");
+      rawTitle = "";
+      for (const word of words) {
+        if ((rawTitle + " " + word).trim().length <= 37) {
+          rawTitle = (rawTitle + " " + word).trim();
+        } else {
+          break;
+        }
+      }
+      if (rawTitle.length === 0) {
+        rawTitle = words[0]?.slice(0, 37) || "Analysis";
+      }
+      rawTitle += "...";
+    }
     title = ensureTitleConstraint(rawTitle || claims[0]?.text || "Analysis");
   } catch (error) {
     console.warn("[Pipeline] Failed to generate title, using fallback", error);
-    // Fallback: use first claim text, ensuring 3-10 words
-    const fallbackText = claims[0]?.text || "Analysis";
+    // Fallback: use first claim text, ensuring 3-10 words and max 40 chars
+    let fallbackText = claims[0]?.text || "Analysis";
+    if (fallbackText.length > 40) {
+      fallbackText = fallbackText.slice(0, 37) + "...";
+    }
     title = ensureTitleConstraint(fallbackText);
   }
 

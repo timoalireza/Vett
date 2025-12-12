@@ -24,6 +24,7 @@ export interface AnalysisResponse {
   verdict: string | null;
   confidence: number | null;
   bias?: string | null;
+  title?: string | null; // Short title for display (max ~40 chars)
   summary?: string | null;
   recommendation?: string | null;
   rawInput?: string | null;
@@ -63,6 +64,7 @@ const ANALYSIS_QUERY = `
       verdict
       confidence
       bias
+      title
       summary
       recommendation
       claims {
