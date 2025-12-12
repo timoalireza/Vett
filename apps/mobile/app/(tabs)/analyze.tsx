@@ -128,7 +128,7 @@ export default function AnalyzeScreen() {
       
       setActiveVideoSource(newSource);
       
-      // Subtle crossfade when transitioning from idle to typing
+      // Crossfade transitions between idle and typing
       if (previousSource === VIDEO_IDLE && newSource === VIDEO_TYPING) {
         // Mark that we're animating
         isAnimatingRef.current = true;
@@ -149,9 +149,28 @@ export default function AnalyzeScreen() {
           }
         });
         loadingOpacity.value = 0;
+      } else if (previousSource === VIDEO_TYPING && newSource === VIDEO_IDLE) {
+        // Mark that we're animating
+        isAnimatingRef.current = true;
+        animationTargetRef.current = newSource;
+        
+        // Crossfade: fade out typing, fade in idle
+        typingOpacity.value = withTiming(0, {
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+        });
+        idleOpacity.value = withTiming(1, {
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+        }, (finished) => {
+          // Reset animation flag when animation completes
+          if (finished) {
+            runOnJS(resetAnimationFlags)();
+          }
+        });
+        loadingOpacity.value = 0;
       } else {
-        // Instant opacity switch for other transitions to prevent flicker
-        // Ensure videos reset to position 0 when they become active
+        // Instant opacity switch for other transitions (e.g., to/from loading)
         if (newSource === VIDEO_IDLE) {
           idleOpacity.value = 1;
           typingOpacity.value = 0;
