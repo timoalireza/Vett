@@ -318,16 +318,22 @@ export const resolvers: IResolvers<GraphQLContext> = {
         // Log the actual error for debugging
         console.error("[submitAnalysis] Error:", error);
         
-        // Check if it's a database connection error
+        // Check if it's a database connection error (but NOT a schema mismatch error)
         if (error instanceof Error) {
           const errorMessage = error.message.toLowerCase();
-          if (
+          // Don't catch schema mismatch errors - let them propagate with their helpful messages
+          const isSchemaMismatch = 
+            errorMessage.includes("schema mismatch") ||
+            errorMessage.includes("column") && errorMessage.includes("missing") ||
+            errorMessage.includes("migrations");
+          
+          if (!isSchemaMismatch && (
             errorMessage.includes("connection") ||
             errorMessage.includes("database") ||
             errorMessage.includes("postgres") ||
             errorMessage.includes("timeout") ||
             errorMessage.includes("econnrefused")
-          ) {
+          )) {
             throw new Error("Database connection error. Please try again in a moment.");
           }
         }

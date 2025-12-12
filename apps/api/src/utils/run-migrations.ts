@@ -46,6 +46,7 @@ export async function runMigrations(): Promise<void> {
         // Error codes that are safe to skip (indicate migration already applied):
         // 42P07 = duplicate_object (object already exists)
         // 42710 = duplicate_object (constraint/index already exists)
+        // 42701 = duplicate_column (column already exists)
         // 2BP01 = cannot drop type because it has dependent objects (handled in migration logic, but skip if still occurs)
         // 
         // Error codes that should NOT be skipped (critical failures):
@@ -57,6 +58,7 @@ export async function runMigrations(): Promise<void> {
         const isSafeToSkip = 
           error.code === "42P07" || // duplicate_object (object already exists)
           error.code === "42710" || // duplicate_object (constraint/index already exists)
+          error.code === "42701" || // duplicate_column (column already exists)
           (error.code === "2BP01" && error.message?.includes("dependent objects")); // cannot drop type with dependent objects
         
         if (isSafeToSkip) {
