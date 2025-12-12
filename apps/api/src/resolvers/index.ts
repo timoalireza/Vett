@@ -21,6 +21,11 @@ interface GraphQLContext {
   loaders: DataLoaderContext;
 }
 
+// Extend Mercurius context to include our custom properties
+declare module "mercurius" {
+  interface MercuriusContext extends GraphQLContext {}
+}
+
 export const resolvers: IResolvers<GraphQLContext> = {
   Query: {
     health: () => ({
@@ -82,7 +87,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
       try {
         // Ensure user exists in database (create if needed)
         // This must be done before using DataLoader, as DataLoader caches null results
-        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+        await userService.getOrCreateUser(ctx.userId);
         
         // Now use DataLoader for user lookup (will find the user we just created)
         const user = await ctx.loaders.userByExternalId.load(ctx.userId);
@@ -590,7 +595,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
     }
   },
   IngestionQuality: {
-    level: (parent: { level: string }) => {
+    level: (parent: { level: string }): string => {
       // Map lowercase enum to uppercase GraphQL enum
       const levelMap: Record<string, string> = {
         excellent: "EXCELLENT",
@@ -601,7 +606,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
       };
       return levelMap[parent.level.toLowerCase()] || "FAIR";
     },
-    recommendation: (parent: { recommendation?: string }) => {
+    recommendation: (parent: { recommendation?: string }): string | null => {
       if (!parent.recommendation) return null;
       const recMap: Record<string, string> = {
         screenshot: "SCREENSHOT",
@@ -610,6 +615,6 @@ export const resolvers: IResolvers<GraphQLContext> = {
       };
       return recMap[parent.recommendation.toLowerCase()] || null;
     }
-  }
+  } as IResolvers<GraphQLContext>["IngestionQuality"]
 };
 

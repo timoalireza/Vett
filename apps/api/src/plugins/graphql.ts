@@ -8,7 +8,7 @@ import { cacheService } from "../services/cache-service.js";
 import { createDataLoaders } from "../loaders/index.js";
 import { subscriptionService } from "../services/subscription-service.js";
 import { userService } from "../services/user-service.js";
-import { trackGraphQLQuery, trackGraphQLMutation, trackGraphQLError } from "./metrics.js";
+import { trackGraphQLQuery, trackGraphQLError } from "./metrics.js";
 
 // Simple in-memory store for mutation rate limiting
 // In production, this should use Redis for distributed rate limiting
@@ -169,7 +169,7 @@ export async function registerGraphql(app: FastifyInstance) {
     // Custom cache function for GraphQL queries
     // When caching is disabled, pass false to Mercurius (not a function)
     // Mercurius validates cache option and expects either false or a valid cache config/function
-    cache: cacheService.isEnabled() ? async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
+    cache: cacheService.isEnabled() ? (async (request: FastifyRequest, query: string, variables?: Record<string, unknown>) => {
       // Skip caching for mutations
       // Note: Mutation tracking is handled in resolvers to avoid double-counting
       if (isMutation(query)) {
@@ -193,7 +193,7 @@ export async function registerGraphql(app: FastifyInstance) {
       // Return null to proceed with normal execution
       // The result will be cached in the onResponse hook
       return null;
-    } : false,
+    }) as any : false,
     // Custom error formatter for better error messages
     errorFormatter: (execution, _context) => {
       // Track GraphQL errors
@@ -295,7 +295,7 @@ export async function registerGraphql(app: FastifyInstance) {
 
   // Add hook to cache successful GraphQL query responses
   if (cacheService.isEnabled()) {
-    app.addHook("onResponse", async (request, reply) => {
+    app.addHook("onSend", async (request, _reply, payload) => {
       // Only cache GraphQL POST requests (queries, not mutations)
       if (
         request.url === "/graphql" &&
@@ -307,20 +307,60 @@ export async function registerGraphql(app: FastifyInstance) {
         // Use isMutation() for consistent mutation detection (handles comments correctly)
         if (body.query && !isMutation(body.query)) {
           try {
-            // Get the response payload
-            const response = reply.getPayload();
-            if (response && typeof response === "string") {
-              const parsed = JSON.parse(response);
-              // Only cache if there are no errors and data exists
+            // onSend hook receives serialized payloads (strings or Buffers), not pre-parsed objects
+            // We need to handle both string and Buffer payloads correctly
+            let payloadString: string | null = null;
+            
+            if (typeof payload === "string") {
+              payloadString = payload;
+            } else if (Buffer.isBuffer(payload)) {
+              // Convert Buffer to string for parsing
+              payloadString = payload.toString("utf-8");
+            } else if (payload && typeof payload === "object" && !Buffer.isBuffer(payload)) {
+              // Only treat as pre-parsed object if it's actually a plain object (not a Buffer)
+              // This is rare for GraphQL responses but handle it for safety
+              const parsed = payload as { data?: unknown; errors?: unknown[] };
               if (parsed && parsed.data && !parsed.errors) {
-                // Cache for 5 minutes (300 seconds)
-                await cacheService.cacheGraphQLQuery(
+                // Cache for 5 minutes (300 seconds) - fire and forget
+                cacheService.cacheGraphQLQuery(
                   body.query,
                   body.variables,
                   parsed.data,
                   300,
                   (request as any).userId
-                );
+                ).catch((error) => {
+                  // Ignore cache errors - don't break the request
+                  app.log.debug({ error }, "Failed to cache GraphQL response");
+                });
+              }
+              return payload;
+            } else {
+              // Unknown payload type, skip caching
+              return payload;
+            }
+            
+            // Parse the serialized payload (string or Buffer converted to string)
+            if (payloadString) {
+              try {
+                const parsed = JSON.parse(payloadString) as { data?: unknown; errors?: unknown[] };
+                
+                // Only cache if there are no errors and data exists
+                if (parsed && parsed.data && !parsed.errors) {
+                  // Cache for 5 minutes (300 seconds) - fire and forget
+                  cacheService.cacheGraphQLQuery(
+                    body.query,
+                    body.variables,
+                    parsed.data,
+                    300,
+                    (request as any).userId
+                  ).catch((error) => {
+                    // Ignore cache errors - don't break the request
+                    app.log.debug({ error }, "Failed to cache GraphQL response");
+                  });
+                }
+              } catch (parseError) {
+                // If parsing fails, skip caching but don't break the request
+                app.log.debug({ error: parseError }, "Failed to parse GraphQL response payload for caching");
               }
             }
           } catch (error) {
@@ -329,6 +369,7 @@ export async function registerGraphql(app: FastifyInstance) {
           }
         }
       }
+      return payload;
     });
   }
 }

@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, pgEnum, uuid, text, timestamp, integer, numeric, boolean, uniqueIndex, sql } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, timestamp, integer, numeric, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const analysisStatusEnum = pgEnum("analysis_status", [
   "QUEUED",

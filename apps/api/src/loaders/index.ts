@@ -1,9 +1,8 @@
 import DataLoader from "dataloader";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import { db } from "../db/index.js";
-import { users, analyses } from "../db/schema.js";
-import { userService } from "../services/user-service.js";
+import { users } from "../db/schema.js";
 import { analysisService } from "../services/analysis-service.js";
 
 /**
@@ -72,7 +71,8 @@ export function createUserByIdLoader() {
 export function createAnalysisByIdLoader() {
   return new DataLoader<
     { id: string; userId?: string },
-    Awaited<ReturnType<typeof analysisService.getAnalysisSummary>> | null
+    Awaited<ReturnType<typeof analysisService.getAnalysisSummary>> | null,
+    string
   >(
     async (keys: readonly { id: string; userId?: string }[]) => {
       // Use the existing service method which handles all business logic

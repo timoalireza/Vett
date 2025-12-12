@@ -1,4 +1,4 @@
-import { Queue, QueueEvents, type ConnectionOptions } from "bullmq";
+import { Queue, QueueEvents } from "bullmq";
 import { createRedisClient } from "../utils/redis-config.js";
 import { env } from "../env.js";
 import type IORedis from "ioredis";
