@@ -222,13 +222,24 @@ export default function ResultScreen() {
   }));
 
   const getVerdictLabel = (s: number, v: string | null | undefined) => {
-    // Unverified: Not enough evidence to make a decision (separate category, no score)
+    // Map server verdicts to mobile display labels
+    // Server can return: "Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion", "Unverified"
+    
+    // Direct mappings
     if (v === "Unverified") return 'Unverified';
-    // Verified: Evidence overwhelmingly supports the claim (85-100)
+    if (v === "Verified") return 'Verified';
+    if (v === "False") return 'False';
+    
+    // Map "Mostly Accurate" and "Partially Accurate" to "Disputed"
+    // These indicate mixed or partial truth, which aligns with the "Disputed" concept
+    if (v === "Mostly Accurate" || v === "Partially Accurate") return 'Disputed';
+    
+    // Map "Opinion" to "Disputed" (opinions are subjective, can't be verified/false)
+    if (v === "Opinion") return 'Disputed';
+    
+    // Fallback to score-based logic only if verdict is null/undefined
     if (s >= 85) return 'Verified';
-    // Disputed: Credible evidence exists on both sides (40-84)
     if (s >= 40) return 'Disputed';
-    // False: Evidence contradicts the claim (0-39)
     return 'False';
   };
 
