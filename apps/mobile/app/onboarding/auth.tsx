@@ -69,8 +69,10 @@ export default function AuthScreen() {
 
   const [loading, setLoading] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [showVerificationForm, setShowVerificationForm] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [isSignUp, setIsSignUp] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -124,16 +126,12 @@ export default function AuthScreen() {
           password,
         });
         
-        // Check if signup is complete and session is available
-        if (result.status === "complete" && result.createdSessionId && setActive) {
-          await setActive({ session: result.createdSessionId });
-          await setAuthMode("signedIn");
-          router.push("/onboarding/profile-setup");
-        } else {
-          // If signup requires additional steps (e.g., verification), inform user
-          setError("Account created but requires verification. Please check your email or try signing in.");
-          setFailedAttempts((prev) => prev + 1);
-        }
+        // Prepare email verification
+        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+        
+        // Show verification form
+        setShowVerificationForm(true);
+        setError(null);
       } else {
         const result = await signIn.create({
           identifier: email.trim(),
@@ -154,6 +152,35 @@ export default function AuthScreen() {
         err.errors?.[0]?.message || err.message || "Authentication failed";
       setError(errorMessage);
       setFailedAttempts((prev) => prev + 1);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verificationCode || verificationCode.length < 6) {
+      setError("Please enter a valid 6-digit verification code");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const completeResult = await signUp.attemptEmailAddressVerification({
+        code: verificationCode,
+      });
+
+      if (completeResult.status === "complete" && completeResult.createdSessionId && setActive) {
+        await setActive({ session: completeResult.createdSessionId });
+        await setAuthMode("signedIn");
+        router.push("/onboarding/profile-setup");
+      } else {
+        setError("Verification incomplete. Please try again.");
+      }
+    } catch (err: any) {
+      const errorMessage = err.errors?.[0]?.message || "Invalid verification code";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -285,6 +312,115 @@ export default function AuthScreen() {
                 </TouchableOpacity>
               )}
             </>
+          ) : showVerificationForm ? (
+            <View style={styles.emailForm}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowVerificationForm(false);
+                  setVerificationCode("");
+                  setError(null);
+                }}
+                style={styles.backButton}
+              >
+                <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
+                <Text
+                  style={[
+                    styles.backText,
+                    {
+                      color: theme.colors.text,
+                      fontSize: theme.typography.caption,
+                    },
+                  ]}
+                >
+                  Back to sign up
+                </Text>
+              </TouchableOpacity>
+
+              <Text
+                style={[
+                  styles.title,
+                  {
+                    color: theme.colors.text,
+                    fontFamily: "Inter_600SemiBold",
+                    fontSize: theme.typography.subheading,
+                    marginBottom: theme.spacing(1),
+                  },
+                ]}
+              >
+                Enter Verification Code
+              </Text>
+              <Text
+                style={[
+                  styles.subtitle,
+                  {
+                    color: theme.colors.textSecondary,
+                    fontFamily: "Inter_400Regular",
+                    fontSize: theme.typography.body,
+                    marginBottom: theme.spacing(2),
+                  },
+                ]}
+              >
+                We sent a 6-digit code to {email}
+              </Text>
+
+              <TextInput
+                placeholder="000000"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+                keyboardType="number-pad"
+                maxLength={6}
+                style={[
+                  styles.input,
+                  styles.verificationInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    borderRadius: theme.radii.md,
+                    fontFamily: "Inter_600SemiBold",
+                    fontSize: theme.typography.heading,
+                  },
+                ]}
+              />
+
+              <OnboardingCTA
+                label="Verify Code"
+                onPress={handleVerifyCode}
+                variant="primary"
+                loading={loading}
+                disabled={loading || verificationCode.length < 6}
+              />
+
+              {error && (
+                <View
+                  style={[
+                    styles.errorContainer,
+                    {
+                      marginTop: theme.spacing(2),
+                      padding: theme.spacing(1.5),
+                      backgroundColor: theme.colors.danger + "20",
+                      borderRadius: theme.radii.md,
+                      borderWidth: 1,
+                      borderColor: theme.colors.danger,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.errorText,
+                      {
+                        color: theme.colors.danger,
+                        fontSize: theme.typography.caption,
+                        textAlign: "center",
+                      },
+                    ]}
+                  >
+                    {error}
+                  </Text>
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.emailForm}>
               <TouchableOpacity
@@ -505,6 +641,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     marginBottom: 12,
+  },
+  verificationInput: {
+    textAlign: "center",
+    letterSpacing: 8,
   },
 });
 
