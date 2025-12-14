@@ -29,7 +29,7 @@ export default function PersonalizationScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={6} totalSteps={8} variant="bar" />
+            <ProgressIndicator currentStep={9} totalSteps={10} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>

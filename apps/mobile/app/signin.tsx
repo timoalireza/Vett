@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, TouchableOpacity, View, TextInput, ActivityIndicator, Alert } from "react-native";
+import { Text, TouchableOpacity, View, TextInput, ActivityIndicator, Alert, SafeAreaView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSignIn, useSignUp, useOAuth } from "@clerk/clerk-expo";
@@ -9,6 +9,7 @@ import { useAppState } from "../src/state/app-state";
 import { useTheme } from "../src/hooks/use-theme";
 import { GradientBackground } from "../src/components/GradientBackground";
 import { GlassCard } from "../src/components/GlassCard";
+import { OnboardingBackButton } from "../src/components/Onboarding/OnboardingBackButton";
 
 export default function SignInScreen() {
   const theme = useTheme();
@@ -238,14 +239,18 @@ export default function SignInScreen() {
 
   return (
     <GradientBackground>
-      <View
-        style={{
-          flex: 1,
-          padding: theme.spacing(4),
-          justifyContent: "center"
-        }}
-      >
-        <GlassCard
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <View style={{ paddingHorizontal: theme.spacing(2.5), paddingTop: theme.spacing(2), paddingBottom: theme.spacing(1) }}>
+          <OnboardingBackButton onPress={() => router.back()} />
+        </View>
+        <View
+          style={{
+            flex: 1,
+            padding: theme.spacing(4),
+            justifyContent: "center"
+          }}
+        >
+          <GlassCard
           style={{
             padding: theme.spacing(3),
             gap: theme.spacing(2)
@@ -725,7 +730,8 @@ export default function SignInScreen() {
             disabled={loading}
           />
         </GlassCard>
-      </View>
+        </View>
+      </SafeAreaView>
     </GradientBackground>
   );
 }

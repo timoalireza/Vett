@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, StyleSheet, AccessibilityInfo, SafeAreaView } from "react-native";
+import { View, StyleSheet, AccessibilityInfo, SafeAreaView, TouchableOpacity, Text } from "react-native";
 import PagerView from "react-native-pager-view";
 import { useRouter } from "expo-router";
 import Animated, {
@@ -136,12 +136,14 @@ export default function IntroScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={currentPage} totalSteps={totalPages} variant="bar" />
+            <ProgressIndicator currentStep={currentPage + 1} totalSteps={10} variant="bar" />
           </View>
         </View>
-        <View style={styles.backButtonContainer}>
-          <OnboardingBackButton onPress={handleBack} />
-        </View>
+        {currentPage > 0 && (
+          <View style={styles.backButtonContainer}>
+            <OnboardingBackButton onPress={handleBack} />
+          </View>
+        )}
         <PagerView
           style={styles.pagerView}
           initialPage={0}

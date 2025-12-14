@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, TextInput } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSignIn, useSignUp, useOAuth } from "@clerk/clerk-expo";
@@ -70,7 +71,7 @@ export default function AuthScreen() {
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
 
@@ -122,31 +123,27 @@ export default function AuthScreen() {
           emailAddress: email.trim(),
           password,
         });
-        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-        Alert.alert(
-          "Verification Required",
-          "Please check your email for a verification code.",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                // For now, skip email verification in onboarding
-                // User can verify later
-                router.push("/onboarding/instagram");
-              },
-            },
-          ]
-        );
+        
+        // Check if signup is complete and session is available
+        if (result.status === "complete" && result.createdSessionId && setActive) {
+          await setActive({ session: result.createdSessionId });
+          await setAuthMode("signedIn");
+          router.push("/onboarding/profile-setup");
+        } else {
+          // If signup requires additional steps (e.g., verification), inform user
+          setError("Account created but requires verification. Please check your email or try signing in.");
+          setFailedAttempts((prev) => prev + 1);
+        }
       } else {
         const result = await signIn.create({
           identifier: email.trim(),
           password,
         });
 
-        if (result.status === "complete") {
+        if (result.status === "complete" && result.createdSessionId && setActive) {
           await setActive({ session: result.createdSessionId });
           await setAuthMode("signedIn");
-          router.push("/onboarding/instagram");
+          router.push("/onboarding/profile-setup");
         } else {
           setError("Sign in incomplete. Please try again.");
           setFailedAttempts((prev) => prev + 1);
@@ -171,7 +168,7 @@ export default function AuthScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={2} totalSteps={8} variant="bar" />
+            <ProgressIndicator currentStep={4} totalSteps={10} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>
@@ -184,12 +181,10 @@ export default function AuthScreen() {
           <GlassCard
           intensity="medium"
           radius="lg"
-          style={[
-            styles.card,
-            {
-              padding: theme.spacing(3),
-            },
-          ]}
+          style={{
+            ...styles.card,
+            padding: theme.spacing(3),
+          }}
         >
           <Text
             style={[
@@ -296,6 +291,8 @@ export default function AuthScreen() {
                 onPress={() => {
                   setShowEmailForm(false);
                   setError(null);
+                  setEmail("");
+                  setPassword("");
                 }}
                 style={styles.backButton}
               >
@@ -309,12 +306,62 @@ export default function AuthScreen() {
                     },
                   ]}
                 >
-                  Back
+                  Back to options
                 </Text>
               </TouchableOpacity>
 
+              <TextInput
+                placeholder="Email"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    borderRadius: theme.radii.md,
+                    fontFamily: "Inter_400Regular",
+                    fontSize: theme.typography.body,
+                  },
+                ]}
+              />
+
+              <TextInput
+                placeholder="Password"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    borderRadius: theme.radii.md,
+                    fontFamily: "Inter_400Regular",
+                    fontSize: theme.typography.body,
+                  },
+                ]}
+              />
+
+              <OnboardingCTA
+                label={isSignUp ? "Create Account" : "Sign In"}
+                onPress={handleEmailAuth}
+                variant="primary"
+                loading={loading}
+                disabled={loading || !email || !password}
+              />
+
               <TouchableOpacity
-                onPress={() => setIsSignUp(!isSignUp)}
+                onPress={() => {
+                  setIsSignUp(!isSignUp);
+                  setError(null);
+                }}
                 style={styles.toggleAuth}
               >
                 <Text
@@ -330,20 +377,34 @@ export default function AuthScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Email/Password inputs would go here - simplified for now */}
-              <Text
-                style={[
-                  styles.infoText,
-                  {
-                    color: theme.colors.textSecondary,
-                    fontSize: theme.typography.caption,
-                    marginTop: theme.spacing(2),
-                    textAlign: "center",
-                  },
-                ]}
-              >
-                Email authentication coming soon. Please use Apple or Google for now.
-              </Text>
+              {error && (
+                <View
+                  style={[
+                    styles.errorContainer,
+                    {
+                      marginTop: theme.spacing(2),
+                      padding: theme.spacing(1.5),
+                      backgroundColor: theme.colors.danger + "20",
+                      borderRadius: theme.radii.md,
+                      borderWidth: 1,
+                      borderColor: theme.colors.danger,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.errorText,
+                      {
+                        color: theme.colors.danger,
+                        fontSize: theme.typography.caption,
+                        textAlign: "center",
+                      },
+                    ]}
+                  >
+                    {error}
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -426,6 +487,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
   toggleAuth: {
+    marginTop: 16,
     marginBottom: 16,
   },
   toggleText: {
@@ -438,6 +500,11 @@ const styles = StyleSheet.create({
   loadingContainer: {
     marginTop: 16,
     alignItems: "center",
+  },
+  input: {
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 12,
   },
 });
 
