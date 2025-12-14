@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { useTheme } from "../../src/hooks/use-theme";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
+import { DevResetButton } from "../../src/utils/dev-reset";
 
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -86,6 +87,13 @@ export default function SettingsScreen() {
           <Row label="Analysis complete" value={<Switch value={notifications.analyses} onValueChange={(val) => setNotifications((prev) => ({ ...prev, analyses: val }))} />} />
           <Row label="Community updates" value={<Switch value={notifications.community} onValueChange={(val) => setNotifications((prev) => ({ ...prev, community: val }))} />} />
         </Section>
+        
+        {/* Dev Reset Button - Only in development */}
+        {__DEV__ && (
+          <Section title="Development">
+            <DevResetButton />
+          </Section>
+        )}
         </ScrollView>
       </SafeAreaView>
     </GradientBackground>
