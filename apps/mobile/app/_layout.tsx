@@ -53,7 +53,7 @@ const clerkPublishableKey =
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function NavigationGate() {
-  const { isReady, authMode, subscriptionPromptShown, markSubscriptionPromptShown } = useAppState();
+  const { isReady, authMode, hasOnboarded, subscriptionPromptShown, markSubscriptionPromptShown } = useAppState();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -66,27 +66,35 @@ function NavigationGate() {
 
     // Use setTimeout to defer navigation and avoid blocking main thread
     const navigationTimer = setTimeout(() => {
-      console.log("[NavigationGate] State:", { isReady, authMode, pathname });
+      console.log("[NavigationGate] State:", { isReady, authMode, hasOnboarded, pathname });
       
-      // Force authentication - no guest mode, no onboarding
+      // Check if user needs onboarding
+      if (!hasOnboarded && !pathname.startsWith("/onboarding") && !pathname.startsWith("/signin")) {
+        router.replace("/onboarding");
+        return;
+      }
+
+      // Force authentication - no guest mode
       const needsAuth = authMode !== "signedIn";
-      if (needsAuth && !pathname.startsWith("/signin")) {
+      if (needsAuth && !pathname.startsWith("/signin") && !pathname.startsWith("/onboarding")) {
         router.replace("/signin");
         return;
       }
 
-      // If authenticated, allow navigation to main app
-      if (authMode === "signedIn" && pathname === "/") {
+      // If authenticated and onboarded, allow navigation to main app
+      if (authMode === "signedIn" && hasOnboarded && pathname === "/") {
         router.replace("/(tabs)/analyze");
         return;
       }
 
-      // Show subscription prompt on first app open (after auth)
+      // Show subscription prompt on first app open (after auth and onboarding)
       if (
         authMode === "signedIn" &&
+        hasOnboarded &&
         !subscriptionPromptShown &&
         !pathname.startsWith("/modals/subscription") &&
-        !pathname.startsWith("/signin")
+        !pathname.startsWith("/signin") &&
+        !pathname.startsWith("/onboarding")
       ) {
         // Small delay to ensure UI is ready
         subscriptionTimer = setTimeout(() => {
@@ -103,7 +111,7 @@ function NavigationGate() {
         clearTimeout(subscriptionTimer);
       }
     };
-  }, [isReady, authMode, subscriptionPromptShown, pathname, router, markSubscriptionPromptShown]);
+  }, [isReady, authMode, hasOnboarded, subscriptionPromptShown, pathname, router, markSubscriptionPromptShown]);
 
   if (!isReady) {
     return (
@@ -130,6 +138,15 @@ function NavigationGate() {
     >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="onboarding/index" />
+      <Stack.Screen name="onboarding/warm-up" />
+      <Stack.Screen name="onboarding/intro" />
+      <Stack.Screen name="onboarding/auth" />
+      <Stack.Screen name="onboarding/profile-setup" />
+      <Stack.Screen name="onboarding/instagram" />
+      <Stack.Screen name="onboarding/demo" />
+      <Stack.Screen name="onboarding/premium" />
+      <Stack.Screen name="onboarding/personalization" />
+      <Stack.Screen name="onboarding/ready" />
       <Stack.Screen name="signin" />
       <Stack.Screen name="result/[jobId]" />
       <Stack.Screen name="result/general" />
