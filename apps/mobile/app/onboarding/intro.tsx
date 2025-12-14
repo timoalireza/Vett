@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, StyleSheet, AccessibilityInfo } from "react-native";
+import { View, StyleSheet, AccessibilityInfo, SafeAreaView } from "react-native";
 import PagerView from "react-native-pager-view";
 import { useRouter } from "expo-router";
 import Animated, {
@@ -15,6 +15,7 @@ import { GradientBackground } from "../../src/components/GradientBackground";
 import { OnboardingCard } from "../../src/components/Onboarding/OnboardingCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
 import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { LensMotif } from "../../src/components/Lens/LensMotif";
 import { useTheme } from "../../src/hooks/use-theme";
 
@@ -47,7 +48,7 @@ function CardA() {
   }));
 
   return (
-    <OnboardingCard title="Truth shouldn't be guesswork.">
+    <OnboardingCard title="Fact-Checking made easy">
       <AnimatedIcon
         name="chatbubble-outline"
         size={80}
@@ -122,9 +123,25 @@ export default function IntroScreen() {
     }
   };
 
+  const handleBack = () => {
+    if (currentPage > 0) {
+      pagerRef.current?.setPage(currentPage - 1);
+    } else {
+      router.back();
+    }
+  };
+
   return (
     <GradientBackground>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={currentPage} totalSteps={totalPages} variant="bar" />
+          </View>
+        </View>
+        <View style={styles.backButtonContainer}>
+          <OnboardingBackButton onPress={handleBack} />
+        </View>
         <PagerView
           style={styles.pagerView}
           initialPage={0}
@@ -143,16 +160,43 @@ export default function IntroScreen() {
         </PagerView>
 
         <View style={styles.footer}>
-          <ProgressIndicator currentStep={currentPage} totalSteps={totalPages} />
           <View style={styles.ctaContainer}>
             <OnboardingCTA
-              label={currentPage === totalPages - 1 ? "Get Started" : "Continue"}
+              label="Get Started"
               onPress={handleNext}
               variant="primary"
             />
+            <TouchableOpacity
+              onPress={() => router.push("/signin")}
+              style={styles.signInButton}
+            >
+              <Text
+                style={[
+                  styles.signInText,
+                  {
+                    color: theme.colors.textSecondary,
+                    fontFamily: "Inter_400Regular",
+                    fontSize: theme.typography.body,
+                  },
+                ]}
+              >
+                Already have an account?{" "}
+                <Text
+                  style={[
+                    styles.signInLink,
+                    {
+                      color: theme.colors.text,
+                      fontFamily: "Inter_500Medium",
+                    },
+                  ]}
+                >
+                  Sign in
+                </Text>
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
@@ -160,6 +204,18 @@ export default function IntroScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
+  backButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   pagerView: {
     flex: 1,
@@ -175,10 +231,20 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 16,
     paddingBottom: 48,
-    gap: 24,
   },
   ctaContainer: {
     width: "100%",
+    gap: 16,
+  },
+  signInButton: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  signInText: {
+    textAlign: "center",
+  },
+  signInLink: {
+    textDecorationLine: "underline",
   },
 });
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, AccessibilityInfo } from "react-native";
+import { View, Text, StyleSheet, AccessibilityInfo, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, {
   useSharedValue,
@@ -11,6 +11,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
+import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { LensMotif } from "../../src/components/Lens/LensMotif";
 import { useTheme } from "../../src/hooks/use-theme";
 import { useAppState } from "../../src/state/app-state";
@@ -69,7 +71,15 @@ export default function ReadyScreen() {
 
   return (
     <GradientBackground>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={7} totalSteps={8} variant="bar" />
+          </View>
+        </View>
+        <View style={styles.backButtonContainer}>
+          <OnboardingBackButton goTo="/onboarding/personalization" />
+        </View>
         <View style={styles.content}>
           <Animated.View style={[styles.lensContainer, lensStyle]}>
             <Animated.View
@@ -142,7 +152,7 @@ export default function ReadyScreen() {
             Settings → to revisit preferences anytime
           </Text>
         </View>
-      </View>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
@@ -150,7 +160,18 @@ export default function ReadyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
+  backButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   content: {
     flex: 1,

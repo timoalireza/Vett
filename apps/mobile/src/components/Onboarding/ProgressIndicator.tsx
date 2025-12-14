@@ -25,6 +25,7 @@ export function ProgressIndicator({
             backgroundColor: theme.colors.border,
             borderRadius: theme.radii.pill,
             height: 4,
+            width: "100%",
           },
         ]}
       >

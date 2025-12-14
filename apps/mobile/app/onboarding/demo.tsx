@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, {
   useSharedValue,
@@ -11,6 +11,7 @@ import Animated, {
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
 import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { DemoClaimCard } from "../../src/components/Onboarding/DemoClaimCard";
 import { DemoResultCard } from "../../src/components/Onboarding/DemoResultCard";
 import { AnimatedLens } from "../../src/components/Lens/AnimatedLens";
@@ -58,7 +59,15 @@ export default function DemoScreen() {
 
   return (
     <GradientBackground>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={4} totalSteps={8} variant="bar" />
+          </View>
+        </View>
+        <View style={styles.backButtonContainer}>
+          <OnboardingBackButton goTo="/onboarding/instagram" />
+        </View>
         <View style={styles.content}>
           <Text
             style={[
@@ -104,12 +113,9 @@ export default function DemoScreen() {
               onPress={handleContinue}
               variant="primary"
             />
-            <View style={styles.progressContainer}>
-              <ProgressIndicator currentStep={4} totalSteps={8} />
-            </View>
           </View>
         )}
-      </View>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
@@ -117,11 +123,22 @@ export default function DemoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: "center",
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
+  backButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   content: {
     flex: 1,
+    padding: 20,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -145,9 +162,7 @@ const styles = StyleSheet.create({
   footer: {
     gap: 24,
     paddingBottom: 32,
-  },
-  progressContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
 });
 

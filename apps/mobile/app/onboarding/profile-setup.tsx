@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
 import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { useTheme } from "../../src/hooks/use-theme";
 
 export default function ProfileSetupScreen() {
@@ -33,8 +34,17 @@ export default function ProfileSetupScreen() {
 
   return (
     <GradientBackground>
-      <View style={styles.container}>
-        <GlassCard
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={2} totalSteps={8} variant="bar" />
+          </View>
+        </View>
+        <View style={styles.backButtonContainer}>
+          <OnboardingBackButton goTo="/onboarding/auth" />
+        </View>
+        <View style={styles.content}>
+          <GlassCard
           intensity="medium"
           radius="lg"
           style={[
@@ -114,17 +124,29 @@ export default function ProfileSetupScreen() {
             </TouchableOpacity>
           </View>
         </GlassCard>
-
-        <View style={styles.footer}>
-          <ProgressIndicator currentStep={2} totalSteps={8} />
         </View>
-      </View>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
+  backButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  content: {
     flex: 1,
     padding: 20,
     justifyContent: "center",

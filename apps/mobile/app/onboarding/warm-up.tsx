@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, StyleSheet, AccessibilityInfo } from "react-native";
+import { View, StyleSheet, AccessibilityInfo, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, {
   useSharedValue,
@@ -9,6 +9,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { LensMotif } from "../../src/components/Lens/LensMotif";
+import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 
 export default function WarmUpScreen() {
   const router = useRouter();
@@ -46,17 +48,42 @@ export default function WarmUpScreen() {
 
   return (
     <GradientBackground>
-      <View style={styles.container}>
-        <Animated.View style={[styles.lensContainer, animatedStyle]}>
-          <LensMotif size={240} showPrompt={false} />
-        </Animated.View>
-      </View>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={0} totalSteps={8} variant="bar" />
+          </View>
+        </View>
+        <View style={styles.backButtonContainer}>
+          <OnboardingBackButton onPress={() => router.back()} />
+        </View>
+        <View style={styles.content}>
+          <Animated.View style={[styles.lensContainer, animatedStyle]}>
+            <LensMotif size={240} showPrompt={false} />
+          </Animated.View>
+        </View>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
+  backButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  content: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",

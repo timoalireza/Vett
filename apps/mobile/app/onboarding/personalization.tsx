@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ScrollView, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
 import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { TopicSelector, Topic } from "../../src/components/Onboarding/TopicSelector";
 import { useTheme } from "../../src/hooks/use-theme";
 
@@ -25,7 +26,15 @@ export default function PersonalizationScreen() {
 
   return (
     <GradientBackground>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={6} totalSteps={8} variant="bar" />
+          </View>
+        </View>
+        <View style={styles.backButtonContainer}>
+          <OnboardingBackButton goTo="/onboarding/premium" />
+        </View>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -87,11 +96,7 @@ export default function PersonalizationScreen() {
             </View>
           </GlassCard>
         </ScrollView>
-
-        <View style={styles.footer}>
-          <ProgressIndicator currentStep={6} totalSteps={8} />
-        </View>
-      </View>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
@@ -99,10 +104,22 @@ export default function PersonalizationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
+  backButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   scrollContent: {
     flexGrow: 1,
+    padding: 20,
     justifyContent: "center",
   },
   card: {
@@ -118,11 +135,6 @@ const styles = StyleSheet.create({
     width: "100%",
     marginTop: 32,
     gap: 12,
-  },
-  footer: {
-    marginTop: 32,
-    paddingHorizontal: 16,
-    paddingBottom: 32,
   },
 });
 

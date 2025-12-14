@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -11,6 +11,7 @@ import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
 import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { useTheme } from "../../src/hooks/use-theme";
 import {
   generateInstagramVerificationCode,
@@ -124,8 +125,20 @@ export default function InstagramScreen() {
 
   return (
     <GradientBackground>
-      <View style={styles.container}>
-        <GlassCard
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={3} totalSteps={8} variant="bar" />
+          </View>
+        </View>
+        <View style={styles.backButtonContainer}>
+          <OnboardingBackButton goTo="/onboarding/profile-setup" />
+        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <GlassCard
           intensity="medium"
           radius="lg"
           style={[
@@ -251,11 +264,8 @@ export default function InstagramScreen() {
             </TouchableOpacity>
           </View>
         </GlassCard>
-
-        <View style={styles.footer}>
-          <ProgressIndicator currentStep={3} totalSteps={8} />
-        </View>
-      </View>
+        </ScrollView>
+      </SafeAreaView>
     </GradientBackground>
   );
 }
@@ -263,6 +273,21 @@ export default function InstagramScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
+  backButtonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  scrollContent: {
+    flexGrow: 1,
     padding: 20,
     justifyContent: "center",
   },
@@ -309,10 +334,6 @@ const styles = StyleSheet.create({
   },
   skipText: {
     textDecorationLine: "underline",
-  },
-  footer: {
-    marginTop: 32,
-    paddingHorizontal: 16,
   },
 });
 
