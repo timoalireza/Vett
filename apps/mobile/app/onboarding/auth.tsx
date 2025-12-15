@@ -199,7 +199,25 @@ export default function AuthScreen() {
           </View>
         </View>
         <View style={styles.backButtonContainer}>
-          <OnboardingBackButton goTo="/onboarding/intro" />
+          <OnboardingBackButton 
+            onPress={() => {
+              if (showVerificationForm) {
+                // Go back to email form to correct credentials
+                setShowVerificationForm(false);
+                setVerificationCode("");
+                setError(null);
+              } else if (showEmailForm) {
+                // Go back to auth options
+                setShowEmailForm(false);
+                setEmail("");
+                setPassword("");
+                setError(null);
+              } else {
+                // Go back to intro (explicit navigation for consistency)
+                router.push("/onboarding/intro");
+              }
+            }}
+          />
         </View>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -314,28 +332,6 @@ export default function AuthScreen() {
             </>
           ) : showVerificationForm ? (
             <View style={styles.emailForm}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowVerificationForm(false);
-                  setVerificationCode("");
-                  setError(null);
-                }}
-                style={styles.backButton}
-              >
-                <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
-                <Text
-                  style={[
-                    styles.backText,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.caption,
-                    },
-                  ]}
-                >
-                  Back to sign up
-                </Text>
-              </TouchableOpacity>
-
               <Text
                 style={[
                   styles.title,
@@ -423,29 +419,6 @@ export default function AuthScreen() {
             </View>
           ) : (
             <View style={styles.emailForm}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowEmailForm(false);
-                  setError(null);
-                  setEmail("");
-                  setPassword("");
-                }}
-                style={styles.backButton}
-              >
-                <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
-                <Text
-                  style={[
-                    styles.backText,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.caption,
-                    },
-                  ]}
-                >
-                  Back to options
-                </Text>
-              </TouchableOpacity>
-
               <TextInput
                 placeholder="Email"
                 placeholderTextColor={theme.colors.textSecondary}
