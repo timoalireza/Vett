@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
@@ -20,9 +20,11 @@ export default function WrapUpScreen() {
   };
 
   const handleWhatIsVett = () => {
-    // TODO: Navigate to explainer screen or show modal
-    // For now, just proceed
-    handleStartVetting();
+    Alert.alert(
+      "What is Vett?",
+      "Vett is your fact-checking companion. Share claims from social media, news, or anywhere else, and Vett will analyze them using evidence-based sources to help you determine their accuracy.\n\nThink of it as a second opinion for the information you encounter online.",
+      [{ text: "Got it", style: "default" }]
+    );
   };
 
   return (
