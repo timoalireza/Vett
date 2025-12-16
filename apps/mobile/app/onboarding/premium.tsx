@@ -38,7 +38,7 @@ export default function PremiumScreen() {
         Alert.alert("Success", "Your free trial has started!", [
           {
             text: "OK",
-            onPress: () => router.push("/onboarding/personalization"),
+            onPress: () => router.push("/onboarding/wrap-up"),
           },
         ]);
       } else {
@@ -53,7 +53,7 @@ export default function PremiumScreen() {
   };
 
   const handleContinueFree = () => {
-    router.push("/onboarding/personalization");
+    router.push("/onboarding/wrap-up");
   };
 
   if (screen === "features") {
@@ -62,11 +62,11 @@ export default function PremiumScreen() {
         <SafeAreaView style={styles.container} edges={["top"]}>
           <View style={styles.header}>
             <View style={styles.progressContainer}>
-              <ProgressIndicator currentStep={8} totalSteps={10} variant="bar" />
+              <ProgressIndicator currentStep={5} totalSteps={7} variant="bar" />
             </View>
           </View>
           <View style={styles.backButtonContainer}>
-            <OnboardingBackButton goTo="/onboarding/demo" />
+            <OnboardingBackButton goTo="/onboarding/instagram" />
           </View>
           <ScrollView
             contentContainerStyle={styles.scrollContent}
@@ -160,7 +160,7 @@ export default function PremiumScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={8} totalSteps={10} variant="bar" />
+            <ProgressIndicator currentStep={6} totalSteps={7} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>

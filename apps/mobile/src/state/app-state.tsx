@@ -1,4 +1,4 @@
-import { ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
+import { ReactNode, createContext, useContext, useCallback, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@clerk/clerk-expo";
 
@@ -12,16 +12,25 @@ interface AppStateValue {
   authMode: AuthMode;
   theme: Theme;
   subscriptionPromptShown: boolean;
+  userIntent: string | null;
+  trustLevel: number | null;
+  alertStyle: string | null;
   markOnboarded: () => Promise<void>;
   setAuthMode: (mode: AuthMode) => Promise<void>;
   markSubscriptionPromptShown: () => Promise<void>;
+  setUserIntent: (intent: string) => Promise<void>;
+  setTrustLevel: (level: number) => Promise<void>;
+  setAlertStyle: (style: string) => Promise<void>;
   resetState: () => Promise<void>;
 }
 
 const STORAGE_KEYS = {
   onboarded: "vett.hasOnboarded",
   authMode: "vett.authMode",
-  subscriptionPromptShown: "vett.subscriptionPromptShown"
+  subscriptionPromptShown: "vett.subscriptionPromptShown",
+  userIntent: "vett.userIntent",
+  trustLevel: "vett.trustLevel",
+  alertStyle: "vett.alertStyle",
 };
 
 const AppStateContext = createContext<AppStateValue | undefined>(undefined);
@@ -32,6 +41,9 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
   const [authMode, setAuthModeValue] = useState<AuthMode>("signedOut");
   const [isReady, setIsReady] = useState(false);
   const [subscriptionPromptShown, setSubscriptionPromptShown] = useState(false);
+  const [userIntent, setUserIntentValue] = useState<string | null>(null);
+  const [trustLevel, setTrustLevelValue] = useState<number | null>(null);
+  const [alertStyle, setAlertStyleValue] = useState<string | null>(null);
 
   useEffect(() => {
     console.log("[AppState] Clerk loaded:", clerkLoaded, "isSignedIn:", isSignedIn);
@@ -57,13 +69,27 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
-        const [storedOnboarding, storedSubscriptionPrompt] = await Promise.all([
+        const [
+          storedOnboarding,
+          storedSubscriptionPrompt,
+          storedUserIntent,
+          storedTrustLevel,
+          storedAlertStyle,
+        ] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.onboarded),
-          AsyncStorage.getItem(STORAGE_KEYS.subscriptionPromptShown)
+          AsyncStorage.getItem(STORAGE_KEYS.subscriptionPromptShown),
+          AsyncStorage.getItem(STORAGE_KEYS.userIntent),
+          AsyncStorage.getItem(STORAGE_KEYS.trustLevel),
+          AsyncStorage.getItem(STORAGE_KEYS.alertStyle),
         ]);
         if (mounted) {
           setHasOnboarded(storedOnboarding === "true");
           setSubscriptionPromptShown(storedSubscriptionPrompt === "true");
+          setUserIntentValue(storedUserIntent);
+          setTrustLevelValue(
+            storedTrustLevel ? parseInt(storedTrustLevel, 10) : null
+          );
+          setAlertStyleValue(storedAlertStyle);
         }
       } catch (error) {
         console.error("[AppState] Error loading state:", error);
@@ -87,31 +113,52 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
     };
   }, [clerkLoaded]);
 
-  const markOnboarded = async () => {
+  const markOnboarded = useCallback(async () => {
     setHasOnboarded(true);
     await AsyncStorage.setItem(STORAGE_KEYS.onboarded, "true");
-  };
+  }, []);
 
-  const setAuthMode = async (mode: AuthMode) => {
+  const setAuthMode = useCallback(async (mode: AuthMode) => {
     setAuthModeValue(mode);
     await AsyncStorage.setItem(STORAGE_KEYS.authMode, mode);
-  };
+  }, []);
 
-  const markSubscriptionPromptShown = async () => {
+  const markSubscriptionPromptShown = useCallback(async () => {
     setSubscriptionPromptShown(true);
     await AsyncStorage.setItem(STORAGE_KEYS.subscriptionPromptShown, "true");
-  };
+  }, []);
 
-  const resetState = async () => {
+  const setUserIntent = useCallback(async (intent: string) => {
+    setUserIntentValue(intent);
+    await AsyncStorage.setItem(STORAGE_KEYS.userIntent, intent);
+  }, []);
+
+  const setTrustLevel = useCallback(async (level: number) => {
+    setTrustLevelValue(level);
+    await AsyncStorage.setItem(STORAGE_KEYS.trustLevel, level.toString());
+  }, []);
+
+  const setAlertStyle = useCallback(async (style: string) => {
+    setAlertStyleValue(style);
+    await AsyncStorage.setItem(STORAGE_KEYS.alertStyle, style);
+  }, []);
+
+  const resetState = useCallback(async () => {
     setHasOnboarded(false);
     setAuthModeValue("signedOut");
     setSubscriptionPromptShown(false);
+    setUserIntentValue(null);
+    setTrustLevelValue(null);
+    setAlertStyleValue(null);
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.onboarded,
       STORAGE_KEYS.authMode,
-      STORAGE_KEYS.subscriptionPromptShown
+      STORAGE_KEYS.subscriptionPromptShown,
+      STORAGE_KEYS.userIntent,
+      STORAGE_KEYS.trustLevel,
+      STORAGE_KEYS.alertStyle,
     ]);
-  };
+  }, []);
 
   const theme = darkTheme;
 
@@ -122,12 +169,34 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       authMode,
       theme,
       subscriptionPromptShown,
+      userIntent,
+      trustLevel,
+      alertStyle,
       markOnboarded,
       setAuthMode,
       markSubscriptionPromptShown,
+      setUserIntent,
+      setTrustLevel,
+      setAlertStyle,
       resetState
     }),
-    [isReady, hasOnboarded, authMode, theme, subscriptionPromptShown]
+    [
+      isReady,
+      hasOnboarded,
+      authMode,
+      theme,
+      subscriptionPromptShown,
+      userIntent,
+      trustLevel,
+      alertStyle,
+      markOnboarded,
+      setAuthMode,
+      markSubscriptionPromptShown,
+      setUserIntent,
+      setTrustLevel,
+      setAlertStyle,
+      resetState,
+    ]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

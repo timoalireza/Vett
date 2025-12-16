@@ -9,6 +9,6 @@ export default function OnboardingIndex() {
     return <Redirect href="/(tabs)/analyze" />;
   }
 
-  // Start with warm-up screen
-  return <Redirect href="/onboarding/warm-up" />;
+  // Start with welcome screen
+  return <Redirect href="/onboarding/welcome" />;
 }

@@ -59,7 +59,7 @@ export default function InstagramScreen() {
             [
               {
                 text: "OK",
-                onPress: () => router.push("/onboarding/demo"),
+                onPress: () => router.push("/onboarding/premium"),
               },
             ]
           );
@@ -76,7 +76,7 @@ export default function InstagramScreen() {
               {
                 text: "OK",
                 onPress: () => {
-                  setTimeout(() => router.push("/onboarding/demo"), 2000);
+                  setTimeout(() => router.push("/onboarding/premium"), 2000);
                 },
               },
             ]
@@ -120,7 +120,7 @@ export default function InstagramScreen() {
   };
 
   const handleSkip = () => {
-    router.push("/onboarding/demo");
+    router.push("/onboarding/premium");
   };
 
   return (
@@ -128,7 +128,7 @@ export default function InstagramScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={6} totalSteps={10} variant="bar" />
+            <ProgressIndicator currentStep={4} totalSteps={7} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>

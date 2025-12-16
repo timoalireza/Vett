@@ -25,6 +25,11 @@ function AuthButton({
   disabled?: boolean;
 }) {
   const theme = useTheme();
+  const isAppleOrGoogle = label.includes("Apple") || label.includes("Google");
+  const backgroundColor = isAppleOrGoogle ? "#FFFFFF" : theme.colors.surface;
+  const textColor = isAppleOrGoogle ? "#000000" : theme.colors.text;
+  const iconColor = isAppleOrGoogle ? "#000000" : theme.colors.text;
+  
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -32,21 +37,21 @@ function AuthButton({
       style={[
         styles.authButton,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor,
           borderRadius: theme.radii.md,
-          borderWidth: 1,
+          borderWidth: isAppleOrGoogle ? 0 : 1,
           borderColor: theme.colors.border,
           opacity: disabled ? 0.5 : 1,
         },
       ]}
       activeOpacity={0.7}
     >
-      <Ionicons name={icon} size={20} color={theme.colors.text} />
+      <Ionicons name={icon} size={20} color={iconColor} />
       <Text
         style={[
           styles.authButtonText,
           {
-            color: theme.colors.text,
+            color: textColor,
             fontFamily: "Inter_500Medium",
             fontSize: theme.typography.body,
           },
@@ -187,7 +192,7 @@ export default function AuthScreen() {
   };
 
   const handleSkip = () => {
-    router.push("/onboarding/demo");
+    router.push("/onboarding/profile-setup");
   };
 
   return (
@@ -195,7 +200,7 @@ export default function AuthScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={4} totalSteps={10} variant="bar" />
+            <ProgressIndicator currentStep={2} totalSteps={7} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>
@@ -213,8 +218,8 @@ export default function AuthScreen() {
                 setPassword("");
                 setError(null);
               } else {
-                // Go back to intro (explicit navigation for consistency)
-                router.push("/onboarding/intro");
+                // Go back to trust screen
+                router.push("/onboarding/trust");
               }
             }}
           />
@@ -565,9 +570,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
     paddingVertical: 16,
+    paddingHorizontal: 20,
   },
   authButtonText: {
-    flex: 1,
     textAlign: "center",
   },
   errorContainer: {

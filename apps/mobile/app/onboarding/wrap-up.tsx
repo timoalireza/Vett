@@ -1,27 +1,28 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, SafeAreaView } from "react-native";
+import React from "react";
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
 import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
 import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
-import { TopicSelector, Topic } from "../../src/components/Onboarding/TopicSelector";
 import { useTheme } from "../../src/hooks/use-theme";
+import { useAppState } from "../../src/state/app-state";
 
-export default function PersonalizationScreen() {
+export default function WrapUpScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
+  const { markOnboarded } = useAppState();
 
-  const handleContinue = () => {
-    // Save preferences to user profile
-    // For now, just proceed
-    router.push("/onboarding/ready");
+  const handleStartVetting = async () => {
+    await markOnboarded();
+    router.replace("/(tabs)/analyze");
   };
 
-  const handleSkip = () => {
-    router.push("/onboarding/ready");
+  const handleWhatIsVett = () => {
+    // TODO: Navigate to explainer screen or show modal
+    // For now, just proceed
+    handleStartVetting();
   };
 
   return (
@@ -29,16 +30,13 @@ export default function PersonalizationScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={9} totalSteps={10} variant="bar" />
+            <ProgressIndicator currentStep={7} totalSteps={7} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>
           <OnboardingBackButton goTo="/onboarding/premium" />
         </View>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.content}>
           <GlassCard
             intensity="medium"
             radius="lg"
@@ -59,7 +57,7 @@ export default function PersonalizationScreen() {
                 },
               ]}
             >
-              What do you want to analyze?
+              Nice. That's all we need for now 👌
             </Text>
             <Text
               style={[
@@ -68,34 +66,37 @@ export default function PersonalizationScreen() {
                   color: theme.colors.textSecondary,
                   fontFamily: "Inter_400Regular",
                   fontSize: theme.typography.body,
-                  marginTop: theme.spacing(1),
-                  marginBottom: theme.spacing(3),
+                  marginTop: theme.spacing(2),
+                  marginBottom: theme.spacing(4),
                 },
               ]}
             >
-              Select topics that interest you (you can change this later)
+              Ready to make your scroll a little smarter?
             </Text>
-
-            <TopicSelector
-              selectedTopics={selectedTopics}
-              onSelectionChange={setSelectedTopics}
-            />
 
             <View style={styles.ctaContainer}>
               <OnboardingCTA
-                label="Continue"
-                onPress={handleContinue}
+                label="Start Vetting"
+                onPress={handleStartVetting}
                 variant="primary"
-                disabled={selectedTopics.length === 0}
               />
-              <OnboardingCTA
-                label="Skip"
-                onPress={handleSkip}
-                variant="ghost"
-              />
+              <TouchableOpacity onPress={handleWhatIsVett} style={styles.linkButton}>
+                <Text
+                  style={[
+                    styles.linkText,
+                    {
+                      color: theme.colors.textSecondary,
+                      fontFamily: "Inter_400Regular",
+                      fontSize: theme.typography.caption,
+                    },
+                  ]}
+                >
+                  Wait—what is Vett exactly?
+                </Text>
+              </TouchableOpacity>
             </View>
           </GlassCard>
-        </ScrollView>
+        </View>
       </SafeAreaView>
     </GradientBackground>
   );
@@ -117,8 +118,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
-  scrollContent: {
-    flexGrow: 1,
+  content: {
+    flex: 1,
     padding: 20,
     justifyContent: "center",
   },
@@ -132,9 +133,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   ctaContainer: {
-    width: "100%",
-    marginTop: 32,
-    gap: 12,
+    marginTop: 16,
+    gap: 16,
+  },
+  linkButton: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  linkText: {
+    textDecorationLine: "underline",
   },
 });
 
