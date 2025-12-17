@@ -4,50 +4,46 @@ import { subscriptions, userUsage, users } from "../db/schema.js";
 import type { SubscriptionPlan, SubscriptionStatus, BillingCycle } from "../types/subscription.js";
 
 export interface PlanLimits {
-  maxAnalysesPerMonth: number | null; // null = unlimited
+  maxAppAnalysesPerMonth: number | null; // null = unlimited (in-app analyses)
+  maxDmAnalysesPerMonth: number | null; // null = unlimited (Instagram DM analyses)
   hasWatermark: boolean;
   historyRetentionDays: number | null; // null = unlimited
   hasPriorityProcessing: boolean;
-  hasAdvancedBiasAnalysis: boolean;
-  hasExtendedSummaries: boolean;
-  hasCrossPlatformSync: boolean;
-  hasCustomAlerts: boolean;
   maxSources: number;
+  hasVettChat: boolean; // Full Vett Chat access (PRO only)
+  hasLimitedVettChat: boolean; // Limited Vett Chat access (PLUS only, specifics TBD)
 }
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   FREE: {
-    maxAnalysesPerMonth: null, // REMOVED - unlimited
+    maxAppAnalysesPerMonth: 10, // 10 analyses per month via app
+    maxDmAnalysesPerMonth: 3, // 3 analyses per month via DM
     hasWatermark: true,
-    historyRetentionDays: null, // REMOVED - unlimited
+    historyRetentionDays: 30, // 30 days history retention
     hasPriorityProcessing: false,
-    hasAdvancedBiasAnalysis: false,
-    hasExtendedSummaries: false,
-    hasCrossPlatformSync: false,
-    hasCustomAlerts: false,
-    maxSources: null // REMOVED - unlimited
+    maxSources: 10,
+    hasVettChat: false,
+    hasLimitedVettChat: false
   },
   PLUS: {
-    maxAnalysesPerMonth: null, // unlimited
+    maxAppAnalysesPerMonth: null, // unlimited app analyses
+    maxDmAnalysesPerMonth: 10, // 10 DM analyses per month
     hasWatermark: false,
-    historyRetentionDays: null, // unlimited
-    hasPriorityProcessing: true,
-    hasAdvancedBiasAnalysis: false,
-    hasExtendedSummaries: false,
-    hasCrossPlatformSync: false,
-    hasCustomAlerts: false,
-    maxSources: 10
+    historyRetentionDays: null, // unlimited history
+    hasPriorityProcessing: false, // standard processing
+    maxSources: 10,
+    hasVettChat: false,
+    hasLimitedVettChat: true // Limited Vett Chat (specifics TBD)
   },
   PRO: {
-    maxAnalysesPerMonth: null, // unlimited
+    maxAppAnalysesPerMonth: null, // unlimited app analyses
+    maxDmAnalysesPerMonth: null, // unlimited DM analyses
     hasWatermark: false,
-    historyRetentionDays: null, // unlimited
-    hasPriorityProcessing: true,
-    hasAdvancedBiasAnalysis: true,
-    hasExtendedSummaries: true,
-    hasCrossPlatformSync: true,
-    hasCustomAlerts: true,
-    maxSources: 20
+    historyRetentionDays: null, // unlimited history
+    hasPriorityProcessing: true, // priority processing
+    maxSources: 20,
+    hasVettChat: true, // Full Vett Chat access
+    hasLimitedVettChat: false
   }
 };
 
@@ -102,11 +98,36 @@ class SubscriptionService {
   }
 
   /**
-   * Check if user can perform analysis
+   * Check if user can perform analysis (app-based)
    */
-  async canPerformAnalysis(userId: string): Promise<{ allowed: boolean; reason?: string }> {
-    // All limits removed - always allow analyses
-    return { allowed: true };
+  async canPerformAnalysis(userId: string): Promise<{ allowed: boolean; reason?: string; remaining?: number; limit?: number }> {
+    const subscription = await this.getOrCreateSubscription(userId);
+    const limits = PLAN_LIMITS[subscription.plan];
+
+    // Unlimited for PLUS and PRO
+    if (limits.maxAppAnalysesPerMonth === null) {
+      return { allowed: true };
+    }
+
+    // Check usage for FREE tier
+    const usage = await this.getOrCreateUsage(
+      userId,
+      subscription.currentPeriodStart,
+      subscription.currentPeriodEnd
+    );
+
+    const remaining = Math.max(0, limits.maxAppAnalysesPerMonth - usage.analysesCount);
+    
+    if (usage.analysesCount >= limits.maxAppAnalysesPerMonth) {
+      return {
+        allowed: false,
+        reason: `You've reached your monthly limit of ${limits.maxAppAnalysesPerMonth} analyses. Upgrade to Plus or Pro for unlimited analyses!`,
+        remaining: 0,
+        limit: limits.maxAppAnalysesPerMonth
+      };
+    }
+
+    return { allowed: true, remaining, limit: limits.maxAppAnalysesPerMonth };
   }
 
   /**
@@ -195,10 +216,10 @@ class SubscriptionService {
 
     return {
       analysesCount: usage.analysesCount,
-      maxAnalyses: limits.maxAnalysesPerMonth,
+      maxAnalyses: limits.maxAppAnalysesPerMonth,
       periodStart: usage.periodStart,
       periodEnd: usage.periodEnd,
-      hasUnlimited: limits.maxAnalysesPerMonth === null
+      hasUnlimited: limits.maxAppAnalysesPerMonth === null
     };
   }
 
@@ -304,6 +325,22 @@ class SubscriptionService {
     
     const subscription = await this.getOrCreateSubscription(userId);
     return PLAN_LIMITS[subscription.plan].hasWatermark;
+  }
+
+  /**
+   * Get DM analysis limit for a subscription plan
+   * Used by instagram-service to enforce per-tier DM limits
+   */
+  getDmLimitForPlan(plan: SubscriptionPlan): number | null {
+    return PLAN_LIMITS[plan].maxDmAnalysesPerMonth;
+  }
+
+  /**
+   * Get user's subscription plan
+   */
+  async getUserPlan(userId: string): Promise<SubscriptionPlan> {
+    const subscription = await this.getOrCreateSubscription(userId);
+    return subscription.plan;
   }
 
   /**

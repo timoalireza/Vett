@@ -9,9 +9,13 @@ import { serviceLogger } from "../utils/service-logger.js";
 import { fetchMediaFromAttachment } from "./instagram/media-fetcher.js";
 import { extractVisionData } from "./instagram/vision-extractor.js";
 import { extractClaims } from "./instagram/claim-extractor.js";
+import { PLAN_LIMITS } from "./subscription-service.js";
+import type { SubscriptionPlan } from "../types/subscription.js";
 
 const INSTAGRAM_API_BASE = "https://graph.facebook.com/v18.0";
-const FREE_TIER_DM_LIMIT = 3; // 3 analyses per month for FREE tier
+
+// DM limits are now defined in PLAN_LIMITS (subscription-service.ts)
+// FREE: 3/month, PLUS: 10/month, PRO: unlimited
 
 interface InstagramMessage {
   id: string;
@@ -738,22 +742,26 @@ class InstagramService {
     allowed: boolean;
     remaining: number;
     limit: number;
+    tier: SubscriptionPlan;
   }> {
     // Check if user is whitelisted for unlimited access (for testing/admin accounts)
     if (this.isWhitelisted(instagramUserId)) {
       serviceLogger.debug({ instagramUserId }, "[Instagram] User is whitelisted - unlimited access granted");
-      return { allowed: true, remaining: -1, limit: -1 }; // -1 means unlimited
+      return { allowed: true, remaining: -1, limit: -1, tier: "PRO" }; // -1 means unlimited
     }
 
-    // Check if user is linked to PRO plan
-    const subscriptionTier = await socialLinkingService.getInstagramUserSubscription(instagramUserId);
+    // Get user's subscription tier (defaults to FREE if not linked)
+    const subscriptionTier = await socialLinkingService.getInstagramUserSubscription(instagramUserId) as SubscriptionPlan | null;
+    const tier: SubscriptionPlan = subscriptionTier || "FREE";
+    const dmLimit = PLAN_LIMITS[tier].maxDmAnalysesPerMonth;
 
-    if (subscriptionTier === "PRO") {
-      // PRO users have unlimited Instagram DM analyses
-      return { allowed: true, remaining: -1, limit: -1 }; // -1 means unlimited
+    // Check if tier has unlimited DM analyses (PRO)
+    if (dmLimit === null) {
+      serviceLogger.debug({ instagramUserId, tier }, "[Instagram] User has unlimited DM analyses");
+      return { allowed: true, remaining: -1, limit: -1, tier };
     }
 
-    // FREE tier: check usage
+    // Check usage against tier limit
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1); // Start of current month
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // End of current month
@@ -815,10 +823,19 @@ class InstagramService {
       throw error;
     }
 
-    const remaining = Math.max(0, FREE_TIER_DM_LIMIT - usage.analysesCount);
-    const allowed = usage.analysesCount < FREE_TIER_DM_LIMIT;
+    const remaining = Math.max(0, dmLimit - usage.analysesCount);
+    const allowed = usage.analysesCount < dmLimit;
 
-    return { allowed, remaining, limit: FREE_TIER_DM_LIMIT };
+    serviceLogger.debug({ 
+      instagramUserId, 
+      tier, 
+      limit: dmLimit, 
+      used: usage.analysesCount, 
+      remaining, 
+      allowed 
+    }, "[Instagram] DM usage check");
+
+    return { allowed, remaining, limit: dmLimit, tier };
   }
 
   /**
@@ -937,18 +954,29 @@ Please try again or contact support if the issue persists.`;
   /**
    * Format rate limit exceeded message
    */
-  formatRateLimitMessage(remaining: number, limit: number): string {
+  formatRateLimitMessage(remaining: number, limit: number, tier: SubscriptionPlan = "FREE"): string {
     const appUrl = env.APP_BASE_URL;
+    
+    if (tier === "FREE") {
+      return `🚫 *Rate Limit Reached*
+
+You've used all ${limit} free DM analyses this month.
+
+💎 *Upgrade to Plus* for 10 DM analyses/month, or *Pro* for unlimited!
+
+Download the Vett app and upgrade your plan:
+${appUrl}`;
+    }
+    
+    // PLUS tier
     return `🚫 *Rate Limit Reached*
 
-You've used ${limit} free analyses this month. ${remaining} remaining.
+You've used all ${limit} DM analyses this month on your Plus plan.
 
-💎 *Upgrade to PRO* for unlimited analyses via Instagram DM!
+💎 *Upgrade to Pro* for unlimited DM analyses!
 
-Download the Vett app and link your Instagram account:
-${appUrl}
-
-Once linked, you'll get unlimited analyses through DMs! 🎉`;
+Open the Vett app to upgrade:
+${appUrl}`;
   }
 
   /**
@@ -1178,7 +1206,7 @@ I'll send you the results as soon as they're ready! 📊`;
         }, "[Instagram] ⛔ Rate limit exceeded - skipping analysis queue");
         
         // Try to send rate limit message (non-blocking)
-        const rateLimitDmResult = await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
+        const rateLimitDmResult = await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit, usageCheck.tier));
         if (!rateLimitDmResult.success) {
           serviceLogger.warn({ 
             instagramUserId, 
@@ -1361,7 +1389,7 @@ I'll send you the results as soon as they're ready! 📊`;
       const usageCheck = await this.checkInstagramUsageLimit(instagramUserId);
       if (!usageCheck.allowed) {
         // Send rate limit message via DM
-        await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
+        await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit, usageCheck.tier));
         return { success: true };
       }
 
@@ -1458,7 +1486,7 @@ I'll send you the results as soon as they're ready! 📊`;
       const usageCheck = await this.checkInstagramUsageLimit(instagramUserId);
       if (!usageCheck.allowed) {
         // Send rate limit message via DM
-        await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit));
+        await this.sendDM(instagramUserId, this.formatRateLimitMessage(usageCheck.remaining, usageCheck.limit, usageCheck.tier));
         return { success: true };
       }
 

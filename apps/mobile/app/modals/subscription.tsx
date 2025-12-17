@@ -20,14 +20,19 @@ const PLAN_PRICES = {
   PRO: { monthly: 6.99, annual: 49.99 }
 };
 
-// Features comparison: Free vs PLUS vs PRO - Simplified and summarized
+// Features comparison: Free vs PLUS vs PRO
+// Based on new tier structure:
+// FREE: 3 DM/10 app analyses, watermark, 30 days history, 10 sources, standard processing
+// PLUS: 10 DM/unlimited app, no watermark, unlimited history, 10 sources, standard processing, limited Vett Chat
+// PRO: unlimited all, no watermark, unlimited history, 20 sources, priority processing, unlimited Vett Chat
 const FEATURES = [
-  { name: "Basic fact-checking", free: true, plus: true, pro: true },
-  { name: "Unlimited analyses", free: false, plus: true, pro: true },
-  { name: "Priority processing", free: false, plus: true, pro: true },
-  { name: "Advanced analysis", free: false, plus: false, pro: true },
-  { name: "VettAI chat assistant", free: false, plus: false, pro: true },
-  { name: "Extended sources & summaries", free: false, plus: false, pro: true }
+  { name: "App analyses", free: "10/mo", plus: "Unlimited", pro: "Unlimited" },
+  { name: "DM analyses", free: "3/mo", plus: "10/mo", pro: "Unlimited" },
+  { name: "No watermark", free: false, plus: true, pro: true },
+  { name: "Unlimited history", free: false, plus: true, pro: true },
+  { name: "Priority processing", free: false, plus: false, pro: true },
+  { name: "Up to 20 sources", free: false, plus: false, pro: true },
+  { name: "Vett Chat", free: false, plus: "Limited", pro: "Unlimited" }
 ];
 
 export default function SubscriptionModal() {
@@ -88,10 +93,65 @@ export default function SubscriptionModal() {
 
   // Get features for the active tab
   const getFeaturesForPlan = (plan: Plan) => {
-    return FEATURES.map(feature => ({
-      ...feature,
-      available: plan === "PLUS" ? feature.plus : feature.pro
-    }));
+    return FEATURES.map(feature => {
+      const planValue = plan === "PLUS" ? feature.plus : feature.pro;
+      return {
+        ...feature,
+        planValue,
+        // For boolean values, use them directly. For strings, consider them "available"
+        available: typeof planValue === "boolean" ? planValue : true
+      };
+    });
+  };
+
+  // Helper to render feature value (checkmark, X, or text)
+  const renderFeatureValue = (value: boolean | string, isAvailable: boolean) => {
+    if (typeof value === "string") {
+      return (
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: theme.typography.caption,
+            fontFamily: "Inter_500Medium",
+            textAlign: "center"
+          }}
+        >
+          {value}
+        </Text>
+      );
+    }
+    
+    if (value) {
+      return (
+        <View
+          style={{
+            backgroundColor: theme.colors.success + "20",
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <Ionicons name="checkmark" size={16} color={theme.colors.success} />
+        </View>
+      );
+    }
+    
+    return (
+      <View
+        style={{
+          backgroundColor: theme.colors.card,
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          alignItems: "center",
+          justifyContent: "center"
+        }}
+      >
+        <Ionicons name="close" size={14} color={theme.colors.textTertiary} />
+      </View>
+    );
   };
 
   return (
@@ -318,75 +378,11 @@ export default function SubscriptionModal() {
                     </Text>
                     {/* Free Column */}
                     <View style={{ flex: 1, alignItems: "center" }}>
-                      {feature.free ? (
-                        <View
-                          style={[
-                            styles.checkmarkCircle,
-                            {
-                              backgroundColor: theme.colors.success + "20",
-                              width: 24,
-                              height: 24,
-                              borderRadius: 12,
-                              alignItems: "center",
-                              justifyContent: "center"
-                            }
-                          ]}
-                        >
-                          <Ionicons name="checkmark" size={16} color={theme.colors.success} />
-                        </View>
-                      ) : (
-                        <View
-                          style={[
-                            styles.checkmarkCircle,
-                            {
-                              backgroundColor: theme.colors.card,
-                              width: 24,
-                              height: 24,
-                              borderRadius: 12,
-                              alignItems: "center",
-                              justifyContent: "center"
-                            }
-                          ]}
-                        >
-                          <Ionicons name="close" size={14} color={theme.colors.textTertiary} />
-                        </View>
-                      )}
+                      {renderFeatureValue(feature.free, typeof feature.free === "string" || feature.free === true)}
                     </View>
                     {/* Plan Column */}
                     <View style={{ flex: 1, alignItems: "center" }}>
-                      {feature.available ? (
-                        <View
-                          style={[
-                            styles.checkmarkCircle,
-                            {
-                              backgroundColor: theme.colors.success + "20",
-                              width: 24,
-                              height: 24,
-                              borderRadius: 12,
-                              alignItems: "center",
-                              justifyContent: "center"
-                            }
-                          ]}
-                        >
-                          <Ionicons name="checkmark" size={16} color={theme.colors.success} />
-                        </View>
-                      ) : (
-                        <View
-                          style={[
-                            styles.checkmarkCircle,
-                            {
-                              backgroundColor: theme.colors.card,
-                              width: 24,
-                              height: 24,
-                              borderRadius: 12,
-                              alignItems: "center",
-                              justifyContent: "center"
-                            }
-                          ]}
-                        >
-                          <Ionicons name="close" size={14} color={theme.colors.textTertiary} />
-                        </View>
-                      )}
+                      {renderFeatureValue(feature.planValue, feature.available)}
                     </View>
                   </View>
                 ))}
