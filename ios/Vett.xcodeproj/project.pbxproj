@@ -346,8 +346,8 @@
 				);
 				INFOPLIST_FILE = vett/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Vett;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.4;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -381,8 +381,8 @@
 				DEVELOPMENT_TEAM = 4CJL5W459D;
 				INFOPLIST_FILE = vett/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Vett;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.4;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
