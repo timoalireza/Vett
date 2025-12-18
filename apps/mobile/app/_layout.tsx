@@ -138,15 +138,14 @@ function NavigationGate() {
     >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="onboarding/index" />
-      <Stack.Screen name="onboarding/warm-up" />
+      <Stack.Screen name="onboarding/welcome" />
       <Stack.Screen name="onboarding/intro" />
       <Stack.Screen name="onboarding/auth" />
-      <Stack.Screen name="onboarding/profile-setup" />
-      <Stack.Screen name="onboarding/instagram" />
+      <Stack.Screen name="onboarding/trust" />
+      <Stack.Screen name="onboarding/stats" />
       <Stack.Screen name="onboarding/demo" />
       <Stack.Screen name="onboarding/premium" />
-      <Stack.Screen name="onboarding/personalization" />
-      <Stack.Screen name="onboarding/ready" />
+      <Stack.Screen name="onboarding/wrap-up" />
       <Stack.Screen name="signin" />
       <Stack.Screen name="result/[jobId]" />
       <Stack.Screen name="result/general" />

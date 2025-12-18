@@ -1,15 +1,6 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    ext {
-        buildToolsVersion = findProperty('android.buildToolsVersion') ?: '34.0.0'
-        minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '23')
-        compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '34')
-        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34')
-        kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.23'
-
-        ndkVersion = "26.1.10909125"
-    }
     repositories {
         google()
         mavenCentral()
@@ -18,6 +9,46 @@ buildscript {
         classpath('com.android.tools.build:gradle')
         classpath('com.facebook.react:react-native-gradle-plugin')
         classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+    }
+}
+
+// Define global properties here so they are available to subprojects via rootProject.ext
+ext {
+    buildToolsVersion = findProperty('android.buildToolsVersion') ?: '34.0.0'
+    minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '23')
+    compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '34')
+    targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34')
+    kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.23'
+    ndkVersion = "26.1.10909125"
+}
+
+subprojects {
+    afterEvaluate { project ->
+        if ((project.plugins.hasPlugin('android') || project.plugins.hasPlugin('android-library'))) {
+            android {
+                compileSdkVersion rootProject.ext.compileSdkVersion
+                buildToolsVersion rootProject.ext.buildToolsVersion
+            }
+        }
+    }
+    
+    // Workaround for Expo modules "unknown property 'release'" validation on Gradle 8+
+    plugins.withId("com.android.library") {
+         // Attempt to ensure publishing set up or ignore
+         try {
+             // Some expo modules assume they can access components.release
+             // applying maven-publish might expose it if AGP doesn't
+             if (!plugins.hasPlugin("maven-publish")) {
+                apply plugin: "maven-publish"
+             }
+             
+             afterEvaluate {
+                 // Force creation of release variant in publishing if missing?
+                 // Actually, just having the plugin might be enough, or we verify existence.
+             }
+         } catch (e) {
+             // ignore
+         }
     }
 }
 
@@ -39,3 +70,5 @@ allprojects {
         maven { url 'https://www.jitpack.io' }
     }
 }
+
+

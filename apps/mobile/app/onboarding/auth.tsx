@@ -89,13 +89,13 @@ export default function AuthScreen() {
       const startOAuth = strategy === "oauth_google" ? startGoogleOAuth : startAppleOAuth;
 
       const { createdSessionId } = await startOAuth({
-        redirectUrl: LinkingModule.createURL("/onboarding/profile-setup", { scheme: "vett" }),
+        redirectUrl: LinkingModule.createURL("/onboarding/trust", { scheme: "vett" }),
       });
 
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
         await setAuthMode("signedIn");
-        router.push("/onboarding/profile-setup");
+        router.push("/onboarding/trust");
       }
     } catch (err: any) {
       const errorMessage =
@@ -146,7 +146,7 @@ export default function AuthScreen() {
         if (result.status === "complete" && result.createdSessionId && setActive) {
           await setActive({ session: result.createdSessionId });
           await setAuthMode("signedIn");
-          router.push("/onboarding/profile-setup");
+          router.push("/onboarding/trust");
         } else {
           setError("Sign in incomplete. Please try again.");
           setFailedAttempts((prev) => prev + 1);
@@ -179,7 +179,7 @@ export default function AuthScreen() {
       if (completeResult.status === "complete" && completeResult.createdSessionId && setActive) {
         await setActive({ session: completeResult.createdSessionId });
         await setAuthMode("signedIn");
-        router.push("/onboarding/profile-setup");
+        router.push("/onboarding/trust");
       } else {
         setError("Verification incomplete. Please try again.");
       }
@@ -192,7 +192,7 @@ export default function AuthScreen() {
   };
 
   const handleSkip = () => {
-    router.push("/onboarding/profile-setup");
+    router.push("/onboarding/trust");
   };
 
   return (
@@ -200,7 +200,7 @@ export default function AuthScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={2} totalSteps={7} variant="bar" />
+            <ProgressIndicator currentStep={3} totalSteps={7} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>
@@ -218,8 +218,8 @@ export default function AuthScreen() {
                 setPassword("");
                 setError(null);
               } else {
-                // Go back to trust screen
-                router.push("/onboarding/trust");
+                // Go back to intro screen
+                router.push("/onboarding/intro");
               }
             }}
           />

@@ -62,11 +62,11 @@ export default function PremiumScreen() {
         <SafeAreaView style={styles.container} edges={["top"]}>
           <View style={styles.header}>
             <View style={styles.progressContainer}>
-              <ProgressIndicator currentStep={5} totalSteps={7} variant="bar" />
+              <ProgressIndicator currentStep={7} totalSteps={7} variant="bar" />
             </View>
           </View>
           <View style={styles.backButtonContainer}>
-            <OnboardingBackButton goTo="/onboarding/instagram" />
+            <OnboardingBackButton goTo="/onboarding/demo" />
           </View>
           <ScrollView
             contentContainerStyle={styles.scrollContent}
@@ -160,7 +160,7 @@ export default function PremiumScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={6} totalSteps={7} variant="bar" />
+            <ProgressIndicator currentStep={7} totalSteps={7} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>

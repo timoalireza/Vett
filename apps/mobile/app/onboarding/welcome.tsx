@@ -1,8 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet, SafeAreaView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
+import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
 import { useTheme } from "../../src/hooks/use-theme";
 
 export default function WelcomeScreen() {
@@ -10,12 +12,21 @@ export default function WelcomeScreen() {
   const theme = useTheme();
 
   const handleGetStarted = () => {
-    router.push("/onboarding/trust");
+    router.push("/onboarding/intro");
+  };
+
+  const handleLogin = () => {
+    router.push("/signin");
   };
 
   return (
     <GradientBackground>
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <ProgressIndicator currentStep={1} totalSteps={7} variant="bar" />
+          </View>
+        </View>
         <View style={styles.content}>
           {/* Logo at top left */}
           <View style={styles.logoContainer}>
@@ -63,10 +74,27 @@ export default function WelcomeScreen() {
 
             <View style={styles.ctaContainer}>
               <OnboardingCTA
-                label="Get started"
+                label="Get Started"
                 onPress={handleGetStarted}
                 variant="primary"
               />
+              <TouchableOpacity onPress={handleLogin} style={styles.loginLink}>
+                <Text
+                  style={[
+                    styles.loginText,
+                    {
+                      color: theme.colors.textSecondary,
+                      fontFamily: "Inter_400Regular",
+                      fontSize: theme.typography.body,
+                    },
+                  ]}
+                >
+                  Already have an account?{" "}
+                  <Text style={{ color: theme.colors.text, fontFamily: "Inter_500Medium" }}>
+                    Log in
+                  </Text>
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -79,12 +107,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressContainer: {
+    width: "100%",
+  },
   content: {
     flex: 1,
     paddingHorizontal: 20,
   },
   logoContainer: {
-    paddingTop: 20,
+    paddingTop: 8,
     alignItems: "flex-start",
   },
   logo: {
@@ -105,6 +141,14 @@ const styles = StyleSheet.create({
   ctaContainer: {
     width: "100%",
     marginTop: 32,
+    alignItems: "center",
+  },
+  loginLink: {
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  loginText: {
+    textAlign: "center",
   },
 });
 
