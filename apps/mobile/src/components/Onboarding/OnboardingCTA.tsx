@@ -8,6 +8,7 @@ interface OnboardingCTAProps {
   variant?: "primary" | "secondary" | "ghost";
   disabled?: boolean;
   loading?: boolean;
+  fullWidth?: boolean;
 }
 
 export function OnboardingCTA({
@@ -16,6 +17,7 @@ export function OnboardingCTA({
   variant = "primary",
   disabled = false,
   loading = false,
+  fullWidth = false,
 }: OnboardingCTAProps) {
   const theme = useTheme();
 
@@ -75,6 +77,7 @@ export function OnboardingCTA({
           opacity: disabled || loading ? 0.5 : 1,
           paddingVertical: theme.spacing(2),
           paddingHorizontal: theme.spacing(4),
+          width: fullWidth ? "100%" : undefined,
         },
       ]}
       activeOpacity={0.8}

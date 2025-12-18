@@ -4,7 +4,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
-import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
 import { useTheme } from "../../src/hooks/use-theme";
 
 export default function WelcomeScreen() {
@@ -22,11 +21,6 @@ export default function WelcomeScreen() {
   return (
     <GradientBackground>
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <View style={styles.header}>
-          <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={1} totalSteps={7} variant="bar" />
-          </View>
-        </View>
         <View style={styles.content}>
           {/* Logo at top left */}
           <View style={styles.logoContainer}>
@@ -73,11 +67,14 @@ export default function WelcomeScreen() {
             </Text>
 
             <View style={styles.ctaContainer}>
-              <OnboardingCTA
-                label="Get Started"
-                onPress={handleGetStarted}
-                variant="primary"
-              />
+              <View style={styles.buttonWrapper}>
+                <OnboardingCTA
+                  label="Get Started"
+                  onPress={handleGetStarted}
+                  variant="primary"
+                  fullWidth={true}
+                />
+              </View>
               <TouchableOpacity onPress={handleLogin} style={styles.loginLink}>
                 <Text
                   style={[
@@ -107,14 +104,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  progressContainer: {
-    width: "100%",
-  },
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -141,11 +130,15 @@ const styles = StyleSheet.create({
   ctaContainer: {
     width: "100%",
     marginTop: 32,
-    alignItems: "center",
+    alignItems: "stretch",
+  },
+  buttonWrapper: {
+    width: "100%",
   },
   loginLink: {
     marginTop: 16,
     paddingVertical: 8,
+    alignItems: "center",
   },
   loginText: {
     textAlign: "center",
