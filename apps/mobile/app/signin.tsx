@@ -677,7 +677,10 @@ export default function SignInScreen() {
                         fontFamily: "Inter_400Regular"
                       }}
                     >
-                      Don't have an account? Sign up
+                      Don't have an account?{" "}
+                      <Text style={{ color: theme.colors.text, fontFamily: "Inter_500Medium" }}>
+                        Sign up
+                      </Text>
                     </Text>
                   </TouchableOpacity>
                 </>

@@ -334,6 +334,27 @@ export default function AuthScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
+
+              <TouchableOpacity
+                onPress={() => router.push("/signin")}
+                style={{ marginTop: theme.spacing(2) }}
+              >
+                <Text
+                  style={[
+                    {
+                      color: theme.colors.textSecondary,
+                      fontSize: theme.typography.caption,
+                      textAlign: "center",
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                >
+                  Already have an account?{" "}
+                  <Text style={{ color: theme.colors.text, fontFamily: "Inter_500Medium" }}>
+                    Sign in
+                  </Text>
+                </Text>
+              </TouchableOpacity>
             </>
           ) : showVerificationForm ? (
             <View style={styles.emailForm}>
@@ -464,32 +485,12 @@ export default function AuthScreen() {
               />
 
               <OnboardingCTA
-                label={isSignUp ? "Create Account" : "Sign In"}
+                label="Create Account"
                 onPress={handleEmailAuth}
                 variant="primary"
                 loading={loading}
                 disabled={loading || !email || !password}
               />
-
-              <TouchableOpacity
-                onPress={() => {
-                  setIsSignUp(!isSignUp);
-                  setError(null);
-                }}
-                style={styles.toggleAuth}
-              >
-                <Text
-                  style={[
-                    styles.toggleText,
-                    {
-                      color: theme.colors.textSecondary,
-                      fontSize: theme.typography.caption,
-                    },
-                  ]}
-                >
-                  {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
-                </Text>
-              </TouchableOpacity>
 
               {error && (
                 <View
@@ -519,6 +520,27 @@ export default function AuthScreen() {
                   </Text>
                 </View>
               )}
+
+              <TouchableOpacity
+                onPress={() => router.push("/signin")}
+                style={{ marginTop: theme.spacing(2) }}
+              >
+                <Text
+                  style={[
+                    {
+                      color: theme.colors.textSecondary,
+                      fontSize: theme.typography.caption,
+                      textAlign: "center",
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                >
+                  Already have an account?{" "}
+                  <Text style={{ color: theme.colors.text, fontFamily: "Inter_500Medium" }}>
+                    Sign in
+                  </Text>
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
