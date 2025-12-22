@@ -16,6 +16,15 @@ import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
 
+// Passkey support - conditionally load if package is available
+let passkeys: any = undefined;
+try {
+  // @ts-ignore - package may not be installed
+  passkeys = require("@clerk/expo-passkeys").passkeys;
+} catch (e) {
+  console.log("Passkeys not available - install @clerk/expo-passkeys for passkey support");
+}
+
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import { AppStateProvider, useAppState } from "../src/state/app-state";
@@ -129,6 +138,35 @@ function NavigationGate() {
     );
   }
 
+  // Options for onboarding screens with smooth swipe gestures
+  // Using transparent background so static elements (progress bar, back button)
+  // appear to stay fixed since they're in the same position on all screens
+  const onboardingScreenOptions = {
+    animation: "slide_from_right" as const,
+    gestureEnabled: true,
+    gestureDirection: "horizontal" as const,
+    transitionSpec: {
+      open: {
+        animation: "timing" as const,
+        config: {
+          duration: 300,
+          useNativeDriver: true,
+        },
+      },
+      close: {
+        animation: "timing" as const,
+        config: {
+          duration: 300,
+          useNativeDriver: true,
+        },
+      },
+    },
+    cardStyle: {
+      backgroundColor: "transparent",
+    },
+    fullScreenGestureEnabled: Platform.OS === "ios",
+  };
+
   return (
     <Stack
       screenOptions={{
@@ -137,15 +175,46 @@ function NavigationGate() {
       }}
     >
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="onboarding/index" />
-      <Stack.Screen name="onboarding/welcome" />
-      <Stack.Screen name="onboarding/intro" />
-      <Stack.Screen name="onboarding/auth" />
-      <Stack.Screen name="onboarding/trust" />
-      <Stack.Screen name="onboarding/stats" />
-      <Stack.Screen name="onboarding/demo" />
-      <Stack.Screen name="onboarding/premium" />
-      <Stack.Screen name="onboarding/wrap-up" />
+      <Stack.Screen 
+        name="onboarding/index" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/welcome" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/intro" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/name" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/auth" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/trust" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/stats" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/demo" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/premium" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/wrap-up" 
+        options={onboardingScreenOptions}
+      />
       <Stack.Screen name="signin" />
       <Stack.Screen name="result/[jobId]" />
       <Stack.Screen name="result/general" />
@@ -216,6 +285,7 @@ export default function RootLayout() {
     <ClerkProvider
       publishableKey={clerkPublishableKey}
       tokenCache={tokenCache}
+      {...(passkeys ? { __experimental_passkeys: passkeys } : {})}
     >
       <QueryClientProvider client={queryClient}>
         <AppStateProvider>

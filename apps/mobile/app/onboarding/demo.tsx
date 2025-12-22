@@ -119,7 +119,7 @@ export default function DemoScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={6} totalSteps={7} variant="bar" />
+            <ProgressIndicator currentStep={7} totalSteps={8} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     justifyContent: "flex-start",
-    paddingTop: 40,
+    paddingTop: 8,
   },
   title: {
     textAlign: "center",

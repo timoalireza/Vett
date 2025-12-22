@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Text, TouchableOpacity, View, TextInput, ActivityIndicator, Alert, SafeAreaView } from "react-native";
+import { Text, TouchableOpacity, View, TextInput, ActivityIndicator, Alert, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useSignIn, useSignUp, useOAuth } from "@clerk/clerk-expo";
+import { useSignIn, useSignUp, useOAuth, useUser } from "@clerk/clerk-expo";
 import * as LinkingModule from "expo-linking";
 
 import { useAppState } from "../src/state/app-state";
@@ -10,6 +11,212 @@ import { useTheme } from "../src/hooks/use-theme";
 import { GradientBackground } from "../src/components/GradientBackground";
 import { GlassCard } from "../src/components/GlassCard";
 import { OnboardingBackButton } from "../src/components/Onboarding/OnboardingBackButton";
+import { formatPhoneForDisplay, getMaxPhoneLength, getDisplayMaxLength } from "../src/utils/phone-formatter";
+
+// Country codes for phone number input (sorted alphabetically by country name)
+const COUNTRY_CODES = [
+  { code: "+355", country: "Albania", flag: "🇦🇱" },
+  { code: "+213", country: "Algeria", flag: "🇩🇿" },
+  { code: "+376", country: "Andorra", flag: "🇦🇩" },
+  { code: "+244", country: "Angola", flag: "🇦🇴" },
+  { code: "+54", country: "Argentina", flag: "🇦🇷" },
+  { code: "+297", country: "Aruba", flag: "🇦🇼" },
+  { code: "+61", country: "Australia", flag: "🇦🇺" },
+  { code: "+43", country: "Austria", flag: "🇦🇹" },
+  { code: "+994", country: "Azerbaijan", flag: "🇦🇿" },
+  { code: "+973", country: "Bahrain", flag: "🇧🇭" },
+  { code: "+880", country: "Bangladesh", flag: "🇧🇩" },
+  { code: "+375", country: "Belarus", flag: "🇧🇾" },
+  { code: "+32", country: "Belgium", flag: "🇧🇪" },
+  { code: "+501", country: "Belize", flag: "🇧🇿" },
+  { code: "+229", country: "Benin", flag: "🇧🇯" },
+  { code: "+975", country: "Bhutan", flag: "🇧🇹" },
+  { code: "+591", country: "Bolivia", flag: "🇧🇴" },
+  { code: "+387", country: "Bosnia and Herzegovina", flag: "🇧🇦" },
+  { code: "+267", country: "Botswana", flag: "🇧🇼" },
+  { code: "+55", country: "Brazil", flag: "🇧🇷" },
+  { code: "+246", country: "British Indian Ocean Territory", flag: "🇮🇴" },
+  { code: "+673", country: "Brunei", flag: "🇧🇳" },
+  { code: "+359", country: "Bulgaria", flag: "🇧🇬" },
+  { code: "+226", country: "Burkina Faso", flag: "🇧🇫" },
+  { code: "+257", country: "Burundi", flag: "🇧🇮" },
+  { code: "+855", country: "Cambodia", flag: "🇰🇭" },
+  { code: "+237", country: "Cameroon", flag: "🇨🇲" },
+  { code: "+1", country: "Canada", flag: "🇨🇦" },
+  { code: "+238", country: "Cape Verde", flag: "🇨🇻" },
+  { code: "+236", country: "Central African Republic", flag: "🇨🇫" },
+  { code: "+235", country: "Chad", flag: "🇹🇩" },
+  { code: "+56", country: "Chile", flag: "🇨🇱" },
+  { code: "+86", country: "China", flag: "🇨🇳" },
+  { code: "+57", country: "Colombia", flag: "🇨🇴" },
+  { code: "+269", country: "Comoros", flag: "🇰🇲" },
+  { code: "+243", country: "Democratic Republic of the Congo", flag: "🇨🇩" },
+  { code: "+242", country: "Republic of the Congo", flag: "🇨🇬" },
+  { code: "+506", country: "Costa Rica", flag: "🇨🇷" },
+  { code: "+225", country: "Ivory Coast", flag: "🇨🇮" },
+  { code: "+385", country: "Croatia", flag: "🇭🇷" },
+  { code: "+53", country: "Cuba", flag: "🇨🇺" },
+  { code: "+599", country: "Curaçao", flag: "🇨🇼" },
+  { code: "+357", country: "Cyprus", flag: "🇨🇾" },
+  { code: "+420", country: "Czech Republic", flag: "🇨🇿" },
+  { code: "+45", country: "Denmark", flag: "🇩🇰" },
+  { code: "+253", country: "Djibouti", flag: "🇩🇯" },
+  { code: "+593", country: "Ecuador", flag: "🇪🇨" },
+  { code: "+20", country: "Egypt", flag: "🇪🇬" },
+  { code: "+503", country: "El Salvador", flag: "🇸🇻" },
+  { code: "+240", country: "Equatorial Guinea", flag: "🇬🇶" },
+  { code: "+291", country: "Eritrea", flag: "🇪🇷" },
+  { code: "+372", country: "Estonia", flag: "🇪🇪" },
+  { code: "+268", country: "Eswatini", flag: "🇸🇿" },
+  { code: "+251", country: "Ethiopia", flag: "🇪🇹" },
+  { code: "+500", country: "Falkland Islands", flag: "🇫🇰" },
+  { code: "+298", country: "Faroe Islands", flag: "🇫🇴" },
+  { code: "+679", country: "Fiji", flag: "🇫🇯" },
+  { code: "+358", country: "Finland", flag: "🇫🇮" },
+  { code: "+33", country: "France", flag: "🇫🇷" },
+  { code: "+594", country: "French Guiana", flag: "🇬🇫" },
+  { code: "+689", country: "French Polynesia", flag: "🇵🇫" },
+  { code: "+241", country: "Gabon", flag: "🇬🇦" },
+  { code: "+220", country: "Gambia", flag: "🇬🇲" },
+  { code: "+995", country: "Georgia", flag: "🇬🇪" },
+  { code: "+49", country: "Germany", flag: "🇩🇪" },
+  { code: "+233", country: "Ghana", flag: "🇬🇭" },
+  { code: "+350", country: "Gibraltar", flag: "🇬🇮" },
+  { code: "+30", country: "Greece", flag: "🇬🇷" },
+  { code: "+299", country: "Greenland", flag: "🇬🇱" },
+  { code: "+590", country: "Guadeloupe", flag: "🇬🇵" },
+  { code: "+224", country: "Guinea", flag: "🇬🇳" },
+  { code: "+245", country: "Guinea-Bissau", flag: "🇬🇼" },
+  { code: "+592", country: "Guyana", flag: "🇬🇾" },
+  { code: "+509", country: "Haiti", flag: "🇭🇹" },
+  { code: "+504", country: "Honduras", flag: "🇭🇳" },
+  { code: "+852", country: "Hong Kong", flag: "🇭🇰" },
+  { code: "+36", country: "Hungary", flag: "🇭🇺" },
+  { code: "+354", country: "Iceland", flag: "🇮🇸" },
+  { code: "+91", country: "India", flag: "🇮🇳" },
+  { code: "+62", country: "Indonesia", flag: "🇮🇩" },
+  { code: "+98", country: "Iran", flag: "🇮🇷" },
+  { code: "+964", country: "Iraq", flag: "🇮🇶" },
+  { code: "+353", country: "Ireland", flag: "🇮🇪" },
+  { code: "+972", country: "Israel", flag: "🇮🇱" },
+  { code: "+39", country: "Italy", flag: "🇮🇹" },
+  { code: "+81", country: "Japan", flag: "🇯🇵" },
+  { code: "+962", country: "Jordan", flag: "🇯🇴" },
+  { code: "+7", country: "Kazakhstan", flag: "🇰🇿" },
+  { code: "+254", country: "Kenya", flag: "🇰🇪" },
+  { code: "+686", country: "Kiribati", flag: "🇰🇮" },
+  { code: "+383", country: "Kosovo", flag: "🇽🇰" },
+  { code: "+965", country: "Kuwait", flag: "🇰🇼" },
+  { code: "+996", country: "Kyrgyzstan", flag: "🇰🇬" },
+  { code: "+856", country: "Laos", flag: "🇱🇦" },
+  { code: "+371", country: "Latvia", flag: "🇱🇻" },
+  { code: "+961", country: "Lebanon", flag: "🇱🇧" },
+  { code: "+266", country: "Lesotho", flag: "🇱🇸" },
+  { code: "+231", country: "Liberia", flag: "🇱🇷" },
+  { code: "+218", country: "Libya", flag: "🇱🇾" },
+  { code: "+423", country: "Liechtenstein", flag: "🇱🇮" },
+  { code: "+370", country: "Lithuania", flag: "🇱🇹" },
+  { code: "+352", country: "Luxembourg", flag: "🇱🇺" },
+  { code: "+853", country: "Macau", flag: "🇲🇴" },
+  { code: "+261", country: "Madagascar", flag: "🇲🇬" },
+  { code: "+265", country: "Malawi", flag: "🇲🇼" },
+  { code: "+60", country: "Malaysia", flag: "🇲🇾" },
+  { code: "+960", country: "Maldives", flag: "🇲🇻" },
+  { code: "+223", country: "Mali", flag: "🇲🇱" },
+  { code: "+356", country: "Malta", flag: "🇲🇹" },
+  { code: "+692", country: "Marshall Islands", flag: "🇲🇭" },
+  { code: "+596", country: "Martinique", flag: "🇲🇶" },
+  { code: "+222", country: "Mauritania", flag: "🇲🇷" },
+  { code: "+230", country: "Mauritius", flag: "🇲🇺" },
+  { code: "+52", country: "Mexico", flag: "🇲🇽" },
+  { code: "+691", country: "Micronesia", flag: "🇫🇲" },
+  { code: "+373", country: "Moldova", flag: "🇲🇩" },
+  { code: "+377", country: "Monaco", flag: "🇲🇨" },
+  { code: "+976", country: "Mongolia", flag: "🇲🇳" },
+  { code: "+382", country: "Montenegro", flag: "🇲🇪" },
+  { code: "+212", country: "Morocco", flag: "🇲🇦" },
+  { code: "+258", country: "Mozambique", flag: "🇲🇿" },
+  { code: "+95", country: "Myanmar", flag: "🇲🇲" },
+  { code: "+264", country: "Namibia", flag: "🇳🇦" },
+  { code: "+674", country: "Nauru", flag: "🇳🇷" },
+  { code: "+977", country: "Nepal", flag: "🇳🇵" },
+  { code: "+31", country: "Netherlands", flag: "🇳🇱" },
+  { code: "+687", country: "New Caledonia", flag: "🇳🇨" },
+  { code: "+64", country: "New Zealand", flag: "🇳🇿" },
+  { code: "+505", country: "Nicaragua", flag: "🇳🇮" },
+  { code: "+227", country: "Niger", flag: "🇳🇪" },
+  { code: "+234", country: "Nigeria", flag: "🇳🇬" },
+  { code: "+683", country: "Niue", flag: "🇳🇺" },
+  { code: "+672", country: "Norfolk Island", flag: "🇳🇫" },
+  { code: "+850", country: "North Korea", flag: "🇰🇵" },
+  { code: "+389", country: "North Macedonia", flag: "🇲🇰" },
+  { code: "+47", country: "Norway", flag: "🇳🇴" },
+  { code: "+968", country: "Oman", flag: "🇴🇲" },
+  { code: "+92", country: "Pakistan", flag: "🇵🇰" },
+  { code: "+680", country: "Palau", flag: "🇵🇼" },
+  { code: "+970", country: "Palestine", flag: "🇵🇸" },
+  { code: "+507", country: "Panama", flag: "🇵🇦" },
+  { code: "+675", country: "Papua New Guinea", flag: "🇵🇬" },
+  { code: "+595", country: "Paraguay", flag: "🇵🇾" },
+  { code: "+51", country: "Peru", flag: "🇵🇪" },
+  { code: "+63", country: "Philippines", flag: "🇵🇭" },
+  { code: "+48", country: "Poland", flag: "🇵🇱" },
+  { code: "+351", country: "Portugal", flag: "🇵🇹" },
+  { code: "+974", country: "Qatar", flag: "🇶🇦" },
+  { code: "+262", country: "Réunion", flag: "🇷🇪" },
+  { code: "+40", country: "Romania", flag: "🇷🇴" },
+  { code: "+7", country: "Russia", flag: "🇷🇺" },
+  { code: "+250", country: "Rwanda", flag: "🇷🇼" },
+  { code: "+290", country: "Saint Helena", flag: "🇸🇭" },
+  { code: "+508", country: "Saint Pierre and Miquelon", flag: "🇵🇲" },
+  { code: "+685", country: "Samoa", flag: "🇼🇸" },
+  { code: "+378", country: "San Marino", flag: "🇸🇲" },
+  { code: "+239", country: "São Tomé and Príncipe", flag: "🇸🇹" },
+  { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
+  { code: "+221", country: "Senegal", flag: "🇸🇳" },
+  { code: "+381", country: "Serbia", flag: "🇷🇸" },
+  { code: "+248", country: "Seychelles", flag: "🇸🇨" },
+  { code: "+232", country: "Sierra Leone", flag: "🇸🇱" },
+  { code: "+65", country: "Singapore", flag: "🇸🇬" },
+  { code: "+421", country: "Slovakia", flag: "🇸🇰" },
+  { code: "+386", country: "Slovenia", flag: "🇸🇮" },
+  { code: "+677", country: "Solomon Islands", flag: "🇸🇧" },
+  { code: "+252", country: "Somalia", flag: "🇸🇴" },
+  { code: "+27", country: "South Africa", flag: "🇿🇦" },
+  { code: "+82", country: "South Korea", flag: "🇰🇷" },
+  { code: "+34", country: "Spain", flag: "🇪🇸" },
+  { code: "+94", country: "Sri Lanka", flag: "🇱🇰" },
+  { code: "+249", country: "Sudan", flag: "🇸🇩" },
+  { code: "+597", country: "Suriname", flag: "🇸🇷" },
+  { code: "+46", country: "Sweden", flag: "🇸🇪" },
+  { code: "+41", country: "Switzerland", flag: "🇨🇭" },
+  { code: "+963", country: "Syria", flag: "🇸🇾" },
+  { code: "+886", country: "Taiwan", flag: "🇹🇼" },
+  { code: "+992", country: "Tajikistan", flag: "🇹🇯" },
+  { code: "+255", country: "Tanzania", flag: "🇹🇿" },
+  { code: "+66", country: "Thailand", flag: "🇹🇭" },
+  { code: "+670", country: "East Timor", flag: "🇹🇱" },
+  { code: "+228", country: "Togo", flag: "🇹🇬" },
+  { code: "+690", country: "Tokelau", flag: "🇹🇰" },
+  { code: "+676", country: "Tonga", flag: "🇹🇴" },
+  { code: "+216", country: "Tunisia", flag: "🇹🇳" },
+  { code: "+90", country: "Turkey", flag: "🇹🇷" },
+  { code: "+993", country: "Turkmenistan", flag: "🇹🇲" },
+  { code: "+688", country: "Tuvalu", flag: "🇹🇻" },
+  { code: "+256", country: "Uganda", flag: "🇺🇬" },
+  { code: "+380", country: "Ukraine", flag: "🇺🇦" },
+  { code: "+971", country: "United Arab Emirates", flag: "🇦🇪" },
+  { code: "+44", country: "United Kingdom", flag: "🇬🇧" },
+  { code: "+1", country: "United States", flag: "🇺🇸" },
+  { code: "+598", country: "Uruguay", flag: "🇺🇾" },
+  { code: "+998", country: "Uzbekistan", flag: "🇺🇿" },
+  { code: "+678", country: "Vanuatu", flag: "🇻🇺" },
+  { code: "+58", country: "Venezuela", flag: "🇻🇪" },
+  { code: "+84", country: "Vietnam", flag: "🇻🇳" },
+  { code: "+681", country: "Wallis and Futuna", flag: "🇼🇫" },
+  { code: "+260", country: "Zambia", flag: "🇿🇲" },
+  { code: "+263", country: "Zimbabwe", flag: "🇿🇼" },
+];
 
 export default function SignInScreen() {
   const theme = useTheme();
@@ -19,128 +226,185 @@ export default function SignInScreen() {
   const { signUp, isLoaded: signUpLoaded } = useSignUp();
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({ strategy: "oauth_google" });
   const { startOAuthFlow: startAppleOAuth } = useOAuth({ strategy: "oauth_apple" });
+  const { user } = useUser();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [countryCode, setCountryCode] = useState("+1");
+  const [selectedCountry, setSelectedCountry] = useState("United States");
   const [verificationCode, setVerificationCode] = useState("");
+  const [firstName, setFirstName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [showVerificationCode, setShowVerificationCode] = useState(false);
-  const [showSecondFactor, setShowSecondFactor] = useState(false);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  // Guest mode removed - users must sign in
+  // Format phone number for display (using utility function)
+  const formatPhone = (phone: string) => formatPhoneForDisplay(phone, countryCode);
 
-  const handleEmailSignIn = async () => {
-    if (!signInLoaded) {
-      Alert.alert("Error", "Clerk is not ready. Please wait a moment and try again.");
+  // Get full phone number with country code
+  const getFullPhoneNumber = () => {
+    const cleaned = phoneNumber.replace(/\D/g, "");
+    return `${countryCode}${cleaned}`;
+  };
+
+  // Get flag for display based on selected country
+  const getDisplayFlag = () => {
+    const country = COUNTRY_CODES.find(
+      c => c.code === countryCode && c.country === selectedCountry
+    );
+    return country?.flag || "🌍";
+  };
+
+  // Check if passkey is available
+  const isPasskeyAvailable = signIn && typeof (signIn as any).authenticateWithPasskey === "function";
+
+  // Handle passkey sign in
+  const handlePasskeySignIn = async () => {
+    if (!signInLoaded || !signIn) {
+      Alert.alert("Error", "Authentication service is not ready. Please wait a moment and try again.");
       return;
     }
 
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password");
+    if (!isPasskeyAvailable) {
+      Alert.alert(
+        "Passkey Not Available",
+        "Passkey authentication is not available. Please sign in with your phone number or social login instead."
+      );
       return;
     }
 
     setLoading(true);
     try {
-      const result = await signIn.create({
-        identifier: email.trim(),
-        password
-      });
+      // Use Clerk's passkey authentication
+      const result = await (signIn as any).authenticateWithPasskey();
 
-      if (result.status === "complete") {
+      if (result.status === "complete" && result.createdSessionId) {
         await setActive({ session: result.createdSessionId });
         await setAuthMode("signedIn");
         router.replace("/(tabs)/analyze");
-      } else if (result.status === "needs_second_factor") {
-        // Prepare second factor authentication
-        // Check available second factor strategies
-        const availableStrategies = signIn.supportedSecondFactors || [];
-        const strategy = availableStrategies.find((s: any) => s.strategy === "totp") 
-          ? "totp" 
-          : availableStrategies[0]?.strategy || "totp";
-        
-        try {
-          // Prepare second factor if method exists
-          if (signIn.prepareSecondFactor) {
-            await signIn.prepareSecondFactor({ strategy });
-          }
-          setShowSecondFactor(true);
-          Alert.alert(
-            "Two-Factor Authentication",
-            "Please enter your 2FA code from your authenticator app."
-          );
-        } catch (err: any) {
-          // If prepareSecondFactor fails, still show the 2FA input
-          // Some strategies don't require explicit preparation
-          setShowSecondFactor(true);
-          console.warn("Could not prepare second factor, proceeding anyway:", err);
-        }
-      } else if (result.status === "needs_first_factor") {
-          Alert.alert("Additional Verification", "Please complete additional verification steps.");
-        } else {
-          Alert.alert("Error", `Sign in incomplete. Status: ${result.status}`);
+      } else {
+        Alert.alert("Error", "Passkey authentication incomplete. Please try again.");
       }
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign in. Please check your credentials.";
-      Alert.alert("Sign In Error", errorMessage);
-      console.error("Sign in error:", err);
+      const errorMessage = err.errors?.[0]?.message || err.message || "Failed to authenticate with passkey.";
+      
+      // Check if passkey is not available on this device
+      if (errorMessage.toLowerCase().includes("not supported") || 
+          errorMessage.toLowerCase().includes("not available") ||
+          errorMessage.toLowerCase().includes("no passkey")) {
+        Alert.alert(
+          "Passkey Not Available",
+          "Passkeys are not available on this device. Please sign in with your phone number instead."
+        );
+      } else {
+        Alert.alert("Authentication Error", errorMessage);
+      }
+      console.error("Passkey sign in error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEmailSignUp = async () => {
-    if (!signUpLoaded) {
-      Alert.alert("Error", "Clerk is not ready. Please wait a moment and try again.");
+  // Handle phone sign in
+  const handlePhoneSignIn = async () => {
+    if (!signInLoaded || !signIn) {
+      Alert.alert("Error", "Authentication service is not ready. Please wait a moment and try again.");
       return;
     }
 
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password");
-      return;
-    }
-
-    if (!firstName || !lastName) {
-      Alert.alert("Error", "Please enter both first and last name");
-      return;
-    }
-
-    if (password.length < 8) {
-      Alert.alert("Error", "Password must be at least 8 characters long");
+    const fullPhone = getFullPhoneNumber();
+    const cleaned = phoneNumber.replace(/\D/g, "");
+    const maxLength = getMaxPhoneLength(countryCode);
+    const minLength = Math.max(7, Math.floor(maxLength * 0.7)); // At least 70% of max length or 7 digits
+    
+    if (!cleaned || cleaned.length < minLength || cleaned.length > maxLength) {
+      Alert.alert("Error", `Please enter a valid phone number (${minLength}-${maxLength} digits)`);
       return;
     }
 
     setLoading(true);
     try {
-      const result = await signUp.create({
-        emailAddress: email.trim(),
-        password,
-        firstName: firstName.trim(),
-        lastName: lastName.trim()
+      // Create sign in with phone number
+      const result = await signIn.create({
+        identifier: fullPhone,
       });
 
-      // Send email verification code
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      // Prepare phone code verification
+      const phoneCodeFactor = result.supportedFirstFactors?.find(
+        (factor: any) => factor.strategy === "phone_code"
+      );
 
-      // Show verification code input
+      if (phoneCodeFactor) {
+        await signIn.prepareFirstFactor({
+          strategy: "phone_code",
+          phoneNumberId: (phoneCodeFactor as any).phoneNumberId,
+        });
+
+        setShowVerificationCode(true);
+        Alert.alert(
+          "Verification Code Sent",
+          `We sent a 6-digit code to ${fullPhone}`
+        );
+      } else {
+        Alert.alert("Error", "Phone verification is not available for this account.");
+      }
+    } catch (err: any) {
+      const errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign in. Please try again.";
+      Alert.alert("Sign In Error", errorMessage);
+      console.error("Phone sign in error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle phone sign up
+  const handlePhoneSignUp = async () => {
+    if (!signUpLoaded || !signUp) {
+      Alert.alert("Error", "Authentication service is not ready. Please wait a moment and try again.");
+      return;
+    }
+
+    const fullPhone = getFullPhoneNumber();
+    const cleaned = phoneNumber.replace(/\D/g, "");
+    const maxLength = getMaxPhoneLength(countryCode);
+    const minLength = Math.max(7, Math.floor(maxLength * 0.7)); // At least 70% of max length or 7 digits
+    
+    if (!cleaned || cleaned.length < minLength || cleaned.length > maxLength) {
+      Alert.alert("Error", `Please enter a valid phone number (${minLength}-${maxLength} digits)`);
+      return;
+    }
+
+    if (!firstName.trim()) {
+      Alert.alert("Error", "Please enter your first name");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Create sign up with phone number
+      await signUp.create({
+        phoneNumber: fullPhone,
+        firstName: firstName.trim(),
+      });
+
+      // Prepare phone verification
+      await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+
       setShowVerificationCode(true);
       Alert.alert(
-        "Verification Required",
-        "Please check your email for a verification code and enter it below."
+        "Verification Code Sent",
+        `We sent a 6-digit code to ${fullPhone}`
       );
     } catch (err: any) {
       const errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign up. Please try again.";
       Alert.alert("Sign Up Error", errorMessage);
-      console.error("Sign up error:", err);
+      console.error("Phone sign up error:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle verification code submission
   const handleVerifyCode = async () => {
     if (!verificationCode || verificationCode.length < 6) {
       Alert.alert("Error", "Please enter a valid 6-digit verification code");
@@ -149,63 +413,83 @@ export default function SignInScreen() {
 
     setLoading(true);
     try {
-      const completeResult = await signUp.attemptEmailAddressVerification({
-        code: verificationCode
-      });
+      if (isSignUp) {
+        // Verify sign up
+        if (!signUp) {
+          Alert.alert("Error", "Sign up session expired. Please try again.");
+          return;
+        }
 
-      if (completeResult.status === "complete") {
-        await setActive({ session: completeResult.createdSessionId });
-        await setAuthMode("signedIn");
-        setShowVerificationCode(false);
-        setVerificationCode("");
-        router.replace("/(tabs)/analyze");
+        const completeResult = await signUp.attemptPhoneNumberVerification({
+          code: verificationCode,
+        });
+
+        if (completeResult.status === "complete" && completeResult.createdSessionId && setActive) {
+          await setActive({ session: completeResult.createdSessionId });
+          await setAuthMode("signedIn");
+          setShowVerificationCode(false);
+          setVerificationCode("");
+          router.replace("/(tabs)/analyze");
+        } else {
+          Alert.alert("Error", "Verification incomplete. Please try again.");
+        }
       } else {
-        Alert.alert("Error", "Verification incomplete. Please try again.");
+        // Verify sign in
+        if (!signIn) {
+          Alert.alert("Error", "Sign in session expired. Please try again.");
+          return;
+        }
+
+        const completeResult = await signIn.attemptFirstFactor({
+          strategy: "phone_code",
+          code: verificationCode,
+        });
+
+        if (completeResult.status === "complete" && completeResult.createdSessionId && setActive) {
+          await setActive({ session: completeResult.createdSessionId });
+          await setAuthMode("signedIn");
+          setShowVerificationCode(false);
+          setVerificationCode("");
+          router.replace("/(tabs)/analyze");
+        } else if (completeResult.status === "needs_second_factor") {
+          Alert.alert(
+            "Two-Factor Authentication",
+            "Please complete additional verification steps."
+          );
+        } else {
+          Alert.alert("Error", "Verification incomplete. Please try again.");
+        }
       }
     } catch (err: any) {
-      Alert.alert("Error", err.errors?.[0]?.message || "Invalid verification code");
+      const errorMessage = err.errors?.[0]?.message || err.message || "Invalid verification code";
+      Alert.alert("Error", errorMessage);
+      console.error("Verification error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSecondFactor = async () => {
-    if (!signInLoaded || !signIn) {
-      Alert.alert("Error", "Clerk is not ready. Please wait a moment and try again.");
-      return;
-    }
-
-    if (!verificationCode || verificationCode.length < 6) {
-      Alert.alert("Error", "Please enter a valid 6-digit 2FA code");
-      return;
-    }
-
+  // Resend verification code
+  const handleResendCode = async () => {
     setLoading(true);
     try {
-      // Determine the strategy to use
-      const availableStrategies = signIn.supportedSecondFactors || [];
-      const strategy = availableStrategies.find((s: any) => s.strategy === "totp") 
-        ? "totp" 
-        : availableStrategies[0]?.strategy || "totp";
-
-      const completeResult = await signIn.attemptSecondFactor({
-        strategy,
-        code: verificationCode
-      });
-
-      if (completeResult.status === "complete") {
-        await setActive({ session: completeResult.createdSessionId });
-        await setAuthMode("signedIn");
-        setShowSecondFactor(false);
-        setVerificationCode("");
-        router.replace("/(tabs)/analyze");
-      } else {
-        Alert.alert("Error", "2FA verification incomplete. Please try again.");
+      if (isSignUp && signUp) {
+        await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+      } else if (!isSignUp && signIn) {
+        const phoneCodeFactor = signIn.supportedFirstFactors?.find(
+          (factor: any) => factor.strategy === "phone_code"
+        );
+        if (phoneCodeFactor) {
+          await signIn.prepareFirstFactor({
+            strategy: "phone_code",
+            phoneNumberId: (phoneCodeFactor as any).phoneNumberId,
+          });
+        }
       }
+      Alert.alert("Code Sent", "A new verification code has been sent to your phone.");
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || err.message || "Invalid 2FA code. Please try again.";
+      const errorMessage = err.errors?.[0]?.message || err.message || "Failed to resend code";
       Alert.alert("Error", errorMessage);
-      console.error("2FA error:", err);
     } finally {
       setLoading(false);
     }
@@ -224,9 +508,6 @@ export default function SignInScreen() {
         await setActive({ session: createdSessionId });
         await setAuthMode("signedIn");
         router.replace("/(tabs)/analyze");
-      } else {
-        // OAuth flow might require additional steps
-        // The user will be redirected back to the app
       }
     } catch (err: any) {
       const errorMessage = err.errors?.[0]?.message || err.message || `Failed to sign in with ${strategy === "oauth_google" ? "Google" : "Apple"}`;
@@ -236,6 +517,103 @@ export default function SignInScreen() {
       setLoading(false);
     }
   };
+
+  // Country picker modal
+  const renderCountryPicker = () => (
+    <View
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.8)",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 100,
+      }}
+    >
+      <View
+        style={{
+          backgroundColor: theme.colors.card,
+          borderRadius: theme.radii.lg,
+          padding: theme.spacing(2),
+          width: "80%",
+          maxHeight: "60%",
+        }}
+      >
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: theme.typography.subheading,
+            fontFamily: "Inter_600SemiBold",
+            marginBottom: theme.spacing(2),
+            textAlign: "center",
+          }}
+        >
+          Select Country
+        </Text>
+        <ScrollView>
+          {COUNTRY_CODES.map((item) => (
+            <TouchableOpacity
+              key={`${item.code}-${item.country}`}
+              onPress={() => {
+                setCountryCode(item.code);
+                setSelectedCountry(item.country);
+                setShowCountryPicker(false);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                padding: theme.spacing(1.5),
+                borderRadius: theme.radii.md,
+                backgroundColor: countryCode === item.code && selectedCountry === item.country ? theme.colors.primary + "20" : "transparent",
+              }}
+            >
+              <Text style={{ fontSize: 24, marginRight: theme.spacing(1.5) }}>{item.flag}</Text>
+              <Text
+                style={{
+                  color: theme.colors.text,
+                  fontSize: theme.typography.body,
+                  fontFamily: "Inter_400Regular",
+                  flex: 1,
+                }}
+              >
+                {item.country}
+              </Text>
+              <Text
+                style={{
+                  color: theme.colors.textSecondary,
+                  fontSize: theme.typography.body,
+                  fontFamily: "Inter_400Regular",
+                }}
+              >
+                {item.code}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <TouchableOpacity
+          onPress={() => setShowCountryPicker(false)}
+          style={{
+            marginTop: theme.spacing(2),
+            padding: theme.spacing(1.5),
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontSize: theme.typography.body,
+              fontFamily: "Inter_500Medium",
+            }}
+          >
+            Cancel
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   return (
     <GradientBackground>
@@ -251,215 +629,133 @@ export default function SignInScreen() {
           }}
         >
           <GlassCard
-          style={{
-            padding: theme.spacing(3),
-            gap: theme.spacing(2)
-          }}
-        >
-          <Text
             style={{
-              color: theme.colors.text,
-              fontSize: 34,
-              fontFamily: "Inter_600SemiBold"
+              padding: theme.spacing(3),
+              gap: theme.spacing(2)
             }}
           >
-            Vett
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.subtitle,
-              fontSize: 18,
-              fontFamily: "Inter_400Regular"
-            }}
-          >
-            Verify anything in seconds. Choose how you want to continue.
-          </Text>
+            <Text
+              style={{
+                color: theme.colors.text,
+                fontSize: theme.typography.heading + 8,
+                fontFamily: "Inter_600SemiBold",
+                textAlign: "center",
+                marginBottom: theme.spacing(2)
+              }}
+            >
+              {isSignUp ? "Create Account" : "Sign In"}
+            </Text>
 
-          {/* Email Verification Code Input */}
-          {showVerificationCode ? (
-            <>
-              <Text
-                style={{
-                  color: theme.colors.text,
-                  fontSize: theme.typography.subheading,
-                  fontFamily: "Inter_600SemiBold",
-                  marginBottom: theme.spacing(1)
-                }}
-              >
-                Enter Verification Code
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontSize: theme.typography.body,
-                  fontFamily: "Inter_400Regular",
-                  marginBottom: theme.spacing(2)
-                }}
-              >
-                We sent a 6-digit code to {email}
-              </Text>
-              <TextInput
-                placeholder="000000"
-                placeholderTextColor={theme.colors.textTertiary}
-                value={verificationCode}
-                onChangeText={setVerificationCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                style={{
-                  backgroundColor: theme.colors.card,
-                  borderRadius: theme.radii.md,
-                  padding: theme.spacing(2),
-                  color: theme.colors.text,
-                  fontSize: theme.typography.heading,
-                  fontFamily: "Inter_600SemiBold",
-                  letterSpacing: 8,
-                  textAlign: "center",
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  marginBottom: theme.spacing(2)
-                }}
-              />
-              <TouchableOpacity
-                onPress={handleVerifyCode}
-                disabled={loading || verificationCode.length < 6}
-                style={{
-                  backgroundColor: theme.colors.primary,
-                  borderRadius: theme.radii.pill,
-                  padding: theme.spacing(2),
-                  alignItems: "center",
-                  opacity: loading || verificationCode.length < 6 ? 0.5 : 1,
-                  marginBottom: theme.spacing(1)
-                }}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontSize: theme.typography.body,
-                      fontFamily: "Inter_500Medium"
-                    }}
-                  >
-                    Verify Code
-                  </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowVerificationCode(false);
-                  setVerificationCode("");
-                }}
-              >
+            {/* Verification Code Input */}
+            {showVerificationCode ? (
+              <>
+                <Text
+                  style={{
+                    color: theme.colors.text,
+                    fontSize: theme.typography.subheading,
+                    fontFamily: "Inter_600SemiBold",
+                    marginBottom: theme.spacing(1)
+                  }}
+                >
+                  Enter Verification Code
+                </Text>
                 <Text
                   style={{
                     color: theme.colors.textSecondary,
-                    fontSize: theme.typography.caption,
-                    textAlign: "center",
-                    fontFamily: "Inter_400Regular"
+                    fontSize: theme.typography.body,
+                    fontFamily: "Inter_400Regular",
+                    marginBottom: theme.spacing(2)
                   }}
                 >
-                  Back to sign up
+                  We sent a 6-digit code to {getFullPhoneNumber()}
                 </Text>
-              </TouchableOpacity>
-            </>
-          ) : showSecondFactor ? (
-            <>
-              <Text
-                style={{
-                  color: theme.colors.text,
-                  fontSize: theme.typography.subheading,
-                  fontFamily: "Inter_600SemiBold",
-                  marginBottom: theme.spacing(1)
-                }}
-              >
-                Two-Factor Authentication
-              </Text>
-              <Text
-                style={{
-                  color: theme.colors.textSecondary,
-                  fontSize: theme.typography.body,
-                  fontFamily: "Inter_400Regular",
-                  marginBottom: theme.spacing(2)
-                }}
-              >
-                Enter the 6-digit code from your authenticator app
-              </Text>
-              <TextInput
-                placeholder="000000"
-                placeholderTextColor={theme.colors.textTertiary}
-                value={verificationCode}
-                onChangeText={setVerificationCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                style={{
-                  backgroundColor: theme.colors.card,
-                  borderRadius: theme.radii.md,
-                  padding: theme.spacing(2),
-                  color: theme.colors.text,
-                  fontSize: theme.typography.heading,
-                  fontFamily: "Inter_600SemiBold",
-                  letterSpacing: 8,
-                  textAlign: "center",
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  marginBottom: theme.spacing(2)
-                }}
-              />
-              <TouchableOpacity
-                onPress={handleSecondFactor}
-                disabled={loading || verificationCode.length < 6}
-                style={{
-                  backgroundColor: theme.colors.primary,
-                  borderRadius: theme.radii.pill,
-                  padding: theme.spacing(2),
-                  alignItems: "center",
-                  opacity: loading || verificationCode.length < 6 ? 0.5 : 1,
-                  marginBottom: theme.spacing(1)
-                }}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
+                <TextInput
+                  placeholder="000000"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={verificationCode}
+                  onChangeText={setVerificationCode}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderRadius: theme.radii.md,
+                    padding: theme.spacing(2),
+                    color: theme.colors.text,
+                    fontSize: theme.typography.heading,
+                    fontFamily: "Inter_600SemiBold",
+                    letterSpacing: 8,
+                    textAlign: "center",
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    marginBottom: theme.spacing(2)
+                  }}
+                />
+                <TouchableOpacity
+                  onPress={handleVerifyCode}
+                  disabled={loading || verificationCode.length < 6}
+                  style={{
+                    backgroundColor: theme.colors.primary,
+                    borderRadius: theme.radii.pill,
+                    padding: theme.spacing(2),
+                    alignItems: "center",
+                    opacity: loading || verificationCode.length < 6 ? 0.5 : 1,
+                    marginBottom: theme.spacing(1)
+                  }}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text
+                      style={{
+                        color: "#FFFFFF",
+                        fontSize: theme.typography.body,
+                        fontFamily: "Inter_500Medium"
+                      }}
+                    >
+                      Verify Code
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleResendCode}
+                  disabled={loading}
+                  style={{ marginBottom: theme.spacing(1) }}
+                >
                   <Text
                     style={{
-                      color: "#FFFFFF",
-                      fontSize: theme.typography.body,
-                      fontFamily: "Inter_500Medium"
+                      color: theme.colors.primary,
+                      fontSize: theme.typography.caption,
+                      textAlign: "center",
+                      fontFamily: "Inter_500Medium",
+                      opacity: loading ? 0.5 : 1
                     }}
                   >
-                    Verify 2FA Code
+                    Resend Code
                   </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowSecondFactor(false);
-                  setVerificationCode("");
-                  // Reset sign-in state if method exists
-                  if (signIn && typeof signIn.reset === "function") {
-                    signIn.reset();
-                  }
-                }}
-              >
-                <Text
-                  style={{
-                    color: theme.colors.textSecondary,
-                    fontSize: theme.typography.caption,
-                    textAlign: "center",
-                    fontFamily: "Inter_400Regular"
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowVerificationCode(false);
+                    setVerificationCode("");
                   }}
                 >
-                  Back to sign in
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              {/* Email/Password Form */}
-              {isSignUp ? (
-                <>
-                  <View style={{ flexDirection: "row", gap: theme.spacing(2) }}>
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontSize: theme.typography.caption,
+                      textAlign: "center",
+                      fontFamily: "Inter_400Regular"
+                    }}
+                  >
+                    Back
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* Sign Up Form */}
+                {isSignUp ? (
+                  <>
                     <TextInput
                       placeholder="First Name"
                       placeholderTextColor={theme.colors.textTertiary}
@@ -468,7 +764,6 @@ export default function SignInScreen() {
                       autoCapitalize="words"
                       autoComplete="given-name"
                       style={{
-                        flex: 1,
                         backgroundColor: theme.colors.card,
                         borderRadius: theme.radii.md,
                         padding: theme.spacing(2),
@@ -478,275 +773,303 @@ export default function SignInScreen() {
                         borderColor: theme.colors.border
                       }}
                     />
-                    <TextInput
-                      placeholder="Last Name"
-                      placeholderTextColor={theme.colors.textTertiary}
-                      value={lastName}
-                      onChangeText={setLastName}
-                      autoCapitalize="words"
-                      autoComplete="family-name"
-                      style={{
-                        flex: 1,
-                        backgroundColor: theme.colors.card,
-                        borderRadius: theme.radii.md,
-                        padding: theme.spacing(2),
-                        color: theme.colors.text,
-                        fontSize: theme.typography.body,
-                        borderWidth: 1,
-                        borderColor: theme.colors.border
-                      }}
-                    />
-                  </View>
-                  <TextInput
-                    placeholder="Email"
-                    placeholderTextColor={theme.colors.textTertiary}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    style={{
-                      backgroundColor: theme.colors.card,
-                      borderRadius: theme.radii.md,
-                      padding: theme.spacing(2),
-                      color: theme.colors.text,
-                      fontSize: theme.typography.body,
-                      borderWidth: 1,
-                      borderColor: theme.colors.border
-                    }}
-                  />
-                  <View style={{ position: "relative" }}>
-                    <TextInput
-                      placeholder="Password"
-                      placeholderTextColor={theme.colors.textTertiary}
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!showPassword}
-                      autoComplete="password-new"
-                      style={{
-                        backgroundColor: theme.colors.card,
-                        borderRadius: theme.radii.md,
-                        padding: theme.spacing(2),
-                        paddingRight: 50,
-                        color: theme.colors.text,
-                        fontSize: theme.typography.body,
-                        borderWidth: 1,
-                        borderColor: theme.colors.border
-                      }}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowPassword(!showPassword)}
-                      style={{
-                        position: "absolute",
-                        right: theme.spacing(2),
-                        top: theme.spacing(2),
-                        padding: theme.spacing(0.5)
-                      }}
-                    >
-                      <Ionicons
-                        name={showPassword ? "eye-off-outline" : "eye-outline"}
-                        size={20}
-                        color={theme.colors.textSecondary}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity
-                    onPress={handleEmailSignUp}
-                    disabled={loading || !email || !password || !firstName || !lastName}
-                    style={{
-                      backgroundColor: theme.colors.primary,
-                      borderRadius: theme.radii.pill,
-                      padding: theme.spacing(2),
-                      alignItems: "center",
-                      opacity: loading || !email || !password || !firstName || !lastName ? 0.5 : 1
-                    }}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <Text
+
+                    {/* Phone Number Input */}
+                    <View style={{ flexDirection: "row", gap: theme.spacing(1) }}>
+                      <TouchableOpacity
+                        onPress={() => setShowCountryPicker(true)}
                         style={{
-                          color: "#FFFFFF",
-                          fontSize: theme.typography.body,
-                          fontFamily: "Inter_500Medium"
+                          backgroundColor: theme.colors.card,
+                          borderRadius: theme.radii.md,
+                          padding: theme.spacing(2),
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: theme.spacing(0.5)
                         }}
                       >
-                        Sign Up
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setIsSignUp(false)}>
-                    <Text
-                      style={{
-                        color: theme.colors.textSecondary,
-                        fontSize: theme.typography.caption,
-                        textAlign: "center",
-                        fontFamily: "Inter_400Regular"
-                      }}
-                    >
-                      Already have an account? Sign in
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <TextInput
-                    placeholder="Email"
-                    placeholderTextColor={theme.colors.textTertiary}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    style={{
-                      backgroundColor: theme.colors.card,
-                      borderRadius: theme.radii.md,
-                      padding: theme.spacing(2),
-                      color: theme.colors.text,
-                      fontSize: theme.typography.body,
-                      borderWidth: 1,
-                      borderColor: theme.colors.border
-                    }}
-                  />
-                  <View style={{ position: "relative" }}>
-                    <TextInput
-                      placeholder="Password"
-                      placeholderTextColor={theme.colors.textTertiary}
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!showPassword}
-                      autoComplete="password"
-                      style={{
-                        backgroundColor: theme.colors.card,
-                        borderRadius: theme.radii.md,
-                        padding: theme.spacing(2),
-                        paddingRight: 50,
-                        color: theme.colors.text,
-                        fontSize: theme.typography.body,
-                        borderWidth: 1,
-                        borderColor: theme.colors.border
-                      }}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowPassword(!showPassword)}
-                      style={{
-                        position: "absolute",
-                        right: theme.spacing(2),
-                        top: theme.spacing(2),
-                        padding: theme.spacing(0.5)
-                      }}
-                    >
-                      <Ionicons
-                        name={showPassword ? "eye-off-outline" : "eye-outline"}
-                        size={20}
-                        color={theme.colors.textSecondary}
+                        <Text style={{ fontSize: 18 }}>
+                          {getDisplayFlag()}
+                        </Text>
+                        <Text
+                          style={{
+                            color: theme.colors.text,
+                            fontSize: theme.typography.body,
+                            fontFamily: "Inter_400Regular"
+                          }}
+                        >
+                          {countryCode}
+                        </Text>
+                        <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
+                      </TouchableOpacity>
+                      <TextInput
+                        placeholder="Phone Number"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        value={formatPhone(phoneNumber)}
+                        onChangeText={(text) => {
+                          const cleaned = text.replace(/\D/g, "");
+                          const maxLength = getMaxPhoneLength(countryCode);
+                          setPhoneNumber(cleaned.slice(0, maxLength));
+                        }}
+                        keyboardType="phone-pad"
+                        autoComplete="tel"
+                        maxLength={getDisplayMaxLength(countryCode)}
+                        style={{
+                          flex: 1,
+                          backgroundColor: theme.colors.card,
+                          borderRadius: theme.radii.md,
+                          padding: theme.spacing(2),
+                          color: theme.colors.text,
+                          fontSize: theme.typography.body,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border
+                        }}
                       />
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={handlePhoneSignUp}
+                      disabled={loading || !phoneNumber || !firstName}
+                      style={{
+                        backgroundColor: theme.colors.primary,
+                        borderRadius: theme.radii.pill,
+                        padding: theme.spacing(2),
+                        alignItems: "center",
+                        opacity: loading || !phoneNumber || !firstName ? 0.5 : 1
+                      }}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontSize: theme.typography.body,
+                            fontFamily: "Inter_500Medium"
+                          }}
+                        >
+                          Sign Up with Phone
+                        </Text>
+                      )}
                     </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity
-                    onPress={handleEmailSignIn}
-                    disabled={loading || !email || !password}
-                    style={{
-                      backgroundColor: theme.colors.primary,
-                      borderRadius: theme.radii.pill,
-                      padding: theme.spacing(2),
-                      alignItems: "center",
-                      opacity: loading || !email || !password ? 0.5 : 1
-                    }}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
+                    <TouchableOpacity onPress={() => setIsSignUp(false)}>
                       <Text
                         style={{
-                          color: "#FFFFFF",
-                          fontSize: theme.typography.body,
-                          fontFamily: "Inter_500Medium"
+                          color: theme.colors.textSecondary,
+                          fontSize: theme.typography.caption,
+                          textAlign: "center",
+                          fontFamily: "Inter_400Regular"
                         }}
                       >
-                        Sign In
+                        Already have an account? Sign in
                       </Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setIsSignUp(true)}>
-                    <Text
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {/* Passkey Sign In Button */}
+                    <TouchableOpacity
+                      onPress={handlePasskeySignIn}
+                      disabled={loading}
                       style={{
-                        color: theme.colors.textSecondary,
-                        fontSize: theme.typography.caption,
-                        textAlign: "center",
-                        fontFamily: "Inter_400Regular"
+                        backgroundColor: theme.colors.primary,
+                        borderRadius: theme.radii.pill,
+                        padding: theme.spacing(2),
+                        alignItems: "center",
+                        flexDirection: "row",
+                        justifyContent: "center",
+                        gap: theme.spacing(1),
+                        opacity: loading ? 0.5 : 1
                       }}
                     >
-                      Don't have an account?{" "}
-                      <Text style={{ color: theme.colors.text, fontFamily: "Inter_500Medium" }}>
-                        Sign up
+                      <Ionicons name="finger-print" size={24} color="#FFFFFF" />
+                      {loading ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontSize: theme.typography.body,
+                            fontFamily: "Inter_500Medium"
+                          }}
+                        >
+                          Sign in with Passkey
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Social Login Buttons */}
+                    <View style={{ flexDirection: "row", gap: theme.spacing(2) }}>
+                      <SocialButton
+                        icon="logo-apple"
+                        iconColor="#000000"
+                        onPress={() => handleOAuth("oauth_apple")}
+                        disabled={loading}
+                      />
+                      <SocialButton
+                        icon="logo-google"
+                        iconColor="#000000"
+                        onPress={() => handleOAuth("oauth_google")}
+                        disabled={loading}
+                      />
+                    </View>
+
+                    {/* OR Separator */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: theme.spacing(2),
+                        marginVertical: theme.spacing(1)
+                      }}
+                    >
+                      <View
+                        style={{
+                          flex: 1,
+                          height: 1,
+                          backgroundColor: theme.colors.border
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontSize: theme.typography.caption
+                        }}
+                      >
+                        OR
                       </Text>
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </>
-          )}
+                      <View
+                        style={{
+                          flex: 1,
+                          height: 1,
+                          backgroundColor: theme.colors.border
+                        }}
+                      />
+                    </View>
 
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: theme.spacing(2),
-              marginVertical: theme.spacing(1)
-            }}
-          >
-            <View
-              style={{
-                flex: 1,
-                height: 1,
-                backgroundColor: theme.colors.border
-              }}
-            />
-            <Text
-              style={{
-                color: theme.colors.textSecondary,
-                fontSize: theme.typography.caption
-              }}
-            >
-              OR
-            </Text>
-            <View
-              style={{
-                flex: 1,
-                height: 1,
-                backgroundColor: theme.colors.border
-              }}
-            />
-          </View>
+                    {/* Phone Number Input */}
+                    <View style={{ flexDirection: "row", gap: theme.spacing(1) }}>
+                      <TouchableOpacity
+                        onPress={() => setShowCountryPicker(true)}
+                        style={{
+                          backgroundColor: theme.colors.card,
+                          borderRadius: theme.radii.md,
+                          padding: theme.spacing(2),
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: theme.spacing(0.5)
+                        }}
+                      >
+                        <Text style={{ fontSize: 18 }}>
+                          {getDisplayFlag()}
+                        </Text>
+                        <Text
+                          style={{
+                            color: theme.colors.text,
+                            fontSize: theme.typography.body,
+                            fontFamily: "Inter_400Regular"
+                          }}
+                        >
+                          {countryCode}
+                        </Text>
+                        <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
+                      </TouchableOpacity>
+                      <TextInput
+                        placeholder="Phone Number"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        value={formatPhone(phoneNumber)}
+                        onChangeText={(text) => {
+                          const cleaned = text.replace(/\D/g, "");
+                          const maxLength = getMaxPhoneLength(countryCode);
+                          setPhoneNumber(cleaned.slice(0, maxLength));
+                        }}
+                        keyboardType="phone-pad"
+                        autoComplete="tel"
+                        maxLength={getDisplayMaxLength(countryCode)}
+                        style={{
+                          flex: 1,
+                          backgroundColor: theme.colors.card,
+                          borderRadius: theme.radii.md,
+                          padding: theme.spacing(2),
+                          color: theme.colors.text,
+                          fontSize: theme.typography.body,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border
+                        }}
+                      />
+                    </View>
 
-          <Button
-            icon="logo-apple"
-            label="Continue with Apple"
-            onPress={() => handleOAuth("oauth_apple")}
-            disabled={loading}
-          />
-          <Button
-            icon="logo-google"
-            label="Continue with Google"
-            onPress={() => handleOAuth("oauth_google")}
-            disabled={loading}
-          />
-        </GlassCard>
+                    <TouchableOpacity
+                      onPress={handlePhoneSignIn}
+                      disabled={loading || !phoneNumber}
+                      style={{
+                        backgroundColor: theme.colors.surface,
+                        borderRadius: theme.radii.pill,
+                        padding: theme.spacing(2),
+                        alignItems: "center",
+                        borderWidth: 1,
+                        borderColor: theme.colors.border,
+                        opacity: loading || !phoneNumber ? 0.5 : 1
+                      }}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color={theme.colors.text} />
+                      ) : (
+                        <Text
+                          style={{
+                            color: theme.colors.text,
+                            fontSize: theme.typography.body,
+                            fontFamily: "Inter_500Medium"
+                          }}
+                        >
+                          Sign in with Phone
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setIsSignUp(true)}
+                      style={{ marginTop: theme.spacing(1) }}
+                    >
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontSize: theme.typography.caption,
+                          textAlign: "center",
+                          fontFamily: "Inter_400Regular"
+                        }}
+                      >
+                        Don't have an account?{" "}
+                        <Text style={{ color: theme.colors.text, fontFamily: "Inter_500Medium" }}>
+                          Sign up
+                        </Text>
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </>
+            )}
+          </GlassCard>
         </View>
+        
+        {/* Country Picker Modal */}
+        {showCountryPicker && renderCountryPicker()}
       </SafeAreaView>
     </GradientBackground>
   );
 }
 
-function Button({
-  label,
+function SocialButton({
   icon,
+  iconColor,
   onPress,
   disabled
 }: {
-  label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
   onPress: () => void;
   disabled?: boolean;
 }) {
@@ -756,27 +1079,17 @@ function Button({
       onPress={onPress}
       disabled={disabled}
       style={{
-        flexDirection: "row",
+        flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        gap: theme.spacing(1),
         paddingVertical: theme.spacing(1.5),
         borderRadius: theme.radii.pill,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: "#FFFFFF",
         opacity: disabled ? 0.5 : 1
       }}
-      accessibilityLabel={label}
+      accessibilityLabel={icon === "logo-apple" ? "Continue with Apple" : "Continue with Google"}
     >
-      <Ionicons name={icon} size={20} color={theme.colors.text} />
-      <Text
-        style={{
-          color: theme.colors.text,
-          fontSize: 16,
-          fontFamily: "Inter_500Medium"
-        }}
-      >
-        {label}
-      </Text>
+      <Ionicons name={icon} size={24} color={iconColor} />
     </TouchableOpacity>
   );
 }

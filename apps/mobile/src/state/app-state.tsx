@@ -15,12 +15,17 @@ interface AppStateValue {
   userIntent: string | null;
   trustLevel: number | null;
   alertStyle: string | null;
+  fullName: string | null;
+  phoneNumber: string | null;
+  countryCode: string | null;
   markOnboarded: () => Promise<void>;
   setAuthMode: (mode: AuthMode) => Promise<void>;
   markSubscriptionPromptShown: () => Promise<void>;
   setUserIntent: (intent: string) => Promise<void>;
   setTrustLevel: (level: number) => Promise<void>;
   setAlertStyle: (style: string) => Promise<void>;
+  setFullName: (name: string) => Promise<void>;
+  setPhoneNumber: (phone: string, countryCode?: string) => Promise<void>;
   resetState: () => Promise<void>;
 }
 
@@ -31,6 +36,9 @@ const STORAGE_KEYS = {
   userIntent: "vett.userIntent",
   trustLevel: "vett.trustLevel",
   alertStyle: "vett.alertStyle",
+  fullName: "vett.fullName",
+  phoneNumber: "vett.phoneNumber",
+  countryCode: "vett.countryCode",
 };
 
 const AppStateContext = createContext<AppStateValue | undefined>(undefined);
@@ -44,6 +52,9 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
   const [userIntent, setUserIntentValue] = useState<string | null>(null);
   const [trustLevel, setTrustLevelValue] = useState<number | null>(null);
   const [alertStyle, setAlertStyleValue] = useState<string | null>(null);
+  const [fullName, setFullNameValue] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumberValue] = useState<string | null>(null);
+  const [countryCode, setCountryCodeValue] = useState<string | null>(null);
 
   useEffect(() => {
     console.log("[AppState] Clerk loaded:", clerkLoaded, "isSignedIn:", isSignedIn);
@@ -75,12 +86,18 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
           storedUserIntent,
           storedTrustLevel,
           storedAlertStyle,
+          storedFullName,
+          storedPhoneNumber,
+          storedCountryCode,
         ] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.onboarded),
           AsyncStorage.getItem(STORAGE_KEYS.subscriptionPromptShown),
           AsyncStorage.getItem(STORAGE_KEYS.userIntent),
           AsyncStorage.getItem(STORAGE_KEYS.trustLevel),
           AsyncStorage.getItem(STORAGE_KEYS.alertStyle),
+          AsyncStorage.getItem(STORAGE_KEYS.fullName),
+          AsyncStorage.getItem(STORAGE_KEYS.phoneNumber),
+          AsyncStorage.getItem(STORAGE_KEYS.countryCode),
         ]);
         if (mounted) {
           setHasOnboarded(storedOnboarding === "true");
@@ -90,6 +107,9 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
             storedTrustLevel ? parseInt(storedTrustLevel, 10) : null
           );
           setAlertStyleValue(storedAlertStyle);
+          setFullNameValue(storedFullName);
+          setPhoneNumberValue(storedPhoneNumber);
+          setCountryCodeValue(storedCountryCode);
         }
       } catch (error) {
         console.error("[AppState] Error loading state:", error);
@@ -143,6 +163,20 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEYS.alertStyle, style);
   }, []);
 
+  const setFullName = useCallback(async (name: string) => {
+    setFullNameValue(name);
+    await AsyncStorage.setItem(STORAGE_KEYS.fullName, name);
+  }, []);
+
+  const setPhoneNumber = useCallback(async (phone: string, countryCode?: string) => {
+    setPhoneNumberValue(phone);
+    if (countryCode) {
+      setCountryCodeValue(countryCode);
+      await AsyncStorage.setItem(STORAGE_KEYS.countryCode, countryCode);
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.phoneNumber, phone);
+  }, []);
+
   const resetState = useCallback(async () => {
     setHasOnboarded(false);
     setAuthModeValue("signedOut");
@@ -150,6 +184,9 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
     setUserIntentValue(null);
     setTrustLevelValue(null);
     setAlertStyleValue(null);
+    setFullNameValue(null);
+    setPhoneNumberValue(null);
+    setCountryCodeValue(null);
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.onboarded,
       STORAGE_KEYS.authMode,
@@ -157,6 +194,9 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       STORAGE_KEYS.userIntent,
       STORAGE_KEYS.trustLevel,
       STORAGE_KEYS.alertStyle,
+      STORAGE_KEYS.fullName,
+      STORAGE_KEYS.phoneNumber,
+      STORAGE_KEYS.countryCode,
     ]);
   }, []);
 
@@ -172,12 +212,17 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       userIntent,
       trustLevel,
       alertStyle,
+      fullName,
+      phoneNumber,
+      countryCode,
       markOnboarded,
       setAuthMode,
       markSubscriptionPromptShown,
       setUserIntent,
       setTrustLevel,
       setAlertStyle,
+      setFullName,
+      setPhoneNumber,
       resetState
     }),
     [
@@ -189,12 +234,17 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       userIntent,
       trustLevel,
       alertStyle,
+      fullName,
+      phoneNumber,
+      countryCode,
       markOnboarded,
       setAuthMode,
       markSubscriptionPromptShown,
       setUserIntent,
       setTrustLevel,
       setAlertStyle,
+      setFullName,
+      setPhoneNumber,
       resetState,
     ]
   );

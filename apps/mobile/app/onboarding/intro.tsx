@@ -46,7 +46,7 @@ export default function IntroScreen() {
     if (currentPage < INFO_CARDS.length - 1) {
       pagerRef.current?.setPage(currentPage + 1);
     } else {
-      router.push("/onboarding/auth");
+      router.push("/onboarding/name");
     }
   };
 
@@ -61,7 +61,7 @@ export default function IntroScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={2} totalSteps={7} variant="bar" />
+            <ProgressIndicator currentStep={2} totalSteps={8} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>
@@ -172,7 +172,8 @@ const styles = StyleSheet.create({
   pageWrapper: {
     flex: 1,
     paddingHorizontal: 20,
-    justifyContent: "center",
+    paddingTop: 8,
+    justifyContent: "flex-start",
   },
   card: {
     width: "100%",

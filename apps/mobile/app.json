@@ -11,7 +11,8 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.timoalireza.vett"
+      "bundleIdentifier": "com.timoalireza.vett",
+      "deploymentTarget": "15.0"
     },
     "android": {
       "package": "com.timoalireza.vett"

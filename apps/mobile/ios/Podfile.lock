@@ -1,5 +1,7 @@
 PODS:
   - boost (1.83.0)
+  - ClerkExpoPasskeys (0.4.28):
+    - ExpoModulesCore
   - DoubleConversion (1.1.6)
   - EXApplication (5.8.4):
     - ExpoModulesCore
@@ -119,11 +121,11 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - PurchasesHybridCommon (17.19.1):
-    - RevenueCat (= 5.48.0)
-  - PurchasesHybridCommonUI (17.19.1):
-    - PurchasesHybridCommon (= 17.19.1)
-    - RevenueCatUI (= 5.48.0)
+  - PurchasesHybridCommon (17.24.0):
+    - RevenueCat (= 5.50.1)
+  - PurchasesHybridCommonUI (17.24.0):
+    - PurchasesHybridCommon (= 17.24.0)
+    - RevenueCatUI (= 5.50.1)
   - RCT-Folly (2024.01.01.00):
     - boost
     - DoubleConversion
@@ -1346,13 +1348,32 @@ PODS:
     - React-logger (= 0.74.5)
     - React-perflogger (= 0.74.5)
     - React-utils (= 0.74.5)
-  - RevenueCat (5.48.0)
-  - RevenueCatUI (5.48.0):
-    - RevenueCat (= 5.48.0)
+  - RevenueCat (5.50.1)
+  - RevenueCatUI (5.50.1):
+    - RevenueCat (= 5.50.1)
   - RNCAsyncStorage (1.23.1):
     - React-Core
-  - RNCMaskedView (0.3.1):
+  - RNCMaskedView (0.3.2):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.01.01.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Codegen
     - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - RNFlashList (1.6.4):
     - React-Core
   - RNGestureHandler (2.16.2):
@@ -1376,11 +1397,11 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNPaywalls (9.6.7):
-    - PurchasesHybridCommonUI (= 17.19.1)
+  - RNPaywalls (9.6.11):
+    - PurchasesHybridCommonUI (= 17.24.0)
     - React-Core
-  - RNPurchases (9.6.7):
-    - PurchasesHybridCommon (= 17.19.1)
+  - RNPurchases (9.6.11):
+    - PurchasesHybridCommon (= 17.24.0)
     - React-Core
   - RNReanimated (3.10.1):
     - DoubleConversion
@@ -1432,30 +1453,31 @@ PODS:
 
 DEPENDENCIES:
   - boost (from `../node_modules/react-native/third-party-podspecs/boost.podspec`)
+  - "ClerkExpoPasskeys (from `../../../node_modules/.pnpm/@clerk+expo-passkeys@0.4.28_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+c_zbsbblbdgbsgrfyzufbkcxmz3y/node_modules/@clerk/expo-passkeys/ios`)"
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
-  - "EXApplication (from `../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_la45dcnx66ri5zt3al6i6dt2k4/node_modules/expo-application/ios`)"
-  - "EXAV (from `../../../node_modules/.pnpm/expo-av@14.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__r_dklrz7hlp6kd3rfjoaehkiv45u/node_modules/expo-av/ios`)"
-  - "EXConstants (from `../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._2jychxn4k2ccyjqq6n7kbbl3su/node_modules/expo-constants/ios`)"
-  - "EXImageLoader (from `../../../node_modules/.pnpm/expo-image-loader@4.7.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_emra54r7qifkn64cohup4vewti/node_modules/expo-image-loader/ios`)"
-  - "Expo (from `../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__react-native@0.7_4sqmg62d3cixomcpejaycasmxy/node_modules/expo`)"
-  - "ExpoAsset (from `../../../node_modules/.pnpm/expo-asset@10.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._neshkv55xdscizaxot3o4ifhzi/node_modules/expo-asset/ios`)"
-  - "ExpoBlur (from `../../../node_modules/.pnpm/expo-blur@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__gvsav7gyzug4y5qz4gyrxofbke/node_modules/expo-blur/ios`)"
-  - "ExpoClipboard (from `../../../node_modules/.pnpm/expo-clipboard@5.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_jpegkocnpzjwq7xec5bo2qauva/node_modules/expo-clipboard/ios`)"
-  - "ExpoCrypto (from `../../../node_modules/.pnpm/expo-crypto@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._gjemitc46gmob7znl65ooi7rbe/node_modules/expo-crypto/ios`)"
-  - "ExpoFileSystem (from `../../../node_modules/.pnpm/expo-file-system@17.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_6kegb5gdhamigighzntehimsxe/node_modules/expo-file-system/ios`)"
-  - "ExpoFont (from `../../../node_modules/.pnpm/expo-font@12.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5_d6hcoyja6a5pu4gkidx5kvmdze/node_modules/expo-font/ios`)"
-  - "ExpoHaptics (from `../../../node_modules/.pnpm/expo-haptics@13.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28_2myntcvgiauzij6wo2awbqwqra/node_modules/expo-haptics/ios`)"
-  - "ExpoHead (from `../../../node_modules/.pnpm/expo-router@3.5.24_j4346sxdzyb7ymjdaxrwkfvp74/node_modules/expo-router/ios`)"
-  - "ExpoImagePicker (from `../../../node_modules/.pnpm/expo-image-picker@15.1.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_hmpu5sedjzccjerkv4fyglhvua/node_modules/expo-image-picker/ios`)"
-  - "ExpoKeepAwake (from `../../../node_modules/.pnpm/expo-keep-awake@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_jifd5ahkbafiikg2v6a6xhucsa/node_modules/expo-keep-awake/ios`)"
-  - "ExpoLinearGradient (from `../../../node_modules/.pnpm/expo-linear-gradient@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+c_bpbz4aor353mxplwfwbl5sd6le/node_modules/expo-linear-gradient/ios`)"
-  - "ExpoLocalAuthentication (from `../../../node_modules/.pnpm/expo-local-authentication@13.8.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@ba_s5syomy2avlmfuo2boahcxewz4/node_modules/expo-local-authentication/ios`)"
+  - "EXApplication (from `../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_4nrafarolol5gs2ju65w3clg3y/node_modules/expo-application/ios`)"
+  - "EXAV (from `../../../node_modules/.pnpm/expo-av@14.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__b_lphom3zlo6rpgd6wi2bdzvzj4e/node_modules/expo-av/ios`)"
+  - "EXConstants (from `../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._bbqg37kf3r2ujef3fgx5jocoiq/node_modules/expo-constants/ios`)"
+  - "EXImageLoader (from `../../../node_modules/.pnpm/expo-image-loader@4.7.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_aojxxlmbhtv3e72zt6dvkxs62m/node_modules/expo-image-loader/ios`)"
+  - "Expo (from `../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__bufferutil@4.1.0_uyjxej4zlufjh4xbmddi4ltpuq/node_modules/expo`)"
+  - "ExpoAsset (from `../../../node_modules/.pnpm/expo-asset@10.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._digt2kgwablexcvpilsp43uc2e/node_modules/expo-asset/ios`)"
+  - "ExpoBlur (from `../../../node_modules/.pnpm/expo-blur@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__fk7dl7tnztzvnya3c27j3kmb64/node_modules/expo-blur/ios`)"
+  - "ExpoClipboard (from `../../../node_modules/.pnpm/expo-clipboard@5.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_vu5sowxmxl6ep55ndtsakgkeai/node_modules/expo-clipboard/ios`)"
+  - "ExpoCrypto (from `../../../node_modules/.pnpm/expo-crypto@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._2677adxxldhrbs4hzzpsfv3qkm/node_modules/expo-crypto/ios`)"
+  - "ExpoFileSystem (from `../../../node_modules/.pnpm/expo-file-system@17.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_zjj5s4fn6bfof76zbnfvadlohi/node_modules/expo-file-system/ios`)"
+  - "ExpoFont (from `../../../node_modules/.pnpm/expo-font@12.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5_2a2qap2oliurmphtsane5miylm/node_modules/expo-font/ios`)"
+  - "ExpoHaptics (from `../../../node_modules/.pnpm/expo-haptics@13.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28_eb2xenivr6moahyzjfyznmoaou/node_modules/expo-haptics/ios`)"
+  - "ExpoHead (from `../../../node_modules/.pnpm/expo-router@3.5.24_kchtszfivs2lg7q7kpu25fcffy/node_modules/expo-router/ios`)"
+  - "ExpoImagePicker (from `../../../node_modules/.pnpm/expo-image-picker@15.1.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_xvjy64kgp7mcpxy2f6lwlsrdxe/node_modules/expo-image-picker/ios`)"
+  - "ExpoKeepAwake (from `../../../node_modules/.pnpm/expo-keep-awake@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_o7pu7mwygi2bkq6meplojpfs2m/node_modules/expo-keep-awake/ios`)"
+  - "ExpoLinearGradient (from `../../../node_modules/.pnpm/expo-linear-gradient@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+c_umi4oo5bhbsw5wdnxshm7fynqa/node_modules/expo-linear-gradient/ios`)"
+  - "ExpoLocalAuthentication (from `../../../node_modules/.pnpm/expo-local-authentication@13.8.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@ba_jke63pa4ogiznqtz7kgcchvtki/node_modules/expo-local-authentication/ios`)"
   - "ExpoModulesCore (from `../../../node_modules/.pnpm/expo-modules-core@1.12.26/node_modules/expo-modules-core`)"
-  - "ExpoSecureStore (from `../../../node_modules/.pnpm/expo-secure-store@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_l4awd2en7viddgljl3bevy7msy/node_modules/expo-secure-store/ios`)"
-  - "ExpoShareIntentModule (from `../../../node_modules/.pnpm/expo-share-intent@2.7.0_expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-e_r7q7q6g6llzy4fw3haxff5qi7u/node_modules/expo-share-intent/ios`)"
-  - "ExpoSystemUI (from `../../../node_modules/.pnpm/expo-system-ui@3.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_3mg3vrjw72tic3y2n2blkag7mi/node_modules/expo-system-ui/ios`)"
-  - "ExpoWebBrowser (from `../../../node_modules/.pnpm/expo-web-browser@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_sd6hxciwy3ikm655a7gfs6iltm/node_modules/expo-web-browser/ios`)"
-  - "EXSplashScreen (from `../../../node_modules/.pnpm/expo-splash-screen@0.27.7_expo-modules-autolinking@1.11.3_expo@51.0.39_@babel+core@7.28.5_@ba_ylq2uvnobogfsandmskaonvkvi/node_modules/expo-splash-screen/ios`)"
+  - "ExpoSecureStore (from `../../../node_modules/.pnpm/expo-secure-store@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_4rcl7mhta5nm6lno57hibk7hai/node_modules/expo-secure-store/ios`)"
+  - "ExpoShareIntentModule (from `../../../node_modules/.pnpm/expo-share-intent@2.7.0_dhl7gzbrvftrsvnep2xhcw7yqu/node_modules/expo-share-intent/ios`)"
+  - "ExpoSystemUI (from `../../../node_modules/.pnpm/expo-system-ui@3.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_c443rhsibpoutb3ioyjztnt774/node_modules/expo-system-ui/ios`)"
+  - "ExpoWebBrowser (from `../../../node_modules/.pnpm/expo-web-browser@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_z5azsw4eaaymscxvo7z7reiojm/node_modules/expo-web-browser/ios`)"
+  - "EXSplashScreen (from `../../../node_modules/.pnpm/expo-splash-screen@0.27.7_expo-modules-autolinking@1.11.3_expo@51.0.39_@babel+core@7.28.5_@ba_4surs7h5bwebhfoosfskelqdem/node_modules/expo-splash-screen/ios`)"
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - fmt (from `../node_modules/react-native/third-party-podspecs/fmt.podspec`)
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
@@ -1537,54 +1559,56 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   boost:
     :podspec: "../node_modules/react-native/third-party-podspecs/boost.podspec"
+  ClerkExpoPasskeys:
+    :path: "../../../node_modules/.pnpm/@clerk+expo-passkeys@0.4.28_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+c_zbsbblbdgbsgrfyzufbkcxmz3y/node_modules/@clerk/expo-passkeys/ios"
   DoubleConversion:
     :podspec: "../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec"
   EXApplication:
-    :path: "../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_la45dcnx66ri5zt3al6i6dt2k4/node_modules/expo-application/ios"
+    :path: "../../../node_modules/.pnpm/expo-application@5.8.4_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_4nrafarolol5gs2ju65w3clg3y/node_modules/expo-application/ios"
   EXAV:
-    :path: "../../../node_modules/.pnpm/expo-av@14.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__r_dklrz7hlp6kd3rfjoaehkiv45u/node_modules/expo-av/ios"
+    :path: "../../../node_modules/.pnpm/expo-av@14.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__b_lphom3zlo6rpgd6wi2bdzvzj4e/node_modules/expo-av/ios"
   EXConstants:
-    :path: "../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._2jychxn4k2ccyjqq6n7kbbl3su/node_modules/expo-constants/ios"
+    :path: "../../../node_modules/.pnpm/expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7._bbqg37kf3r2ujef3fgx5jocoiq/node_modules/expo-constants/ios"
   EXImageLoader:
-    :path: "../../../node_modules/.pnpm/expo-image-loader@4.7.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_emra54r7qifkn64cohup4vewti/node_modules/expo-image-loader/ios"
+    :path: "../../../node_modules/.pnpm/expo-image-loader@4.7.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_aojxxlmbhtv3e72zt6dvkxs62m/node_modules/expo-image-loader/ios"
   Expo:
-    :path: "../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__react-native@0.7_4sqmg62d3cixomcpejaycasmxy/node_modules/expo"
+    :path: "../../../node_modules/.pnpm/expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__bufferutil@4.1.0_uyjxej4zlufjh4xbmddi4ltpuq/node_modules/expo"
   ExpoAsset:
-    :path: "../../../node_modules/.pnpm/expo-asset@10.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._neshkv55xdscizaxot3o4ifhzi/node_modules/expo-asset/ios"
+    :path: "../../../node_modules/.pnpm/expo-asset@10.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._digt2kgwablexcvpilsp43uc2e/node_modules/expo-asset/ios"
   ExpoBlur:
-    :path: "../../../node_modules/.pnpm/expo-blur@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__gvsav7gyzug4y5qz4gyrxofbke/node_modules/expo-blur/ios"
+    :path: "../../../node_modules/.pnpm/expo-blur@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5__fk7dl7tnztzvnya3c27j3kmb64/node_modules/expo-blur/ios"
   ExpoClipboard:
-    :path: "../../../node_modules/.pnpm/expo-clipboard@5.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_jpegkocnpzjwq7xec5bo2qauva/node_modules/expo-clipboard/ios"
+    :path: "../../../node_modules/.pnpm/expo-clipboard@5.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_vu5sowxmxl6ep55ndtsakgkeai/node_modules/expo-clipboard/ios"
   ExpoCrypto:
-    :path: "../../../node_modules/.pnpm/expo-crypto@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._gjemitc46gmob7znl65ooi7rbe/node_modules/expo-crypto/ios"
+    :path: "../../../node_modules/.pnpm/expo-crypto@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28._2677adxxldhrbs4hzzpsfv3qkm/node_modules/expo-crypto/ios"
   ExpoFileSystem:
-    :path: "../../../node_modules/.pnpm/expo-file-system@17.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_6kegb5gdhamigighzntehimsxe/node_modules/expo-file-system/ios"
+    :path: "../../../node_modules/.pnpm/expo-file-system@17.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_zjj5s4fn6bfof76zbnfvadlohi/node_modules/expo-file-system/ios"
   ExpoFont:
-    :path: "../../../node_modules/.pnpm/expo-font@12.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5_d6hcoyja6a5pu4gkidx5kvmdze/node_modules/expo-font/ios"
+    :path: "../../../node_modules/.pnpm/expo-font@12.0.10_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28.5_2a2qap2oliurmphtsane5miylm/node_modules/expo-font/ios"
   ExpoHaptics:
-    :path: "../../../node_modules/.pnpm/expo-haptics@13.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28_2myntcvgiauzij6wo2awbqwqra/node_modules/expo-haptics/ios"
+    :path: "../../../node_modules/.pnpm/expo-haptics@13.0.1_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.28_eb2xenivr6moahyzjfyznmoaou/node_modules/expo-haptics/ios"
   ExpoHead:
-    :path: "../../../node_modules/.pnpm/expo-router@3.5.24_j4346sxdzyb7ymjdaxrwkfvp74/node_modules/expo-router/ios"
+    :path: "../../../node_modules/.pnpm/expo-router@3.5.24_kchtszfivs2lg7q7kpu25fcffy/node_modules/expo-router/ios"
   ExpoImagePicker:
-    :path: "../../../node_modules/.pnpm/expo-image-picker@15.1.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_hmpu5sedjzccjerkv4fyglhvua/node_modules/expo-image-picker/ios"
+    :path: "../../../node_modules/.pnpm/expo-image-picker@15.1.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_xvjy64kgp7mcpxy2f6lwlsrdxe/node_modules/expo-image-picker/ios"
   ExpoKeepAwake:
-    :path: "../../../node_modules/.pnpm/expo-keep-awake@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_jifd5ahkbafiikg2v6a6xhucsa/node_modules/expo-keep-awake/ios"
+    :path: "../../../node_modules/.pnpm/expo-keep-awake@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7_o7pu7mwygi2bkq6meplojpfs2m/node_modules/expo-keep-awake/ios"
   ExpoLinearGradient:
-    :path: "../../../node_modules/.pnpm/expo-linear-gradient@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+c_bpbz4aor353mxplwfwbl5sd6le/node_modules/expo-linear-gradient/ios"
+    :path: "../../../node_modules/.pnpm/expo-linear-gradient@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+c_umi4oo5bhbsw5wdnxshm7fynqa/node_modules/expo-linear-gradient/ios"
   ExpoLocalAuthentication:
-    :path: "../../../node_modules/.pnpm/expo-local-authentication@13.8.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@ba_s5syomy2avlmfuo2boahcxewz4/node_modules/expo-local-authentication/ios"
+    :path: "../../../node_modules/.pnpm/expo-local-authentication@13.8.0_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@ba_jke63pa4ogiznqtz7kgcchvtki/node_modules/expo-local-authentication/ios"
   ExpoModulesCore:
     :path: "../../../node_modules/.pnpm/expo-modules-core@1.12.26/node_modules/expo-modules-core"
   ExpoSecureStore:
-    :path: "../../../node_modules/.pnpm/expo-secure-store@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_l4awd2en7viddgljl3bevy7msy/node_modules/expo-secure-store/ios"
+    :path: "../../../node_modules/.pnpm/expo-secure-store@13.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core_4rcl7mhta5nm6lno57hibk7hai/node_modules/expo-secure-store/ios"
   ExpoShareIntentModule:
-    :path: "../../../node_modules/.pnpm/expo-share-intent@2.7.0_expo-constants@16.0.2_expo@51.0.39_@babel+core@7.28.5_@babel+preset-e_r7q7q6g6llzy4fw3haxff5qi7u/node_modules/expo-share-intent/ios"
+    :path: "../../../node_modules/.pnpm/expo-share-intent@2.7.0_dhl7gzbrvftrsvnep2xhcw7yqu/node_modules/expo-share-intent/ios"
   ExpoSystemUI:
-    :path: "../../../node_modules/.pnpm/expo-system-ui@3.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_3mg3vrjw72tic3y2n2blkag7mi/node_modules/expo-system-ui/ios"
+    :path: "../../../node_modules/.pnpm/expo-system-ui@3.0.7_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@7.2_c443rhsibpoutb3ioyjztnt774/node_modules/expo-system-ui/ios"
   ExpoWebBrowser:
-    :path: "../../../node_modules/.pnpm/expo-web-browser@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_sd6hxciwy3ikm655a7gfs6iltm/node_modules/expo-web-browser/ios"
+    :path: "../../../node_modules/.pnpm/expo-web-browser@13.0.3_expo@51.0.39_@babel+core@7.28.5_@babel+preset-env@7.28.5_@babel+core@_z5azsw4eaaymscxvo7z7reiojm/node_modules/expo-web-browser/ios"
   EXSplashScreen:
-    :path: "../../../node_modules/.pnpm/expo-splash-screen@0.27.7_expo-modules-autolinking@1.11.3_expo@51.0.39_@babel+core@7.28.5_@ba_ylq2uvnobogfsandmskaonvkvi/node_modules/expo-splash-screen/ios"
+    :path: "../../../node_modules/.pnpm/expo-splash-screen@0.27.7_expo-modules-autolinking@1.11.3_expo@51.0.39_@babel+core@7.28.5_@ba_4surs7h5bwebhfoosfskelqdem/node_modules/expo-splash-screen/ios"
   FBLazyVector:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
   fmt:
@@ -1721,6 +1745,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   boost: d3f49c53809116a5d38da093a8aa78bf551aed09
+  ClerkExpoPasskeys: ebd0a1a71972a90ed561250cbfa615d358a56561
   DoubleConversion: 76ab83afb40bddeeee456813d9c04f67f78771b5
   EXApplication: d62cd534090692cbf538ea15f69f829b517a40b1
   EXAV: 64e72329d2f8c2ba13608fed4a713af4e793242d
@@ -1751,8 +1776,8 @@ SPEC CHECKSUMS:
   hermes-engine: 8c1577f3fdb849cbe7729c2e7b5abc4b845e88f8
   lottie-ios: fcb5e73e17ba4c983140b7d21095c834b3087418
   lottie-react-native: f26bf46e376a20620da39b1e74d9f0972bfeb0e8
-  PurchasesHybridCommon: a4837eebc889b973668af685d6c23b89a038461d
-  PurchasesHybridCommonUI: bf5566763f906429584534a117a7862537b92c0c
+  PurchasesHybridCommon: 3b79d2602b94ed9ee3e8c4b31be4cd2a640c9dc9
+  PurchasesHybridCommonUI: cb0d8e875a0a1594e003e21b0612eb40b2c508b1
   RCT-Folly: 5dc73daec3476616d19e8a53f0156176f7b55461
   RCTDeprecation: 3afceddffa65aee666dafd6f0116f1d975db1584
   RCTRequired: ec1239bc9d8bf63e10fb92bd8b26171a9258e0c1
@@ -1804,20 +1829,20 @@ SPEC CHECKSUMS:
   React-runtimescheduler: 2cbd0f3625b30bba08e8768776107f6f0203159b
   React-utils: 9fa4e5d0b5e6c6c85c958f19d6ef854337886417
   ReactCommon: 9f285823dbe955099978d9bff65a7653ca029256
-  RevenueCat: 1e61140a343a77dc286f171b3ffab99ca09a4b57
-  RevenueCatUI: 625b2b2f4ee8c052d2e9939c2b906cdaecded253
+  RevenueCat: c676920ae9b3c9cd08c49d26e7cd4c04a0263069
+  RevenueCatUI: a0566e6da2a8ae917a00956e76b7aa474de62f14
   RNCAsyncStorage: aa75595c1aefa18f868452091fa0c411a516ce11
-  RNCMaskedView: de80352547bd4f0d607bf6bab363d826822bd126
+  RNCMaskedView: af7c1703f39cdef08a99275bfcadf324aa403403
   RNFlashList: 23b2c67aa684179d29c8c2f468c6f5334e609951
   RNGestureHandler: 326e35460fb6c8c64a435d5d739bea90d7ed4e49
-  RNPaywalls: d9f17bc5cab8555a7c0b395f5c0bdc3256b42c2a
-  RNPurchases: 5f3cd4fea5ef2b3914c925b2201dd5cecd31922f
-  RNReanimated: 0375193903cd6ffe6f02dd2bc17a784a4ac84d6d
+  RNPaywalls: 0704568176af79db4489b018a8a99f74c9d8d988
+  RNPurchases: 0189c1cd0cc18ced16bdecc9560bd6e0a98a0a40
+  RNReanimated: 5c25d80975dd6867c667b5c0ae8cbe23442f5674
   RNScreens: a2d8a2555b4653d7a19706eb172f855657ac30d7
   RNSVG: 0e7deccab0678200815104223aadd5ca734dd41d
   SocketRocket: abac6f5de4d4d62d24e11868d7a2f427e0ef940d
   Yoga: 950bbfd7e6f04790fdb51149ed51df41f329fcc8
 
-PODFILE CHECKSUM: df3af8f3e9170739691625d06b484683ddc65953
+PODFILE CHECKSUM: bae7b4837733a0c0b07e887808d6c7680999ce73
 
 COCOAPODS: 1.16.2

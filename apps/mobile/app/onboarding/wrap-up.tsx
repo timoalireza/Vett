@@ -32,7 +32,7 @@ export default function WrapUpScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={7} totalSteps={7} variant="bar" />
+            <ProgressIndicator currentStep={8} totalSteps={8} variant="bar" />
           </View>
         </View>
         <View style={styles.backButtonContainer}>
@@ -123,7 +123,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
-    justifyContent: "center",
+    paddingTop: 8,
+    justifyContent: "flex-start",
   },
   card: {
     width: "100%",
