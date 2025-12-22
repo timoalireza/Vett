@@ -220,7 +220,7 @@ Return ONLY the DALL-E prompt, nothing else.`;
       n: 1
     });
 
-    const imageUrl = imageResponse.data[0]?.url;
+    const imageUrl = imageResponse.data?.[0]?.url;
     if (!imageUrl) {
       console.warn("[image-search] DALL-E did not return an image URL");
       return null;

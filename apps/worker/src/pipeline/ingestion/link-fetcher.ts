@@ -5,7 +5,6 @@ import { extractTwitterContent, extractTwitterContentFallback } from "./extracto
 import { extractInstagramContent } from "./extractors/instagram.js";
 import { extractThreadsContent } from "./extractors/threads.js";
 import { extractFacebookContent } from "./extractors/facebook.js";
-import { extractFacebookContent } from "./extractors/facebook.js";
 import {
   extractTikTokTranscription,
   extractYouTubeShortsTranscription,

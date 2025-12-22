@@ -158,7 +158,7 @@ export async function extractClaimsWithOpenAI(text: string): Promise<ClaimExtrac
       return fallbackClaims(trimmed);
     }
 
-    const claims = parsed.claims
+    const claims: ClaimWithoutSources[] = parsed.claims
       .map((claimCandidate) => {
         if (typeof claimCandidate.text !== "string" || claimCandidate.text.trim().length < 6) {
           return null;
@@ -177,8 +177,8 @@ export async function extractClaimsWithOpenAI(text: string): Promise<ClaimExtrac
           confidence: normaliseNumber(claimCandidate.confidence, verdict === "Opinion" ? 0.5 : 0.65)
         };
       })
-      .filter((claim): claim is PipelineClaim => claim !== null)
-      .slice(0, MAX_CLAIMS);
+      .filter((claim): claim is NonNullable<typeof claim> => claim !== null)
+      .slice(0, MAX_CLAIMS) as ClaimWithoutSources[];
 
     if (claims.length === 0) {
       return fallbackClaims(trimmed);

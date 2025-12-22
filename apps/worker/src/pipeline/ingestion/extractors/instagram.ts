@@ -50,7 +50,7 @@ function collectHashtags(text: string | null | undefined): string[] {
 export async function extractInstagramContent(
   url: string,
   isReel: boolean = false,
-  options?: {
+  _options?: {
     processMedia?: boolean;
   }
 ): Promise<InstagramExtractionResult | null> {

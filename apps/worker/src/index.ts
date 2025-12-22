@@ -368,10 +368,13 @@ function createWorker(): Worker {
     console.log("[Worker] Creating BullMQ Worker instance...");
     
     // Log connection factory before creating worker
-    logger.info("[Worker] Connection factory:", { 
-      hasFactory: !!connectionFactory,
-      hasCreateClient: !!(connectionFactory as any).createClient 
-    });
+    logger.info(
+      { 
+        hasFactory: !!connectionFactory,
+        hasCreateClient: !!(connectionFactory as any).createClient 
+      },
+      "[Worker] Connection factory"
+    );
     console.log("[Worker] Connection factory ready:", !!connectionFactory);
     
     // CRITICAL: Verify Redis connection is ready before creating Worker

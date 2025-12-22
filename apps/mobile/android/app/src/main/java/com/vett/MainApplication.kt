@@ -1,4 +1,4 @@
-package com.timoalireza.vett
+package com.vett
 
 import android.app.Application
 import android.content.res.Configuration

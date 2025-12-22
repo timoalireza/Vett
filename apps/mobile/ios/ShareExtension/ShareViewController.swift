@@ -4,25 +4,25 @@
  * inspired by :
  *  - https://ajith-ab.github.io/react-native-receive-sharing-intent/docs/ios#create-share-extension
  */
+import MobileCoreServices
 import Photos
 import Social
 import UIKit
-import UniformTypeIdentifiers
 
 class ShareViewController: UIViewController {
-  let hostAppGroupIdentifier = "group.com.timoalireza.vett"
+  let hostAppGroupIdentifier = "group.com.vett"
   let shareProtocol = "vett"
   let sharedKey = "vettShareKey"
   var sharedMedia: [SharedMediaFile] = []
   var sharedWebUrl: [WebUrl] = []
   var sharedText: [String] = []
-  let imageContentType: String = UTType.image.identifier
-  let videoContentType: String = UTType.movie.identifier
-  let textContentType: String = UTType.text.identifier
-  let urlContentType: String = UTType.url.identifier
-  let propertyListType: String = UTType.propertyList.identifier
-  let fileURLType: String = UTType.fileURL.identifier
-  let pdfContentType: String = UTType.pdf.identifier
+  let imageContentType = kUTTypeImage as String
+  let videoContentType = kUTTypeMovie as String
+  let textContentType = kUTTypeText as String
+  let urlContentType = kUTTypeURL as String
+  let propertyListType = kUTTypePropertyList as String
+  let fileURLType = kUTTypeFileURL as String
+  let pdfContentType = kUTTypePDF as String
 
   override func viewDidLoad() {
     super.viewDidLoad()

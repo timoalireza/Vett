@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "expo start --clear",
     "ios": "expo run:ios",
-    "ios:launch": "xcrun simctl launch FF50C157-A300-48E0-993D-A9ACD98B0FD5 com.timoalireza.vett",
+    "ios:launch": "xcrun simctl launch FF50C157-A300-48E0-993D-A9ACD98B0FD5 com.vett",
     "ios:boot": "xcrun simctl boot FF50C157-A300-48E0-993D-A9ACD98B0FD5 && open -a Simulator",
     "android": "expo run:android",
     "web": "expo start --web",
@@ -67,6 +67,8 @@
     "@types/react": "~18.2.79",
     "eslint": "^9.39.2",
     "eslint-config-universe": "^12.1.0",
+    "patch-package": "^8.0.1",
+    "postinstall-postinstall": "^2.1.0",
     "typescript": "~5.3.3"
   }
 }

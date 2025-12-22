@@ -14,7 +14,9 @@ Return concise assessments (<=140 chars).
 If the evidence is in another language, translate the assessment to English.
 `;
 
-type EvaluationOutput = {
+// Type for evaluation output (used in type assertions)
+// This type is used for runtime type checking, not directly referenced
+type _EvaluationOutput = {
   reliability: number;
   relevance: number;
   assessment: string;

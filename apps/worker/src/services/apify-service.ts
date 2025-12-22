@@ -112,10 +112,8 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
   // Input format: { "username": [], "startUrls": ["..."], "resultsType": "posts" }
   
   // We will try apify/instagram-post-scraper which is designed for this
-  const input = {
-    startUrls: [url],
-    resultsType: "posts",
-  };
+  // Input format: { "startUrls": ["..."], "resultsType": "posts" }
+  // Note: input is prepared but not used in current implementation
 
   try {
     console.log(`[Apify] Scraping Instagram post: ${url}`);
