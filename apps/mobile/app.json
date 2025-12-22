@@ -29,6 +29,7 @@
       [
         "expo-share-intent",
         {
+          "groupIdentifier": "group.com.timoalireza.vett",
           "iosActivationRules": {
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
             "NSExtensionActivationSupportsText": true,

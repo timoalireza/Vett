@@ -10,7 +10,7 @@ import Social
 import UIKit
 
 class ShareViewController: UIViewController {
-  let hostAppGroupIdentifier = "group.com.vett"
+  let hostAppGroupIdentifier = "group.com.timoalireza.vett"
   let shareProtocol = "vett"
   let sharedKey = "vettShareKey"
   var sharedMedia: [SharedMediaFile] = []
