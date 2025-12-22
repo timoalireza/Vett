@@ -2,51 +2,140 @@ import Purchases, { CustomerInfo, PurchasesOffering, PurchasesPackage } from "re
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-// Get API key from config
-const getRevenueCatApiKey = (): string => {
-  const envKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
-  const configKey = Constants.expoConfig?.extra?.revenueCatApiKey as string | undefined;
+// Check if we're in sandbox/test mode
+const isSandboxMode = (): boolean => {
+  const sandboxFlag = process.env.EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE;
+  const configSandbox = Constants.expoConfig?.extra?.revenueCatSandboxMode;
+  
+  // Check if explicitly set to true or "true" (string)
+  return sandboxFlag === 'true' || configSandbox === true;
+};
 
-  if (!envKey && !configKey) {
-    throw new Error(
-      "RevenueCat API key not found. Add EXPO_PUBLIC_REVENUECAT_API_KEY to .env or revenueCatApiKey to app.json"
-    );
+// Get API key from config (platform-specific or shared, production or sandbox)
+const getRevenueCatApiKey = (): string => {
+  const useSandbox = isSandboxMode();
+  
+  // Sandbox/Test keys (for testing with sandbox/test data)
+  const iosSandboxKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_SANDBOX_API_KEY;
+  const androidSandboxKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_SANDBOX_API_KEY;
+  
+  // Production keys (for live app)
+  const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
+  const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
+  
+  // Fall back to shared key
+  const sharedKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+  
+  // Also check app.json config
+  const configKey = Constants.expoConfig?.extra?.revenueCatApiKey as string | undefined;
+  const configIosKey = Constants.expoConfig?.extra?.revenueCatIosApiKey as string | undefined;
+  const configAndroidKey = Constants.expoConfig?.extra?.revenueCatAndroidApiKey as string | undefined;
+  const configIosSandboxKey = Constants.expoConfig?.extra?.revenueCatIosSandboxApiKey as string | undefined;
+  const configAndroidSandboxKey = Constants.expoConfig?.extra?.revenueCatAndroidSandboxApiKey as string | undefined;
+
+  // Select key based on platform and mode
+  let apiKey: string | undefined;
+  
+  if (Platform.OS === 'ios') {
+    if (useSandbox) {
+      // Use sandbox/test key for sandbox mode
+      apiKey = iosSandboxKey || configIosSandboxKey || sharedKey || configKey;
+      if (iosSandboxKey || configIosSandboxKey) {
+        console.log('[RevenueCat] Using iOS SANDBOX/TEST key');
+      }
+    } else {
+      // Use production key for production mode
+      apiKey = iosKey || configIosKey || sharedKey || configKey;
+    }
+  } else if (Platform.OS === 'android') {
+    if (useSandbox) {
+      // Use sandbox/test key for sandbox mode
+      apiKey = androidSandboxKey || configAndroidSandboxKey || sharedKey || configKey;
+      if (androidSandboxKey || configAndroidSandboxKey) {
+        console.log('[RevenueCat] Using Android SANDBOX/TEST key');
+      }
+    } else {
+      // Use production key for production mode
+      apiKey = androidKey || configAndroidKey || sharedKey || configKey;
+    }
+  } else {
+    apiKey = sharedKey || configKey;
   }
 
-  return envKey || configKey || "";
+  if (!apiKey) {
+    // Generate platform-specific error message
+    let errorMsg = `RevenueCat API key not found for platform: ${Platform.OS} (sandbox mode: ${useSandbox}). `;
+    
+    if (Platform.OS === 'ios') {
+      if (useSandbox) {
+        errorMsg += `Add EXPO_PUBLIC_REVENUECAT_IOS_SANDBOX_API_KEY to .env for iOS sandbox testing.`;
+      } else {
+        errorMsg += `Add EXPO_PUBLIC_REVENUECAT_IOS_API_KEY to .env for iOS production.`;
+      }
+    } else if (Platform.OS === 'android') {
+      if (useSandbox) {
+        errorMsg += `Add EXPO_PUBLIC_REVENUECAT_ANDROID_SANDBOX_API_KEY to .env for Android sandbox testing.`;
+      } else {
+        errorMsg += `Add EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY to .env for Android production.`;
+      }
+    } else {
+      errorMsg += `Add EXPO_PUBLIC_REVENUECAT_API_KEY to .env or configure platform-specific keys.`;
+    }
+    
+    throw new Error(errorMsg);
+  }
+
+  return apiKey;
 };
 
 let revenueCatInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 
 /**
  * Initialize RevenueCat SDK
  * Call this once when your app starts
+ * 
+ * This function is safe to call multiple times concurrently - it will only initialize once
+ * and return the same promise for all concurrent calls.
  */
 export async function initializeRevenueCat(userId?: string): Promise<void> {
+  // If already initialized, return immediately
   if (revenueCatInitialized) {
     console.log("[RevenueCat] Already initialized");
     return;
   }
 
-  try {
-    const apiKey = getRevenueCatApiKey();
-    
-    // Configure RevenueCat with API key
-    // Note: RevenueCat provides separate keys for iOS and Android
-    // You can use the same key for both if configured, or get platform-specific keys
-    await Purchases.configure({ apiKey });
-
-    // Set user ID if provided
-    if (userId) {
-      await Purchases.logIn(userId);
-    }
-
-    revenueCatInitialized = true;
-    console.log("[RevenueCat] Initialized successfully");
-  } catch (error) {
-    console.error("[RevenueCat] Initialization failed:", error);
-    throw error;
+  // If initialization is in progress, return the existing promise
+  if (initializationPromise) {
+    console.log("[RevenueCat] Initialization in progress, waiting...");
+    return initializationPromise;
   }
+
+  // Start initialization and store the promise
+  initializationPromise = (async () => {
+    try {
+      const apiKey = getRevenueCatApiKey();
+      const sandbox = isSandboxMode();
+      
+      // Configure RevenueCat with API key
+      await Purchases.configure({ apiKey });
+
+      // Set user ID if provided
+      if (userId) {
+        await Purchases.logIn(userId);
+      }
+
+      revenueCatInitialized = true;
+      console.log(`[RevenueCat] Initialized successfully for ${Platform.OS} (${sandbox ? 'SANDBOX' : 'PRODUCTION'} mode)`);
+    } catch (error) {
+      // Reset promise on error so retry is possible
+      initializationPromise = null;
+      console.error("[RevenueCat] Initialization failed:", error);
+      throw error;
+    }
+  })();
+
+  return initializationPromise;
 }
 
 /**

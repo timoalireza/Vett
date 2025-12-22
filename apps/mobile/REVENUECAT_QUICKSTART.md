@@ -14,20 +14,42 @@ pnpm exec expo prebuild --clean
 pnpm exec expo run:ios
 ```
 
-### 2. Get Your RevenueCat API Key
+### 2. Get Your RevenueCat API Keys
 
 1. Sign up at [revenuecat.com](https://www.revenuecat.com)
 2. Create a new project
 3. Go to **Project Settings** → **API Keys**
-4. Copy your API key (you'll get separate keys for iOS and Android)
+4. Find **"Public app-specific API keys"** section (NOT "Secret API keys")
+5. You'll see keys organized by environment:
 
-### 3. Add API Key to Your App
+**Production Keys** (for live app):
+- Look for **Production** section or tab
+- Copy **Apple App Store** key (starts with `appl_`)
+
+**Sandbox Keys** (for testing):
+- Look for **Sandbox** or **Test** section or tab
+- Copy **Apple App Store** key (starts with `appl_`)
+
+**⚠️ IMPORTANT:**
+- Both environments use the same **label** ("Apple App Store")
+- Keys are in **different sections** (Production vs Sandbox)
+- Copy from the correct section for each purpose
+- Use **public SDK** keys (NOT sk_ secret keys)
+
+### 3. Add API Keys to Your App
 
 **Option A: Environment Variable (Recommended)**
 
 Add to `.env` file:
 ```bash
-EXPO_PUBLIC_REVENUECAT_API_KEY=your_api_key_here
+# Production Keys (from Production section in RevenueCat)
+EXPO_PUBLIC_REVENUECAT_IOS_API_KEY=appl_your_production_key
+
+# Sandbox Keys (from Sandbox section in RevenueCat) 
+EXPO_PUBLIC_REVENUECAT_IOS_SANDBOX_API_KEY=appl_your_sandbox_key
+
+# Mode: 'true' for testing, 'false' or unset for production
+EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=false
 ```
 
 **Option B: app.json**
@@ -37,13 +59,17 @@ Add to `app.json`:
 {
   "expo": {
     "extra": {
-      "revenueCatApiKey": "your_api_key_here"
+      "revenueCatIosApiKey": "appl_your_production_key",
+      "revenueCatIosSandboxApiKey": "appl_your_sandbox_key",
+      "revenueCatSandboxMode": false
     }
   }
 }
 ```
 
-**Note**: If you have separate iOS/Android keys, you can modify `src/services/revenuecat.ts` to handle them separately.
+**Switching Modes:**
+- For production: Set `EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=false`
+- For testing: Set `EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=true`
 
 ### 4. Configure Products in RevenueCat Dashboard
 

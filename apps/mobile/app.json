@@ -45,11 +45,11 @@
       ]
     ],
     "extra": {
-      "apiUrl": "https://vett-api-production.up.railway.app",
+      "apiUrl": "https://api.vett.xyz",
       "eas": {
         "projectId": "vett-mobile-dev"
       },
-      "clerkPublishableKey": "pk_test_Z2VuZXJvdXMtc3R1cmdlb24tOS5jbGVyay5hY2NvdW50cy5kZXYk"
+      "clerkPublishableKey": "pk_live_Y2xlcmsudmV0dC54eXok"
     }
   }
 }
