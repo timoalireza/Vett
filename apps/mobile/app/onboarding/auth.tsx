@@ -384,6 +384,8 @@ export default function AuthScreen() {
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || undefined;
 
+      console.log("[Auth] Attempting sign up with phone:", fullPhone, "Country:", selectedCountry, "Code:", countryCode);
+
       await signUp.create({
         phoneNumber: fullPhone,
         firstName: firstName,
@@ -396,10 +398,22 @@ export default function AuthScreen() {
       setShowVerificationForm(true);
       setError(null);
     } catch (err: any) {
+      console.error("[Auth] Sign up error:", err);
       let errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign up";
       
       if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("already exists")) {
         errorMessage = "An account session already exists. Please sign out first.";
+      }
+      
+      // Handle unsupported country code errors
+      if (
+        errorMessage.toLowerCase().includes("unsupported country code") ||
+        (errorMessage.toLowerCase().includes("country code") && errorMessage.toLowerCase().includes("not supported")) ||
+        (errorMessage.toLowerCase().includes("phone number") && errorMessage.toLowerCase().includes("not supported")) ||
+        (errorMessage.toLowerCase().includes("country") && errorMessage.toLowerCase().includes("not available"))
+      ) {
+        errorMessage = `Phone verification is not available for ${selectedCountry} (+${countryCode.replace("+", "")}). Please try a different country or contact support for assistance.`;
+        console.warn("[Auth] Unsupported country code detected:", countryCode, selectedCountry);
       }
       
       setError(errorMessage);
