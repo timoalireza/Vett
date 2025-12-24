@@ -346,15 +346,26 @@ export default function SignInScreen() {
         identifier: fullPhone,
       });
 
+      console.log("[SignIn] Sign in created:", {
+        status: result.status,
+        supportedFirstFactors: result.supportedFirstFactors?.map((f: any) => f.strategy),
+        identifier: fullPhone
+      });
+
       // Prepare phone code verification
       const phoneCodeFactor = result.supportedFirstFactors?.find(
         (factor: any) => factor.strategy === "phone_code"
       );
 
       if (phoneCodeFactor) {
-        await signIn.prepareFirstFactor({
+        const prepareResult = await signIn.prepareFirstFactor({
           strategy: "phone_code",
           phoneNumberId: (phoneCodeFactor as any).phoneNumberId,
+        });
+
+        console.log("[SignIn] Prepare first factor result:", {
+          status: prepareResult.status,
+          signInStatus: signIn.status
         });
 
         setShowVerificationCode(true);
@@ -365,15 +376,23 @@ export default function SignInScreen() {
           `We sent a 6-digit code to ${fullPhone}`
         );
       } else {
-        const errorMsg = "Phone verification is not available for this account.";
+        console.warn("[SignIn] No phone_code factor available:", result.supportedFirstFactors);
+        const errorMsg = "Phone verification is not available for this account. Please try signing up instead.";
         setError(errorMsg);
         Alert.alert("Error", errorMsg);
       }
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign in. Please try again.";
+      console.error("[SignIn] Phone sign in error:", err);
+      let errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign in. Please try again.";
+      const errorCode = err.errors?.[0]?.code;
+      
+      // Handle "identifier not found" - user doesn't exist, suggest sign up
+      if (errorCode === "form_identifier_not_found" || errorMessage.toLowerCase().includes("couldn't find your account") || errorMessage.toLowerCase().includes("identifier not found")) {
+        errorMessage = "No account found with this phone number. Please sign up instead.";
+      }
+      
       setError(errorMessage);
       Alert.alert("Sign In Error", errorMessage);
-      console.error("Phone sign in error:", err);
     } finally {
       setLoading(false);
     }
@@ -444,6 +463,15 @@ export default function SignInScreen() {
       Alert.alert("Error", errorMsg);
       return;
     }
+
+    console.log("[SignIn] Attempting verification:", {
+      isSignUp,
+      codeLength: verificationCode.length,
+      signInStatus: signIn?.status,
+      signUpStatus: signUp?.status,
+      hasSignIn: !!signIn,
+      hasSignUp: !!signUp
+    });
 
     setError("");
     setLoading(true);
@@ -540,6 +568,32 @@ export default function SignInScreen() {
           return;
         }
 
+        // Check if signIn is already complete (shouldn't happen, but handle it)
+        if (signIn.status === "complete") {
+          console.log("[SignIn] Sign in already complete, activating session");
+          if (signIn.createdSessionId && setActive) {
+            try {
+              await setActive({ session: signIn.createdSessionId });
+              await setAuthMode("signedIn");
+              setShowVerificationCode(false);
+              setVerificationCode("");
+              router.replace("/(tabs)/analyze");
+              return;
+            } catch (err) {
+              console.warn("[SignIn] Failed to activate already-complete session:", err);
+              const errorMsg = "Your account is already verified. Please restart the app.";
+              setError(errorMsg);
+              Alert.alert("Error", errorMsg);
+              return;
+            }
+          }
+        }
+
+        // Verify signIn is in correct state for verification
+        if (signIn.status !== "needs_first_factor") {
+          console.warn("[SignIn] Unexpected signIn status before verification:", signIn.status);
+        }
+
         const completeResult = await signIn.attemptFirstFactor({
           strategy: "phone_code",
           code: verificationCode,
@@ -547,13 +601,14 @@ export default function SignInScreen() {
 
         console.log("[SignIn] Sign in verification result:", {
           resultStatus: completeResult.status,
-          hasSessionId: !!completeResult.createdSessionId,
-          signInStatus: signIn.status
+          resultSessionId: completeResult.createdSessionId,
+          signInStatus: signIn.status,
+          signInSessionId: signIn.createdSessionId
         });
 
-        // Check both the result and the signIn object status
-        const isComplete = completeResult.status === "complete";
-        const sessionId = completeResult.createdSessionId;
+        // Check for completion - session ID can be on either the result or signIn object
+        const isComplete = completeResult.status === "complete" || signIn.status === "complete";
+        const sessionId = completeResult.createdSessionId || signIn.createdSessionId;
 
         if (isComplete && sessionId) {
           if (!setActive) {
@@ -583,15 +638,38 @@ export default function SignInScreen() {
             "Two-Factor Authentication",
             errorMsg
           );
+        } else if (isComplete && !sessionId) {
+          // Verification complete but no session - this shouldn't happen but let's handle it
+          console.warn("[SignIn] Verification complete but no session ID:", {
+            resultStatus: completeResult.status,
+            signInStatus: signIn.status
+          });
+          const errorMsg = "Verification succeeded but session creation failed. Please try signing in again.";
+          setError(errorMsg);
+          Alert.alert("Error", errorMsg);
+        } else if (completeResult.status === "needs_identifier") {
+          // Session was reset, need to start over
+          console.warn("[SignIn] Session needs identifier - was reset");
+          const errorMsg = "Your sign-in session was reset. Please go back and try again.";
+          setError(errorMsg);
+          Alert.alert("Session Expired", errorMsg);
+        } else if (completeResult.status === "needs_first_factor") {
+          // Code might be wrong, but Clerk didn't throw - try requesting new code
+          console.warn("[SignIn] Still needs first factor after verification attempt");
+          const errorMsg = "The verification code may be incorrect or expired. Please request a new code.";
+          setError(errorMsg);
+          Alert.alert("Verification Failed", errorMsg);
         } else {
           // Log the actual result to help debug
-          console.warn("[SignIn] Verification incomplete:", {
+          console.warn("[SignIn] Verification returned unexpected status:", {
             resultStatus: completeResult.status,
             signInStatus: signIn.status,
-            hasSessionId: !!sessionId,
-            hasSetActive: !!setActive
+            hasResultSessionId: !!completeResult.createdSessionId,
+            hasSignInSessionId: !!signIn.createdSessionId,
+            hasSetActive: !!setActive,
+            fullResult: JSON.stringify(completeResult, null, 2)
           });
-          const errorMsg = "Verification incomplete. Please try again.";
+          const errorMsg = `Verification failed (status: ${completeResult.status}). Please try again or request a new code.`;
           setError(errorMsg);
           Alert.alert("Error", errorMsg);
         }

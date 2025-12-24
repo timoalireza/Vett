@@ -445,7 +445,7 @@ export default function AuthScreen() {
 
       setShowVerificationForm(true);
       setError(null);
-      setResendCooldown(30); // Start 30 second cooldown
+      setResendCooldown(60); // Start 60 second cooldown (matches Clerk's rate limit)
     } catch (err: any) {
       console.error("[Auth] Sign up error:", err);
       let errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign up";
@@ -587,7 +587,7 @@ export default function AuthScreen() {
     
     try {
       await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
-      setResendCooldown(30); // Start 30 second cooldown
+      setResendCooldown(60); // Start 60 second cooldown (matches Clerk's rate limit)
       Alert.alert("Code Sent", "A new verification code has been sent to your phone.");
     } catch (err: any) {
       console.error("[Auth] Resend code error:", err);
