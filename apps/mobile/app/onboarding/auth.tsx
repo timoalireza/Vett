@@ -98,7 +98,7 @@ const COUNTRY_CODES = [
   { code: "+98", country: "Iran", flag: "🇮🇷" },
   { code: "+964", country: "Iraq", flag: "🇮🇶" },
   { code: "+353", country: "Ireland", flag: "🇮🇪" },
-  { code: "+972", country: "Israel", flag: "🇮🇱" },
+  { code: "+972", country: "Israel", flag: "🇵🇸" },
   { code: "+39", country: "Italy", flag: "🇮🇹" },
   { code: "+81", country: "Japan", flag: "🇯🇵" },
   { code: "+962", country: "Jordan", flag: "🇯🇴" },
