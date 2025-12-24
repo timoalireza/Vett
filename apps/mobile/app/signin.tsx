@@ -438,7 +438,9 @@ export default function SignInScreen() {
       if (isSignUp) {
         // Verify sign up
         if (!signUp) {
-          Alert.alert("Error", "Sign up session expired. Please try again.");
+          const errorMsg = "Sign up session expired. Please try again.";
+          setError(errorMsg);
+          Alert.alert("Error", errorMsg);
           return;
         }
 
@@ -453,12 +455,16 @@ export default function SignInScreen() {
           setVerificationCode("");
           router.replace("/(tabs)/analyze");
         } else {
-          Alert.alert("Error", "Verification incomplete. Please try again.");
+          const errorMsg = "Verification incomplete. Please try again.";
+          setError(errorMsg);
+          Alert.alert("Error", errorMsg);
         }
       } else {
         // Verify sign in
         if (!signIn) {
-          Alert.alert("Error", "Sign in session expired. Please try again.");
+          const errorMsg = "Sign in session expired. Please try again.";
+          setError(errorMsg);
+          Alert.alert("Error", errorMsg);
           return;
         }
 
@@ -474,12 +480,16 @@ export default function SignInScreen() {
           setVerificationCode("");
           router.replace("/(tabs)/analyze");
         } else if (completeResult.status === "needs_second_factor") {
+          const errorMsg = "Please complete additional verification steps.";
+          setError(errorMsg);
           Alert.alert(
             "Two-Factor Authentication",
-            "Please complete additional verification steps."
+            errorMsg
           );
         } else {
-          Alert.alert("Error", "Verification incomplete. Please try again.");
+          const errorMsg = "Verification incomplete. Please try again.";
+          setError(errorMsg);
+          Alert.alert("Error", errorMsg);
         }
       }
     } catch (err: any) {
@@ -982,7 +992,10 @@ export default function SignInScreen() {
                       />
                     </View>
 
-                    <TouchableOpacity onPress={() => setIsSignUp(false)}>
+                    <TouchableOpacity onPress={() => {
+                      setIsSignUp(false);
+                      setError("");
+                    }}>
                       <Text
                         style={{
                           color: theme.colors.textSecondary,
@@ -1152,7 +1165,10 @@ export default function SignInScreen() {
                     </View>
 
                     <TouchableOpacity
-                      onPress={() => setIsSignUp(true)}
+                      onPress={() => {
+                        setIsSignUp(true);
+                        setError("");
+                      }}
                       style={{ marginTop: theme.spacing(1) }}
                     >
                       <Text
