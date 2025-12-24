@@ -586,6 +586,16 @@ export default function SignInScreen() {
               Alert.alert("Error", errorMsg);
               return;
             }
+          } else {
+            // SignIn is complete but missing session ID or setActive - can't proceed
+            console.warn("[SignIn] Sign in complete but missing session ID or setActive:", {
+              hasSessionId: !!signIn.createdSessionId,
+              hasSetActive: !!setActive
+            });
+            const errorMsg = "Your account is already verified but we couldn't activate your session. Please restart the app.";
+            setError(errorMsg);
+            Alert.alert("Error", errorMsg);
+            return;
           }
         }
 
