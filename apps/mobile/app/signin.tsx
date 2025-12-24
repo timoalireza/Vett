@@ -237,6 +237,7 @@ export default function SignInScreen() {
   const [showVerificationCode, setShowVerificationCode] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   // Format phone number for display (using utility function)
   const formatPhone = (phone: string) => formatPhoneForDisplay(phone, countryCode);
@@ -308,7 +309,9 @@ export default function SignInScreen() {
   // Handle phone sign in
   const handlePhoneSignIn = async () => {
     if (!signInLoaded || !signIn) {
-      Alert.alert("Error", "Authentication service is not ready. Please wait a moment and try again.");
+      const errorMsg = "Authentication service is not ready. Please wait a moment and try again.";
+      setError(errorMsg);
+      Alert.alert("Error", errorMsg);
       return;
     }
 
@@ -318,10 +321,13 @@ export default function SignInScreen() {
     const minLength = Math.max(7, Math.floor(maxLength * 0.7)); // At least 70% of max length or 7 digits
     
     if (!cleaned || cleaned.length < minLength || cleaned.length > maxLength) {
-      Alert.alert("Error", `Please enter a valid phone number (${minLength}-${maxLength} digits)`);
+      const errorMsg = `Please enter a valid phone number (${minLength}-${maxLength} digits)`;
+      setError(errorMsg);
+      Alert.alert("Error", errorMsg);
       return;
     }
 
+    setError("");
     setLoading(true);
     try {
       // Create sign in with phone number
@@ -341,15 +347,19 @@ export default function SignInScreen() {
         });
 
         setShowVerificationCode(true);
+        setError("");
         Alert.alert(
           "Verification Code Sent",
           `We sent a 6-digit code to ${fullPhone}`
         );
       } else {
-        Alert.alert("Error", "Phone verification is not available for this account.");
+        const errorMsg = "Phone verification is not available for this account.";
+        setError(errorMsg);
+        Alert.alert("Error", errorMsg);
       }
     } catch (err: any) {
       const errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign in. Please try again.";
+      setError(errorMessage);
       Alert.alert("Sign In Error", errorMessage);
       console.error("Phone sign in error:", err);
     } finally {
@@ -360,7 +370,9 @@ export default function SignInScreen() {
   // Handle phone sign up
   const handlePhoneSignUp = async () => {
     if (!signUpLoaded || !signUp) {
-      Alert.alert("Error", "Authentication service is not ready. Please wait a moment and try again.");
+      const errorMsg = "Authentication service is not ready. Please wait a moment and try again.";
+      setError(errorMsg);
+      Alert.alert("Error", errorMsg);
       return;
     }
 
@@ -370,15 +382,20 @@ export default function SignInScreen() {
     const minLength = Math.max(7, Math.floor(maxLength * 0.7)); // At least 70% of max length or 7 digits
     
     if (!cleaned || cleaned.length < minLength || cleaned.length > maxLength) {
-      Alert.alert("Error", `Please enter a valid phone number (${minLength}-${maxLength} digits)`);
+      const errorMsg = `Please enter a valid phone number (${minLength}-${maxLength} digits)`;
+      setError(errorMsg);
+      Alert.alert("Error", errorMsg);
       return;
     }
 
     if (!firstName.trim()) {
-      Alert.alert("Error", "Please enter your first name");
+      const errorMsg = "Please enter your first name";
+      setError(errorMsg);
+      Alert.alert("Error", errorMsg);
       return;
     }
 
+    setError("");
     setLoading(true);
     try {
       // Create sign up with phone number
@@ -391,12 +408,14 @@ export default function SignInScreen() {
       await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
 
       setShowVerificationCode(true);
+      setError("");
       Alert.alert(
         "Verification Code Sent",
         `We sent a 6-digit code to ${fullPhone}`
       );
     } catch (err: any) {
       const errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign up. Please try again.";
+      setError(errorMessage);
       Alert.alert("Sign Up Error", errorMessage);
       console.error("Phone sign up error:", err);
     } finally {
@@ -407,10 +426,13 @@ export default function SignInScreen() {
   // Handle verification code submission
   const handleVerifyCode = async () => {
     if (!verificationCode || verificationCode.length < 6) {
-      Alert.alert("Error", "Please enter a valid 6-digit verification code");
+      const errorMsg = "Please enter a valid 6-digit verification code";
+      setError(errorMsg);
+      Alert.alert("Error", errorMsg);
       return;
     }
 
+    setError("");
     setLoading(true);
     try {
       if (isSignUp) {
@@ -462,6 +484,7 @@ export default function SignInScreen() {
       }
     } catch (err: any) {
       const errorMessage = err.errors?.[0]?.message || err.message || "Invalid verification code";
+      setError(errorMessage);
       Alert.alert("Error", errorMessage);
       console.error("Verification error:", err);
     } finally {
@@ -471,6 +494,7 @@ export default function SignInScreen() {
 
   // Resend verification code
   const handleResendCode = async () => {
+    setError("");
     setLoading(true);
     try {
       if (isSignUp && signUp) {
@@ -489,6 +513,7 @@ export default function SignInScreen() {
       Alert.alert("Code Sent", "A new verification code has been sent to your phone.");
     } catch (err: any) {
       const errorMessage = err.errors?.[0]?.message || err.message || "Failed to resend code";
+      setError(errorMessage);
       Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
@@ -561,6 +586,7 @@ export default function SignInScreen() {
                 setCountryCode(item.code);
                 setSelectedCountry(item.country);
                 setShowCountryPicker(false);
+                setError("");
               }}
               style={{
                 flexDirection: "row",
@@ -733,10 +759,35 @@ export default function SignInScreen() {
                     Resend Code
                   </Text>
                 </TouchableOpacity>
+
+                {error && showVerificationCode && (
+                  <TouchableOpacity
+                    onPress={() => setError("")}
+                    style={{
+                      backgroundColor: "#FF3B30",
+                      borderRadius: theme.radii.md,
+                      padding: theme.spacing(2),
+                      alignItems: "center",
+                      marginTop: theme.spacing(1)
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#FFFFFF",
+                        fontSize: theme.typography.body,
+                        fontFamily: "Inter_500Medium",
+                        textAlign: "center"
+                      }}
+                    >
+                      {error}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   onPress={() => {
                     setShowVerificationCode(false);
                     setVerificationCode("");
+                    setError("");
                   }}
                 >
                   <Text
@@ -756,11 +807,14 @@ export default function SignInScreen() {
                 {/* Sign Up Form */}
                 {isSignUp ? (
                   <>
-                    <TextInput
+                      <TextInput
                       placeholder="First Name"
                       placeholderTextColor={theme.colors.textTertiary}
                       value={firstName}
-                      onChangeText={setFirstName}
+                      onChangeText={(text) => {
+                        setFirstName(text);
+                        if (error) setError("");
+                      }}
                       autoCapitalize="words"
                       autoComplete="given-name"
                       style={{
@@ -811,6 +865,7 @@ export default function SignInScreen() {
                           const cleaned = text.replace(/\D/g, "");
                           const maxLength = getMaxPhoneLength(countryCode);
                           setPhoneNumber(cleaned.slice(0, maxLength));
+                          if (error) setError("");
                         }}
                         keyboardType="phone-pad"
                         autoComplete="tel"
@@ -840,80 +895,43 @@ export default function SignInScreen() {
                       }}
                     >
                       {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
+                        <ActivityIndicator color="#000000" />
                       ) : (
                         <Text
                           style={{
-                            color: "#FFFFFF",
+                            color: "#000000",
                             fontSize: theme.typography.body,
                             fontFamily: "Inter_500Medium"
                           }}
                         >
-                          Sign Up with Phone
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setIsSignUp(false)}>
-                      <Text
-                        style={{
-                          color: theme.colors.textSecondary,
-                          fontSize: theme.typography.caption,
-                          textAlign: "center",
-                          fontFamily: "Inter_400Regular"
-                        }}
-                      >
-                        Already have an account? Sign in
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    {/* Passkey Sign In Button */}
-                    <TouchableOpacity
-                      onPress={handlePasskeySignIn}
-                      disabled={loading}
-                      style={{
-                        backgroundColor: theme.colors.primary,
-                        borderRadius: theme.radii.pill,
-                        padding: theme.spacing(2),
-                        alignItems: "center",
-                        flexDirection: "row",
-                        justifyContent: "center",
-                        gap: theme.spacing(1),
-                        opacity: loading ? 0.5 : 1
-                      }}
-                    >
-                      <Ionicons name="finger-print" size={24} color="#FFFFFF" />
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                      ) : (
-                        <Text
-                          style={{
-                            color: "#FFFFFF",
-                            fontSize: theme.typography.body,
-                            fontFamily: "Inter_500Medium"
-                          }}
-                        >
-                          Sign in with Passkey
+                          Continue with Phone
                         </Text>
                       )}
                     </TouchableOpacity>
 
-                    {/* Social Login Buttons */}
-                    <View style={{ flexDirection: "row", gap: theme.spacing(2) }}>
-                      <SocialButton
-                        icon="logo-apple"
-                        iconColor="#000000"
-                        onPress={() => handleOAuth("oauth_apple")}
-                        disabled={loading}
-                      />
-                      <SocialButton
-                        icon="logo-google"
-                        iconColor="#000000"
-                        onPress={() => handleOAuth("oauth_google")}
-                        disabled={loading}
-                      />
-                    </View>
+                    {error && !showVerificationCode && (
+                      <TouchableOpacity
+                        onPress={() => setError("")}
+                        style={{
+                          backgroundColor: "#FF3B30",
+                          borderRadius: theme.radii.md,
+                          padding: theme.spacing(2),
+                          alignItems: "center",
+                          marginTop: theme.spacing(1)
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontSize: theme.typography.body,
+                            fontFamily: "Inter_500Medium",
+                            textAlign: "center"
+                          }}
+                        >
+                          {error}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
                     {/* OR Separator */}
                     <View
@@ -948,7 +966,38 @@ export default function SignInScreen() {
                       />
                     </View>
 
-                    {/* Phone Number Input */}
+                    {/* Social Login Buttons - Secondary Options */}
+                    <View style={{ flexDirection: "row", gap: theme.spacing(2) }}>
+                      <SocialButton
+                        icon="logo-apple"
+                        iconColor="#000000"
+                        onPress={() => handleOAuth("oauth_apple")}
+                        disabled={loading}
+                      />
+                      <SocialButton
+                        icon="logo-google"
+                        iconColor="#000000"
+                        onPress={() => handleOAuth("oauth_google")}
+                        disabled={loading}
+                      />
+                    </View>
+
+                    <TouchableOpacity onPress={() => setIsSignUp(false)}>
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontSize: theme.typography.caption,
+                          textAlign: "center",
+                          fontFamily: "Inter_400Regular"
+                        }}
+                      >
+                        Already have an account? Sign in
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {/* Phone Number Input - Primary Option */}
                     <View style={{ flexDirection: "row", gap: theme.spacing(1) }}>
                       <TouchableOpacity
                         onPress={() => setShowCountryPicker(true)}
@@ -985,6 +1034,7 @@ export default function SignInScreen() {
                           const cleaned = text.replace(/\D/g, "");
                           const maxLength = getMaxPhoneLength(countryCode);
                           setPhoneNumber(cleaned.slice(0, maxLength));
+                          if (error) setError("");
                         }}
                         keyboardType="phone-pad"
                         autoComplete="tel"
@@ -1006,29 +1056,100 @@ export default function SignInScreen() {
                       onPress={handlePhoneSignIn}
                       disabled={loading || !phoneNumber}
                       style={{
-                        backgroundColor: theme.colors.surface,
+                        backgroundColor: theme.colors.primary,
                         borderRadius: theme.radii.pill,
                         padding: theme.spacing(2),
                         alignItems: "center",
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
                         opacity: loading || !phoneNumber ? 0.5 : 1
                       }}
                     >
                       {loading ? (
-                        <ActivityIndicator color={theme.colors.text} />
+                        <ActivityIndicator color="#000000" />
                       ) : (
                         <Text
                           style={{
-                            color: theme.colors.text,
+                            color: "#000000",
                             fontSize: theme.typography.body,
                             fontFamily: "Inter_500Medium"
                           }}
                         >
-                          Sign in with Phone
+                          Continue with Phone
                         </Text>
                       )}
                     </TouchableOpacity>
+
+                    {error && !showVerificationCode && (
+                      <TouchableOpacity
+                        onPress={() => setError("")}
+                        style={{
+                          backgroundColor: "#FF3B30",
+                          borderRadius: theme.radii.md,
+                          padding: theme.spacing(2),
+                          alignItems: "center",
+                          marginTop: theme.spacing(1)
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontSize: theme.typography.body,
+                            fontFamily: "Inter_500Medium",
+                            textAlign: "center"
+                          }}
+                        >
+                          {error}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* OR Separator */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: theme.spacing(2),
+                        marginVertical: theme.spacing(1)
+                      }}
+                    >
+                      <View
+                        style={{
+                          flex: 1,
+                          height: 1,
+                          backgroundColor: theme.colors.border
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: theme.colors.textSecondary,
+                          fontSize: theme.typography.caption
+                        }}
+                      >
+                        OR
+                      </Text>
+                      <View
+                        style={{
+                          flex: 1,
+                          height: 1,
+                          backgroundColor: theme.colors.border
+                        }}
+                      />
+                    </View>
+
+                    {/* Social Login Buttons - Secondary Options */}
+                    <View style={{ flexDirection: "row", gap: theme.spacing(2) }}>
+                      <SocialButton
+                        icon="logo-apple"
+                        iconColor="#000000"
+                        onPress={() => handleOAuth("oauth_apple")}
+                        disabled={loading}
+                      />
+                      <SocialButton
+                        icon="logo-google"
+                        iconColor="#000000"
+                        onPress={() => handleOAuth("oauth_google")}
+                        disabled={loading}
+                      />
+                    </View>
 
                     <TouchableOpacity
                       onPress={() => setIsSignUp(true)}
