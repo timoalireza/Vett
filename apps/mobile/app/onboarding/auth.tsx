@@ -236,8 +236,10 @@ export default function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0); // Cooldown in seconds
   const sessionIdRef = useRef<string | null | undefined>(sessionId);
   const isSigningOutRef = useRef<boolean>(false);
+  const hasAttemptedAutoNavigateRef = useRef<boolean>(false); // Track if we've already tried to navigate
 
   // Load stored values when component mounts or when stored values change
   useEffect(() => {
@@ -261,6 +263,52 @@ export default function AuthScreen() {
   useEffect(() => {
     isSigningOutRef.current = isSigningOut;
   }, [isSigningOut]);
+
+  // Check if signUp is already complete and handle accordingly
+  // Only runs once when we first detect complete status, not when user navigates back
+  useEffect(() => {
+    if (
+      signUp && 
+      signUp.status === "complete" && 
+      signUp.createdSessionId && 
+      setActive && 
+      !loading && 
+      !showVerificationForm &&
+      !hasAttemptedAutoNavigateRef.current
+    ) {
+      // Sign up is already complete, try to set active session
+      // Mark as attempted to prevent re-running when user goes back
+      hasAttemptedAutoNavigateRef.current = true;
+      
+      const handleAlreadyComplete = async () => {
+        try {
+          await setActive({ session: signUp.createdSessionId });
+          await setAuthMode("signedIn");
+          router.push("/onboarding/trust");
+        } catch (err) {
+          console.warn("[Auth] Failed to set active session for already complete sign up:", err);
+          // Reset the ref so user can try again if navigation failed
+          hasAttemptedAutoNavigateRef.current = false;
+        }
+      };
+      handleAlreadyComplete();
+    }
+    
+    // Reset the ref when signUp status changes away from complete (e.g., new sign up attempt)
+    if (signUp && signUp.status !== "complete") {
+      hasAttemptedAutoNavigateRef.current = false;
+    }
+  }, [signUp?.status, signUp?.createdSessionId, setActive, loading, showVerificationForm, setAuthMode, router]);
+
+  // Timer for resend cooldown
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(resendCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
   
   const setIsSigningOutWithRef = (value: boolean) => {
     setIsSigningOut(value);
@@ -397,6 +445,7 @@ export default function AuthScreen() {
 
       setShowVerificationForm(true);
       setError(null);
+      setResendCooldown(30); // Start 30 second cooldown
     } catch (err: any) {
       console.error("[Auth] Sign up error:", err);
       let errorMessage = err.errors?.[0]?.message || err.message || "Failed to sign up";
@@ -435,6 +484,26 @@ export default function AuthScreen() {
       return;
     }
 
+    // Check if signUp is already complete
+    if (signUp.status === "complete") {
+      // If already complete, try to set active session
+      if (signUp.createdSessionId && setActive) {
+        try {
+          await setActive({ session: signUp.createdSessionId });
+          await setAuthMode("signedIn");
+          router.push("/onboarding/trust");
+          return;
+        } catch (err) {
+          console.warn("[Auth] Failed to set active session for already complete sign up:", err);
+          setError("Your account is already verified. Please sign in or restart the app.");
+          return;
+        }
+      } else {
+        setError("Your account is already verified. Please sign in or restart the app.");
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
     
@@ -451,8 +520,31 @@ export default function AuthScreen() {
         setError("Verification incomplete. Please try again.");
       }
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || "Invalid verification code";
+      console.error("[Auth] Verification error:", err);
+      
+      // Extract error message from Clerk
+      let errorMessage = err.errors?.[0]?.message || err.message || "Invalid verification code";
+      const errorCode = err.errors?.[0]?.code || err.code;
+      
+      // Handle specific Clerk error cases
+      if (errorCode === "form_identifier_not_found" || errorMessage.toLowerCase().includes("not found")) {
+        errorMessage = "Verification session expired. Please request a new code.";
+      } else if (errorCode === "form_code_incorrect" || errorMessage.toLowerCase().includes("incorrect") || errorMessage.toLowerCase().includes("invalid")) {
+        errorMessage = "The verification code is incorrect. Please check and try again.";
+      } else if (errorCode === "form_param_format_invalid" || errorMessage.toLowerCase().includes("format")) {
+        errorMessage = "Invalid code format. Please enter a 6-digit code.";
+      } else if (errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("timeout")) {
+        errorMessage = "The verification code has expired. Please request a new code.";
+      } else if (errorMessage.toLowerCase().includes("already") && errorMessage.toLowerCase().includes("verified")) {
+        errorMessage = "This code has already been used. Please request a new code.";
+      } else if (errorMessage.toLowerCase().includes("too many") || errorMessage.toLowerCase().includes("rate limit")) {
+        errorMessage = "Too many attempts. Please wait a moment and request a new code.";
+      } else if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("expired")) {
+        errorMessage = "Your verification session has expired. Please start over.";
+      }
+      
       setError(errorMessage);
+      setFailedAttempts((prev) => prev + 1);
     } finally {
       setLoading(false);
     }
@@ -460,14 +552,54 @@ export default function AuthScreen() {
 
   // Resend verification code
   const handleResendCode = async () => {
-    if (!signUp) return;
+    // Check if cooldown is active
+    if (resendCooldown > 0) {
+      return; // Don't allow resend during cooldown
+    }
+
+    if (!signUp) {
+      setError("Sign up session expired. Please start over.");
+      return;
+    }
+
+    // Check if signUp is already complete
+    if (signUp.status === "complete") {
+      if (signUp.createdSessionId && setActive) {
+        try {
+          await setActive({ session: signUp.createdSessionId });
+          await setAuthMode("signedIn");
+          router.push("/onboarding/trust");
+          return;
+        } catch (err) {
+          console.warn("[Auth] Failed to set active session:", err);
+          setError("Your account is already verified. Please sign in or restart the app.");
+          return;
+        }
+      } else {
+        setError("Your account is already verified. Please sign in or restart the app.");
+        return;
+      }
+    }
     
     setLoading(true);
+    setError(null);
+    setVerificationCode(""); // Clear existing code when resending
+    
     try {
       await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+      setResendCooldown(30); // Start 30 second cooldown
       Alert.alert("Code Sent", "A new verification code has been sent to your phone.");
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || "Failed to resend code";
+      console.error("[Auth] Resend code error:", err);
+      let errorMessage = err.errors?.[0]?.message || err.message || "Failed to resend code";
+      
+      // Handle specific errors
+      if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("expired")) {
+        errorMessage = "Your verification session has expired. Please start over.";
+      } else if (errorMessage.toLowerCase().includes("rate limit") || errorMessage.toLowerCase().includes("too many")) {
+        errorMessage = "Too many requests. Please wait a moment before requesting a new code.";
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -592,6 +724,8 @@ export default function AuthScreen() {
                 setShowVerificationForm(false);
                 setVerificationCode("");
                 setError(null);
+                setResendCooldown(0); // Reset cooldown when going back
+                hasAttemptedAutoNavigateRef.current = false; // Reset navigation attempt ref when going back
               } else {
                 router.back();
               }
@@ -690,7 +824,7 @@ export default function AuthScreen() {
 
                 <TouchableOpacity
                   onPress={handleResendCode}
-                  disabled={loading}
+                  disabled={loading || resendCooldown > 0}
                   style={{ marginTop: theme.spacing(2) }}
                 >
                   <Text
@@ -699,10 +833,10 @@ export default function AuthScreen() {
                       fontSize: theme.typography.caption,
                       textAlign: "center",
                       fontFamily: "Inter_500Medium",
-                      opacity: loading ? 0.5 : 1,
+                      opacity: loading || resendCooldown > 0 ? 0.5 : 1,
                     }}
                   >
-                    Resend Code
+                    {resendCooldown > 0 ? `Request again in ${resendCooldown}s` : "Resend Code"}
                   </Text>
                 </TouchableOpacity>
 
