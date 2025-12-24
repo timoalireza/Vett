@@ -444,17 +444,76 @@ export default function SignInScreen() {
           return;
         }
 
+        // Check if signUp is already complete
+        if (signUp.status === "complete") {
+          // If already complete, try to set active session
+          if (signUp.createdSessionId && setActive) {
+            try {
+              await setActive({ session: signUp.createdSessionId });
+              await setAuthMode("signedIn");
+              setShowVerificationCode(false);
+              setVerificationCode("");
+              router.replace("/(tabs)/analyze");
+              return;
+            } catch (err) {
+              console.warn("Failed to set active session for already complete sign up:", err);
+              const errorMsg = "Your account is already verified. Please sign in or restart the app.";
+              setError(errorMsg);
+              Alert.alert("Error", errorMsg);
+              return;
+            }
+          } else {
+            const errorMsg = "Your account is already verified. Please sign in or restart the app.";
+            setError(errorMsg);
+            Alert.alert("Error", errorMsg);
+            return;
+          }
+        }
+
         const completeResult = await signUp.attemptPhoneNumberVerification({
           code: verificationCode,
         });
 
-        if (completeResult.status === "complete" && completeResult.createdSessionId && setActive) {
-          await setActive({ session: completeResult.createdSessionId });
-          await setAuthMode("signedIn");
-          setShowVerificationCode(false);
-          setVerificationCode("");
-          router.replace("/(tabs)/analyze");
+        console.log("[SignIn] Sign up verification result:", {
+          resultStatus: completeResult.status,
+          hasSessionId: !!completeResult.createdSessionId,
+          signUpStatus: signUp.status,
+          signUpSessionId: signUp.createdSessionId
+        });
+
+        // Check both the result and the signUp object status
+        const isComplete = completeResult.status === "complete" || signUp.status === "complete";
+        const sessionId = completeResult.createdSessionId || signUp.createdSessionId;
+
+        if (isComplete && sessionId) {
+          if (!setActive) {
+            const errorMsg = "Unable to activate session. Please try again.";
+            setError(errorMsg);
+            Alert.alert("Error", errorMsg);
+            console.error("[SignIn] setActive is not available");
+            return;
+          }
+          
+          try {
+            await setActive({ session: sessionId });
+            await setAuthMode("signedIn");
+            setShowVerificationCode(false);
+            setVerificationCode("");
+            router.replace("/(tabs)/analyze");
+          } catch (activeErr: any) {
+            console.error("[SignIn] Failed to set active session:", activeErr);
+            const errorMsg = activeErr.errors?.[0]?.message || activeErr.message || "Failed to activate session. Please try again.";
+            setError(errorMsg);
+            Alert.alert("Error", errorMsg);
+          }
         } else {
+          // Log the actual result to help debug
+          console.warn("[SignIn] Verification incomplete:", {
+            resultStatus: completeResult.status,
+            signUpStatus: signUp.status,
+            hasSessionId: !!sessionId,
+            hasSetActive: !!setActive
+          });
           const errorMsg = "Verification incomplete. Please try again.";
           setError(errorMsg);
           Alert.alert("Error", errorMsg);
@@ -473,12 +532,37 @@ export default function SignInScreen() {
           code: verificationCode,
         });
 
-        if (completeResult.status === "complete" && completeResult.createdSessionId && setActive) {
-          await setActive({ session: completeResult.createdSessionId });
-          await setAuthMode("signedIn");
-          setShowVerificationCode(false);
-          setVerificationCode("");
-          router.replace("/(tabs)/analyze");
+        console.log("[SignIn] Sign in verification result:", {
+          resultStatus: completeResult.status,
+          hasSessionId: !!completeResult.createdSessionId,
+          signInStatus: signIn.status
+        });
+
+        // Check both the result and the signIn object status
+        const isComplete = completeResult.status === "complete";
+        const sessionId = completeResult.createdSessionId;
+
+        if (isComplete && sessionId) {
+          if (!setActive) {
+            const errorMsg = "Unable to activate session. Please try again.";
+            setError(errorMsg);
+            Alert.alert("Error", errorMsg);
+            console.error("[SignIn] setActive is not available");
+            return;
+          }
+          
+          try {
+            await setActive({ session: sessionId });
+            await setAuthMode("signedIn");
+            setShowVerificationCode(false);
+            setVerificationCode("");
+            router.replace("/(tabs)/analyze");
+          } catch (activeErr: any) {
+            console.error("[SignIn] Failed to set active session:", activeErr);
+            const errorMsg = activeErr.errors?.[0]?.message || activeErr.message || "Failed to activate session. Please try again.";
+            setError(errorMsg);
+            Alert.alert("Error", errorMsg);
+          }
         } else if (completeResult.status === "needs_second_factor") {
           const errorMsg = "Please complete additional verification steps.";
           setError(errorMsg);
@@ -487,16 +571,44 @@ export default function SignInScreen() {
             errorMsg
           );
         } else {
+          // Log the actual result to help debug
+          console.warn("[SignIn] Verification incomplete:", {
+            resultStatus: completeResult.status,
+            signInStatus: signIn.status,
+            hasSessionId: !!sessionId,
+            hasSetActive: !!setActive
+          });
           const errorMsg = "Verification incomplete. Please try again.";
           setError(errorMsg);
           Alert.alert("Error", errorMsg);
         }
       }
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || err.message || "Invalid verification code";
+      console.error("[SignIn] Verification error:", err);
+      
+      // Extract error message from Clerk
+      let errorMessage = err.errors?.[0]?.message || err.message || "Invalid verification code";
+      const errorCode = err.errors?.[0]?.code || err.code;
+      
+      // Handle specific Clerk error cases
+      if (errorCode === "form_identifier_not_found" || errorMessage.toLowerCase().includes("not found")) {
+        errorMessage = "Verification session expired. Please request a new code.";
+      } else if (errorCode === "form_code_incorrect" || errorMessage.toLowerCase().includes("incorrect") || errorMessage.toLowerCase().includes("invalid")) {
+        errorMessage = "The verification code is incorrect. Please check and try again.";
+      } else if (errorCode === "form_param_format_invalid" || errorMessage.toLowerCase().includes("format")) {
+        errorMessage = "Invalid code format. Please enter a 6-digit code.";
+      } else if (errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("timeout")) {
+        errorMessage = "The verification code has expired. Please request a new code.";
+      } else if (errorMessage.toLowerCase().includes("already") && errorMessage.toLowerCase().includes("verified")) {
+        errorMessage = "This code has already been used. Please request a new code.";
+      } else if (errorMessage.toLowerCase().includes("too many") || errorMessage.toLowerCase().includes("rate limit")) {
+        errorMessage = "Too many attempts. Please wait a moment and request a new code.";
+      } else if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("expired")) {
+        errorMessage = "Your verification session has expired. Please start over.";
+      }
+      
       setError(errorMessage);
       Alert.alert("Error", errorMessage);
-      console.error("Verification error:", err);
     } finally {
       setLoading(false);
     }
