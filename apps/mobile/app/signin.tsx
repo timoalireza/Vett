@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Text, TouchableOpacity, View, TextInput, ActivityIndicator, Alert, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -238,6 +238,17 @@ export default function SignInScreen() {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0); // Cooldown in seconds
+
+  // Timer for resend cooldown
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(resendCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   // Format phone number for display (using utility function)
   const formatPhone = (phone: string) => formatPhoneForDisplay(phone, countryCode);
@@ -348,6 +359,7 @@ export default function SignInScreen() {
 
         setShowVerificationCode(true);
         setError("");
+        setResendCooldown(60); // Start 60 second cooldown (matches Clerk's rate limit)
         Alert.alert(
           "Verification Code Sent",
           `We sent a 6-digit code to ${fullPhone}`
@@ -409,6 +421,7 @@ export default function SignInScreen() {
 
       setShowVerificationCode(true);
       setError("");
+      setResendCooldown(60); // Start 60 second cooldown (matches Clerk's rate limit)
       Alert.alert(
         "Verification Code Sent",
         `We sent a 6-digit code to ${fullPhone}`
@@ -481,9 +494,9 @@ export default function SignInScreen() {
           signUpSessionId: signUp.createdSessionId
         });
 
-        // Check both the result and the signUp object status
-        const isComplete = completeResult.status === "complete" || signUp.status === "complete";
-        const sessionId = completeResult.createdSessionId || signUp.createdSessionId;
+        // Use the verification attempt result as the sole source of truth
+        const isComplete = completeResult.status === "complete";
+        const sessionId = completeResult.createdSessionId;
 
         if (isComplete && sessionId) {
           if (!setActive) {
@@ -597,14 +610,14 @@ export default function SignInScreen() {
         errorMessage = "The verification code is incorrect. Please check and try again.";
       } else if (errorCode === "form_param_format_invalid" || errorMessage.toLowerCase().includes("format")) {
         errorMessage = "Invalid code format. Please enter a 6-digit code.";
+      } else if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("expired")) {
+        errorMessage = "Your verification session has expired. Please start over.";
       } else if (errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("timeout")) {
         errorMessage = "The verification code has expired. Please request a new code.";
       } else if (errorMessage.toLowerCase().includes("already") && errorMessage.toLowerCase().includes("verified")) {
         errorMessage = "This code has already been used. Please request a new code.";
       } else if (errorMessage.toLowerCase().includes("too many") || errorMessage.toLowerCase().includes("rate limit")) {
         errorMessage = "Too many attempts. Please wait a moment and request a new code.";
-      } else if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("expired")) {
-        errorMessage = "Your verification session has expired. Please start over.";
       }
       
       setError(errorMessage);
@@ -616,6 +629,11 @@ export default function SignInScreen() {
 
   // Resend verification code
   const handleResendCode = async () => {
+    // Check if cooldown is active
+    if (resendCooldown > 0) {
+      return; // Don't allow resend during cooldown
+    }
+
     setError("");
     setLoading(true);
     try {
@@ -632,9 +650,28 @@ export default function SignInScreen() {
           });
         }
       }
+      setResendCooldown(60); // Start 60 second cooldown (matches Clerk's rate limit)
       Alert.alert("Code Sent", "A new verification code has been sent to your phone.");
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || err.message || "Failed to resend code";
+      console.error("[SignIn] Resend code error:", err);
+      let errorMessage = err.errors?.[0]?.message || err.message || "Failed to resend code";
+      const errorCode = err.errors?.[0]?.code || err.code;
+      
+      // Handle rate limiting - extract retry-after or use default 60 seconds
+      if (
+        errorCode === "rate_limit_exceeded" ||
+        errorMessage.toLowerCase().includes("rate limit") ||
+        errorMessage.toLowerCase().includes("too many") ||
+        errorMessage.toLowerCase().includes("too many requests")
+      ) {
+        // Try to extract retry-after from error metadata or use default 60 seconds
+        const retryAfter = err.retryAfter || err.retry_after || err.metadata?.retryAfter || 60;
+        setResendCooldown(Math.max(60, retryAfter)); // Use at least 60 seconds
+        errorMessage = `Too many requests. Please wait ${Math.max(60, retryAfter)} seconds before requesting a new code.`;
+      } else if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("expired")) {
+        errorMessage = "Your verification session has expired. Please start over.";
+      }
+      
       setError(errorMessage);
       Alert.alert("Error", errorMessage);
     } finally {
@@ -866,7 +903,7 @@ export default function SignInScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleResendCode}
-                  disabled={loading}
+                  disabled={loading || resendCooldown > 0}
                   style={{ marginBottom: theme.spacing(1) }}
                 >
                   <Text
@@ -875,10 +912,10 @@ export default function SignInScreen() {
                       fontSize: theme.typography.caption,
                       textAlign: "center",
                       fontFamily: "Inter_500Medium",
-                      opacity: loading ? 0.5 : 1
+                      opacity: loading || resendCooldown > 0 ? 0.5 : 1
                     }}
                   >
-                    Resend Code
+                    {resendCooldown > 0 ? `Request again in ${resendCooldown}s` : "Resend Code"}
                   </Text>
                 </TouchableOpacity>
 
@@ -910,6 +947,7 @@ export default function SignInScreen() {
                     setShowVerificationCode(false);
                     setVerificationCode("");
                     setError("");
+                    setResendCooldown(0); // Reset cooldown when going back
                   }}
                 >
                   <Text
