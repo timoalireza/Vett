@@ -512,12 +512,52 @@ export default function AuthScreen() {
         code: verificationCode,
       });
 
-      if (completeResult.status === "complete" && completeResult.createdSessionId && setActive) {
-        await setActive({ session: completeResult.createdSessionId });
-        await setAuthMode("signedIn");
-        router.push("/onboarding/trust");
+      console.log("[Auth] Verification result:", {
+        resultStatus: completeResult.status,
+        hasSessionId: !!completeResult.createdSessionId,
+        signUpStatus: signUp.status,
+        signUpSessionId: signUp.createdSessionId
+      });
+
+      // Use the verification attempt result as the sole source of truth
+      const isComplete = completeResult.status === "complete";
+      const sessionId = completeResult.createdSessionId;
+
+      if (isComplete && sessionId) {
+        if (!setActive) {
+          setError("Unable to activate session. Please try again.");
+          console.error("[Auth] setActive is not available");
+          return;
+        }
+        
+        try {
+          await setActive({ session: sessionId });
+          await setAuthMode("signedIn");
+          router.push("/onboarding/trust");
+        } catch (activeErr: any) {
+          console.error("[Auth] Failed to set active session:", activeErr);
+          const errorMsg = activeErr.errors?.[0]?.message || activeErr.message || "Failed to activate session. Please try again.";
+          setError(errorMsg);
+        }
       } else {
-        setError("Verification incomplete. Please try again.");
+        // Log the actual result to help debug
+        console.warn("[Auth] Verification incomplete:", {
+          resultStatus: completeResult.status,
+          signUpStatus: signUp.status,
+          hasSessionId: !!sessionId,
+          hasSetActive: !!setActive
+        });
+        
+        // Provide more specific error message based on status
+        let errorMsg = "Verification incomplete. Please try again.";
+        if (completeResult.status === "missing_requirements") {
+          errorMsg = "Additional verification required. Please contact support.";
+        } else if (completeResult.status === "abandoned") {
+          errorMsg = "Verification session expired. Please request a new code.";
+        } else if (!sessionId && isComplete) {
+          errorMsg = "Verification succeeded but session creation failed. Please try again.";
+        }
+        setError(errorMsg);
       }
     } catch (err: any) {
       console.error("[Auth] Verification error:", err);
