@@ -504,6 +504,24 @@ export default function AuthScreen() {
       }
     }
 
+    // Check if phone is already verified (status will be missing_requirements)
+    const phoneVerificationStatus = (signUp as any).verifications?.phoneNumber?.status;
+    if (phoneVerificationStatus === "verified") {
+      const missingFields = (signUp as any).missingFields || [];
+      console.log("[Auth] Phone already verified before attempting verification. Missing fields:", missingFields);
+      
+      let errorMsg = "Your phone is already verified! ";
+      if (missingFields.includes("email_address")) {
+        errorMsg += "Your Clerk dashboard requires email verification. Go to Clerk → Configure → Email, Phone, Username and make email optional.";
+      } else if (missingFields.length > 0) {
+        errorMsg += `Additional fields required: ${missingFields.join(", ")}. Please update Clerk dashboard.`;
+      } else {
+        errorMsg += "Please restart the app to complete sign in.";
+      }
+      setError(errorMsg);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     
@@ -512,11 +530,15 @@ export default function AuthScreen() {
         code: verificationCode,
       });
 
+      // Log detailed info including missing fields
       console.log("[Auth] Verification result:", {
         resultStatus: completeResult.status,
         hasSessionId: !!completeResult.createdSessionId,
         signUpStatus: signUp.status,
-        signUpSessionId: signUp.createdSessionId
+        signUpSessionId: signUp.createdSessionId,
+        missingFields: (completeResult as any).missingFields || (signUp as any).missingFields,
+        unverifiedFields: (completeResult as any).unverifiedFields || (signUp as any).unverifiedFields,
+        verifications: (signUp as any).verifications,
       });
 
       // Use the verification attempt result as the sole source of truth
@@ -539,6 +561,45 @@ export default function AuthScreen() {
           const errorMsg = activeErr.errors?.[0]?.message || activeErr.message || "Failed to activate session. Please try again.";
           setError(errorMsg);
         }
+      } else if (completeResult.status === "missing_requirements") {
+        // Phone verified but additional requirements needed
+        const missingFields = (completeResult as any).missingFields || (signUp as any).missingFields || [];
+        const unverifiedFields = (completeResult as any).unverifiedFields || (signUp as any).unverifiedFields || [];
+        
+        console.warn("[Auth] Missing requirements:", { missingFields, unverifiedFields });
+        
+        // Check if we just need to verify email or if phone is actually verified
+        const phoneVerified = (signUp as any).verifications?.phoneNumber?.status === "verified";
+        
+        if (phoneVerified && missingFields.length === 0 && unverifiedFields.length === 0) {
+          // Phone is verified and no other requirements - try to complete anyway
+          console.log("[Auth] Phone verified, attempting to get session...");
+          
+          // Check if signUp itself now has a session
+          if (signUp.createdSessionId && setActive) {
+            try {
+              await setActive({ session: signUp.createdSessionId });
+              await setAuthMode("signedIn");
+              router.push("/onboarding/trust");
+              return;
+            } catch (err) {
+              console.warn("[Auth] Failed to activate signUp session:", err);
+            }
+          }
+        }
+        
+        // Build user-friendly error message
+        let errorMsg = "Phone verified! ";
+        if (missingFields.includes("email_address")) {
+          errorMsg += "Email verification is also required. Please check your Clerk dashboard settings.";
+        } else if (missingFields.length > 0) {
+          errorMsg += `Additional fields required: ${missingFields.join(", ")}`;
+        } else if (unverifiedFields.length > 0) {
+          errorMsg += `Please verify: ${unverifiedFields.join(", ")}`;
+        } else {
+          errorMsg += "Additional verification required. Please contact support.";
+        }
+        setError(errorMsg);
       } else {
         // Log the actual result to help debug
         console.warn("[Auth] Verification incomplete:", {
@@ -550,9 +611,7 @@ export default function AuthScreen() {
         
         // Provide more specific error message based on status
         let errorMsg = "Verification incomplete. Please try again.";
-        if (completeResult.status === "missing_requirements") {
-          errorMsg = "Additional verification required. Please contact support.";
-        } else if (completeResult.status === "abandoned") {
+        if (completeResult.status === "abandoned") {
           errorMsg = "Verification session expired. Please request a new code.";
         } else if (!sessionId && isComplete) {
           errorMsg = "Verification succeeded but session creation failed. Please try again.";
@@ -576,7 +635,15 @@ export default function AuthScreen() {
       } else if (errorMessage.toLowerCase().includes("expired") || errorMessage.toLowerCase().includes("timeout")) {
         errorMessage = "The verification code has expired. Please request a new code.";
       } else if (errorMessage.toLowerCase().includes("already") && errorMessage.toLowerCase().includes("verified")) {
-        errorMessage = "This code has already been used. Please request a new code.";
+        // Phone is already verified - this usually means Clerk needs additional fields
+        const missingFields = (signUp as any)?.missingFields || [];
+        if (missingFields.includes("email_address")) {
+          errorMessage = "Phone verified! Your Clerk dashboard requires email verification. Please make email optional in Clerk → Configure → Email, Phone, Username.";
+        } else if (missingFields.length > 0) {
+          errorMessage = `Phone verified! Additional fields required: ${missingFields.join(", ")}. Please update Clerk dashboard settings.`;
+        } else {
+          errorMessage = "Phone verified! But sign-up incomplete. Please check Clerk dashboard settings or restart the app.";
+        }
       } else if (errorMessage.toLowerCase().includes("too many") || errorMessage.toLowerCase().includes("rate limit")) {
         errorMessage = "Too many attempts. Please wait a moment and request a new code.";
       } else if (errorMessage.toLowerCase().includes("session") && errorMessage.toLowerCase().includes("expired")) {
@@ -620,6 +687,25 @@ export default function AuthScreen() {
         return;
       }
     }
+
+    // Check if phone is already verified (missing_requirements state)
+    const phoneVerificationStatus = (signUp as any).verifications?.phoneNumber?.status;
+    if (phoneVerificationStatus === "verified") {
+      const missingFields = (signUp as any).missingFields || [];
+      console.log("[Auth] Phone already verified, missing fields:", missingFields);
+      
+      let errorMsg = "Your phone is already verified! ";
+      if (missingFields.includes("email_address")) {
+        errorMsg += "Your Clerk dashboard requires email verification. Please update your Clerk settings to make email optional, or contact support.";
+      } else if (missingFields.length > 0) {
+        errorMsg += `Additional fields required: ${missingFields.join(", ")}. Please update your Clerk dashboard settings.`;
+      } else {
+        errorMsg += "Please restart the app to sign in.";
+      }
+      setError(errorMsg);
+      Alert.alert("Phone Already Verified", errorMsg);
+      return;
+    }
     
     setLoading(true);
     setError(null);
@@ -638,6 +724,14 @@ export default function AuthScreen() {
         errorMessage = "Your verification session has expired. Please start over.";
       } else if (errorMessage.toLowerCase().includes("rate limit") || errorMessage.toLowerCase().includes("too many")) {
         errorMessage = "Too many requests. Please wait a moment before requesting a new code.";
+      } else if (errorMessage.toLowerCase().includes("already") && errorMessage.toLowerCase().includes("verified")) {
+        // Phone already verified - this is a Clerk config issue
+        const missingFields = (signUp as any).missingFields || [];
+        if (missingFields.includes("email_address")) {
+          errorMessage = "Phone verified! Your Clerk dashboard requires email. Please make email optional in Clerk settings.";
+        } else {
+          errorMessage = "Phone already verified! Please restart the app or check Clerk dashboard settings.";
+        }
       }
       
       setError(errorMessage);
