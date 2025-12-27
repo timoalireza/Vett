@@ -434,11 +434,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.5,
     marginBottom: 4,
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   logo: {
     color: "#FFFFFF",
     fontSize: 28,
     letterSpacing: -0.5,
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   headlineSection: {
     paddingTop: 32,
@@ -467,6 +473,9 @@ const styles = StyleSheet.create({
     fontSize: 32,
     lineHeight: 40,
     letterSpacing: -0.5,
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   spacer: {
     flex: 1,
@@ -488,6 +497,9 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.2,
     marginTop: SUBTEXT_VERTICAL_OFFSET_PX,
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   bottomSection: {
     paddingHorizontal: 20,
