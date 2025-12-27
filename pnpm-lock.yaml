@@ -39,6 +39,9 @@ importers:
       lint-staged:
         specifier: ^15.2.7
         version: 15.5.2
+      patch-package:
+        specifier: ^8.0.1
+        version: 8.0.1
       prettier:
         specifier: ^3.3.3
         version: 3.6.2
