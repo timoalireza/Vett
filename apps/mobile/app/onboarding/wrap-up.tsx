@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
@@ -36,12 +37,7 @@ export default function WrapUpScreen() {
           <GlassCard
             intensity="medium"
             radius="lg"
-            style={[
-              styles.card,
-              {
-                padding: theme.spacing(3),
-              },
-            ]}
+            style={{ ...styles.card, padding: theme.spacing(3) }}
           >
             <Text
               style={[
