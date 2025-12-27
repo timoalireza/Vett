@@ -16,7 +16,7 @@
 
 3. **Rebuild the iOS app**
    ```bash
-   cd /Users/timoalireza/Documents/Vett/apps/mobile
+   cd apps/mobile
    pnpm ios
    ```
 
@@ -37,7 +37,7 @@ If `pnpm ios` doesn't work:
 
 1. Open Xcode:
    ```bash
-   cd /Users/timoalireza/Documents/Vett/apps/mobile
+   cd apps/mobile
    open ios/Vett.xcworkspace
    ```
 
@@ -48,7 +48,7 @@ If `pnpm ios` doesn't work:
 
 3. Start Metro separately:
    ```bash
-   cd /Users/timoalireza/Documents/Vett/apps/mobile
+   cd apps/mobile
    pnpm dev
    ```
 
