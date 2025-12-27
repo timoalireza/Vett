@@ -32,8 +32,7 @@ const SLIDE_BACKGROUNDS: { [key: number]: ImageSourcePropType | null } = {
   // Only the images that exist in `apps/mobile/assets/onboarding/` are wired here.
   0: require("../../assets/onboarding/slide-1-info-moves-fast.png"),
   1: require("../../assets/onboarding/slide-2-verification.png"),
-  // TODO: add `slide-3-frictionless.png`
-  2: null,
+  2: require("../../assets/onboarding/slide-3-frictionless.png"),
   3: require("../../assets/onboarding/slide-4-truth-layer.png"),
   // TODO: add `slide-5-vett-it.png`
   4: null,
