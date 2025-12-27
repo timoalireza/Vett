@@ -142,7 +142,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <Text 
         style={{ 
           color: theme.colors.text, 
-          fontFamily: "Inter_600SemiBold",
+          fontFamily: "Inter_700Bold",
           fontSize: theme.typography.body,
           marginBottom: theme.spacing(0.5)
         }}

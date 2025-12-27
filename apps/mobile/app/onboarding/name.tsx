@@ -5,7 +5,6 @@ import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
-import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
 import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { useTheme } from "../../src/hooks/use-theme";
 import { useAppState } from "../../src/state/app-state";
@@ -35,14 +34,8 @@ export default function NameScreen() {
   return (
     <GradientBackground>
       <SafeAreaView style={styles.container} edges={["top"]}>
-        {/* Static elements - same position on all screens so they appear fixed */}
-        <View style={styles.header}>
-          <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={3} totalSteps={8} variant="bar" />
-          </View>
-        </View>
         <View style={styles.backButtonContainer}>
-          <OnboardingBackButton goTo="/onboarding/intro" />
+          <OnboardingBackButton goTo="/onboarding/welcome" />
         </View>
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -63,7 +56,7 @@ export default function NameScreen() {
                   styles.title,
                   {
                     color: theme.colors.text,
-                    fontFamily: "Inter_600SemiBold",
+                    fontFamily: "Inter_700Bold",
                     fontSize: theme.typography.heading + 8,
                   },
                 ]}
@@ -113,16 +106,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  progressContainer: {
-    width: "100%",
-  },
   backButtonContainer: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 12,
   },
   keyboardAvoidingView: {

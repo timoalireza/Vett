@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   title: {
-    fontFamily: "Inter_200ExtraLight",
+    fontFamily: "Inter_700Bold",
     fontSize: 28,
     color: "#FFFFFF",
   },

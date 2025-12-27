@@ -8,7 +8,7 @@ function HealthOverview() {
   const theme = useTheme();
   return (
     <View style={{ padding: theme.spacing(3), gap: theme.spacing(1.5) }}>
-      <Text style={{ color: theme.colors.text, fontFamily: "Inter_600SemiBold" }}>Clinical snapshot</Text>
+      <Text style={{ color: theme.colors.text, fontFamily: "Inter_700Bold" }}>Clinical snapshot</Text>
       <Text style={{ color: theme.colors.subtitle }}>
         CDC, WHO, and peer-reviewed cohort studies confirm flu shots remain recommended for pregnant people in 2025. Our ingestion flagged policy memos supporting continuity of care.
       </Text>

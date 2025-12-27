@@ -164,7 +164,7 @@ export function AnalysisCardVertical({
                 {
                   color: "#FFFFFF",
                   fontSize: 17,
-                  fontFamily: "Inter_600SemiBold",
+                  fontFamily: "Inter_700Bold",
                   lineHeight: 22,
                   marginBottom: 8
                 }
@@ -182,7 +182,7 @@ export function AnalysisCardVertical({
                     {
                       color: "rgba(255, 255, 255, 0.5)",
                       fontSize: 11,
-                      fontFamily: "Inter_600SemiBold",
+                      fontFamily: "Inter_500Medium",
                       letterSpacing: 0.5,
                       textTransform: "uppercase"
                     }

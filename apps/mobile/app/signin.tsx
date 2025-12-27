@@ -818,7 +818,7 @@ export default function SignInScreen() {
           style={{
             color: theme.colors.text,
             fontSize: theme.typography.subheading,
-            fontFamily: "Inter_600SemiBold",
+            fontFamily: "Inter_700Bold",
             marginBottom: theme.spacing(2),
             textAlign: "center",
           }}
@@ -911,7 +911,7 @@ export default function SignInScreen() {
               style={{
                 color: theme.colors.text,
                 fontSize: theme.typography.heading + 8,
-                fontFamily: "Inter_600SemiBold",
+                fontFamily: "Inter_700Bold",
                 textAlign: "center",
                 marginBottom: theme.spacing(2)
               }}
@@ -926,7 +926,7 @@ export default function SignInScreen() {
                   style={{
                     color: theme.colors.text,
                     fontSize: theme.typography.subheading,
-                    fontFamily: "Inter_600SemiBold",
+                    fontFamily: "Inter_700Bold",
                     marginBottom: theme.spacing(1)
                   }}
                 >
@@ -955,7 +955,7 @@ export default function SignInScreen() {
                     padding: theme.spacing(2),
                     color: theme.colors.text,
                     fontSize: theme.typography.heading,
-                    fontFamily: "Inter_600SemiBold",
+                    fontFamily: "Inter_700Bold",
                     letterSpacing: 8,
                     textAlign: "center",
                     borderWidth: 1,

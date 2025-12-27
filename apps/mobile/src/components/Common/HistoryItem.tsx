@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   scoreText: {
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_500Medium",
     fontSize: 12,
   },
   content: {

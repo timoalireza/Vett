@@ -89,7 +89,7 @@ export function ScoreRing({ score, label = "Vett Score", size = 140, verdict }: 
           style={{
             color: "rgba(255, 255, 255, 0.5)",
             fontSize: 11,
-            fontFamily: "Inter_600SemiBold",
+            fontFamily: "Inter_500Medium",
             letterSpacing: 0.8,
             textTransform: "uppercase",
             marginBottom: 4

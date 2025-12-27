@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   input: {
-    fontFamily: "Inter_300Light",
+    fontFamily: "Inter_400Regular",
     fontSize: 18,
     textAlign: "center",
     minWidth: 200,

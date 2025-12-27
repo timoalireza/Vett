@@ -7,7 +7,6 @@ import { useSignUp, useAuth, useClerk } from "@clerk/clerk-expo";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
-import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
 import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { useTheme } from "../../src/hooks/use-theme";
 import { useAppState } from "../../src/state/app-state";
@@ -772,7 +771,7 @@ export default function AuthScreen() {
           style={{
             color: theme.colors.text,
             fontSize: theme.typography.subheading,
-            fontFamily: "Inter_600SemiBold",
+            fontFamily: "Inter_700Bold",
             marginBottom: theme.spacing(2),
             textAlign: "center",
           }}
@@ -845,12 +844,6 @@ export default function AuthScreen() {
   return (
     <GradientBackground>
       <SafeAreaView style={styles.container} edges={["top"]}>
-        {/* Static elements - same position on all screens so they appear fixed */}
-        <View style={styles.header}>
-          <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={4} totalSteps={8} variant="bar" />
-          </View>
-        </View>
         <View style={styles.backButtonContainer}>
           <OnboardingBackButton 
             onPress={() => {
@@ -889,7 +882,7 @@ export default function AuthScreen() {
                 styles.title,
                 {
                   color: theme.colors.text,
-                  fontFamily: "Inter_600SemiBold",
+                  fontFamily: "Inter_700Bold",
                   fontSize: theme.typography.heading,
                   marginBottom: theme.spacing(3),
                 },
@@ -905,7 +898,7 @@ export default function AuthScreen() {
                     styles.title,
                     {
                       color: theme.colors.text,
-                      fontFamily: "Inter_600SemiBold",
+                      fontFamily: "Inter_700Bold",
                       fontSize: theme.typography.subheading,
                       marginBottom: theme.spacing(1),
                     },
@@ -942,7 +935,7 @@ export default function AuthScreen() {
                       borderColor: theme.colors.border,
                       color: theme.colors.text,
                       borderRadius: theme.radii.md,
-                      fontFamily: "Inter_600SemiBold",
+                      fontFamily: "Inter_700Bold",
                       fontSize: theme.typography.heading,
                     },
                   ]}
@@ -1121,16 +1114,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  progressContainer: {
-    width: "100%",
-  },
   backButtonContainer: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 12,
   },
   keyboardAvoidingView: {

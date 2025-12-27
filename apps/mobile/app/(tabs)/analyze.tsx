@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
   },
   pillButtonText: {
     color: '#000000',
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
   },
 });

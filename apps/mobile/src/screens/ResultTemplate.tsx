@@ -202,7 +202,7 @@ export function ResultTemplate({
               padding: theme.spacing(2)
             }}
           >
-            <Text style={{ color: theme.colors.text, fontFamily: "Inter_600SemiBold" }}>{topic.toUpperCase()} OVERVIEW</Text>
+            <Text style={{ color: theme.colors.text, fontFamily: "Inter_700Bold" }}>{topic.toUpperCase()} OVERVIEW</Text>
             <Text style={{ color: theme.colors.subtitle, marginTop: theme.spacing(1) }}>
               This is a placeholder overview detailing how the verdict was reached. Replace with real pipeline output once backend wiring is ready.
             </Text>

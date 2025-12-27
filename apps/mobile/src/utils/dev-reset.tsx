@@ -54,7 +54,7 @@ export function DevResetButton() {
           styles.buttonText,
           {
             color: theme.colors.danger,
-            fontFamily: "Inter_600SemiBold",
+            fontFamily: "Inter_500Medium",
             fontSize: theme.typography.body,
           },
         ]}

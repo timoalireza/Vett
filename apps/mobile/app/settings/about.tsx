@@ -59,7 +59,7 @@ export default function AboutScreen() {
                 {
                   color: theme.colors.text,
                   fontSize: theme.typography.heading,
-                  fontFamily: "Inter_600SemiBold",
+                  fontFamily: "Inter_700Bold",
                   marginBottom: theme.spacing(3)
                 }
               ]}

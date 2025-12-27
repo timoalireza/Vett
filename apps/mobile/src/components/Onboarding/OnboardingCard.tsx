@@ -19,7 +19,7 @@ export function OnboardingCard({ title, subtitle, children }: OnboardingCardProp
           styles.title,
           {
             color: theme.colors.text,
-            fontFamily: "Inter_200ExtraLight",
+            fontFamily: "Inter_700Bold",
             fontSize: theme.typography.heading,
           },
         ]}

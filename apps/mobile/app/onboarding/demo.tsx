@@ -15,7 +15,6 @@ import * as Haptics from "expo-haptics";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
-import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
 import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { useTheme } from "../../src/hooks/use-theme";
 
@@ -117,11 +116,6 @@ export default function DemoScreen() {
   return (
     <GradientBackground>
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={7} totalSteps={8} variant="bar" />
-          </View>
-        </View>
         <View style={styles.backButtonContainer}>
           <OnboardingBackButton goTo="/onboarding/stats" />
         </View>
@@ -133,7 +127,7 @@ export default function DemoScreen() {
               styles.title,
               {
                 color: theme.colors.text,
-                fontFamily: "Inter_600SemiBold",
+                fontFamily: "Inter_700Bold",
                 fontSize: theme.typography.heading,
               },
             ]}
@@ -257,7 +251,7 @@ export default function DemoScreen() {
                       styles.verdictText,
                       {
                         color: getVerdictColor(DEMO_RESULT.verdict),
-                        fontFamily: "Inter_600SemiBold",
+                        fontFamily: "Inter_700Bold",
                         fontSize: theme.typography.body,
                       },
                     ]}
@@ -378,16 +372,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  progressContainer: {
-    width: "100%",
-  },
   backButtonContainer: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 12,
   },
   content: {

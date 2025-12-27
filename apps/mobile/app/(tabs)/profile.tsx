@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   title: {
-    fontFamily: "Inter_200ExtraLight",
+    fontFamily: "Inter_700Bold",
     fontSize: 28,
     color: "#FFFFFF",
   },
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statisticValue: {
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_700Bold",
     fontSize: 24,
     color: "#FFFFFF",
     marginBottom: 4,

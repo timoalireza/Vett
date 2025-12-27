@@ -4,12 +4,10 @@ import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { 
   useFonts, 
-  Inter_200ExtraLight,
-  Inter_300Light,
   Inter_400Regular, 
   Inter_500Medium, 
-  Inter_600SemiBold, 
-  Inter_700Bold 
+  Inter_700Bold,
+  Inter_800ExtraBold
 } from "@expo-google-fonts/inter";
 import { StatusBar } from "expo-status-bar";
 import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
@@ -238,12 +236,10 @@ function NavigationGate() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Inter_200ExtraLight,
-    Inter_300Light,
     Inter_400Regular,
     Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold
+    Inter_700Bold,
+    Inter_800ExtraBold
   });
 
   useEffect(() => {

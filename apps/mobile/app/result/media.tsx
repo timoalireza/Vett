@@ -8,7 +8,7 @@ function MediaOverview() {
   const theme = useTheme();
   return (
     <View style={{ padding: theme.spacing(3), gap: theme.spacing(1.5) }}>
-      <Text style={{ color: theme.colors.text, fontFamily: "Inter_600SemiBold" }}>Media integrity</Text>
+      <Text style={{ color: theme.colors.text, fontFamily: "Inter_700Bold" }}>Media integrity</Text>
       <Text style={{ color: theme.colors.subtitle }}>
         Reverse image search linked the viral powerlifting post to an earlier Reuters gallery. Captions were altered to insert fabricated quotes.
       </Text>

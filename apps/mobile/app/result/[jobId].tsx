@@ -448,7 +448,7 @@ export default function ResultScreen() {
                 ]}>
                   <Text 
                     style={{
-                      fontFamily: 'Inter_600SemiBold',
+                      fontFamily: 'Inter_700Bold',
                       fontSize: claimFontSize,
                       color: '#FFFFFF',
                       textAlign: 'center',
@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   verdictScoreValue: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_700Bold',
     fontSize: 28,
     color: '#FFFFFF',
     textAlign: 'center',
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   sourcesBadgeText: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
     color: '#FFFFFF',
   },
@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     marginTop: 16,
-    fontFamily: 'Inter_200ExtraLight',
+    fontFamily: 'Inter_700Bold',
     fontSize: 36,
     color: '#22C55E',
   },

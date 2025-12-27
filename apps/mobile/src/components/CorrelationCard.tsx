@@ -51,7 +51,7 @@ export function CorrelationCard({
         style={{
           color: color,
           fontSize: 28,
-          fontFamily: "Inter_600SemiBold"
+          fontFamily: "Inter_700Bold"
         }}
       >
         r = {correlation.toFixed(2)}

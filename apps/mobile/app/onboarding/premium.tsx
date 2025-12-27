@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
-import { ProgressIndicator } from "../../src/components/Onboarding/ProgressIndicator";
 import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 import { useTheme } from "../../src/hooks/use-theme";
 import { useRevenueCat } from "../../src/hooks/use-revenuecat";
@@ -60,11 +59,6 @@ export default function PremiumScreen() {
     return (
       <GradientBackground>
         <SafeAreaView style={styles.container} edges={["top"]}>
-          <View style={styles.header}>
-            <View style={styles.progressContainer}>
-              <ProgressIndicator currentStep={8} totalSteps={8} variant="bar" />
-            </View>
-          </View>
           <View style={styles.backButtonContainer}>
             <OnboardingBackButton goTo="/onboarding/demo" />
           </View>
@@ -87,7 +81,7 @@ export default function PremiumScreen() {
                   styles.title,
                   {
                     color: theme.colors.text,
-                    fontFamily: "Inter_600SemiBold",
+                    fontFamily: "Inter_700Bold",
                     fontSize: theme.typography.heading,
                   },
                 ]}
@@ -158,11 +152,6 @@ export default function PremiumScreen() {
   return (
     <GradientBackground>
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={styles.header}>
-          <View style={styles.progressContainer}>
-            <ProgressIndicator currentStep={8} totalSteps={8} variant="bar" />
-          </View>
-        </View>
         <View style={styles.backButtonContainer}>
           <OnboardingBackButton onPress={() => setScreen("features")} />
         </View>
@@ -185,7 +174,7 @@ export default function PremiumScreen() {
               styles.title,
               {
                 color: theme.colors.text,
-                fontFamily: "Inter_600SemiBold",
+                fontFamily: "Inter_700Bold",
                 fontSize: theme.typography.heading,
               },
             ]}
@@ -238,16 +227,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  progressContainer: {
-    width: "100%",
-  },
   backButtonContainer: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 12,
   },
   scrollContent: {

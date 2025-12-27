@@ -172,7 +172,7 @@ export default function LinkedAccountsScreen() {
                   <Text
                     style={{
                       color: theme.colors.text,
-                      fontFamily: "Inter_600SemiBold",
+                      fontFamily: "Inter_700Bold",
                       fontSize: theme.typography.body
                     }}
                   >
@@ -298,7 +298,7 @@ export default function LinkedAccountsScreen() {
                 <Text
                   style={{
                     color: theme.colors.text,
-                    fontFamily: "Inter_600SemiBold",
+                    fontFamily: "Inter_700Bold",
                     fontSize: theme.typography.caption,
                     marginBottom: theme.spacing(0.5)
                   }}

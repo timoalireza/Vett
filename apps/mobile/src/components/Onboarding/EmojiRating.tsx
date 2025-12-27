@@ -211,7 +211,7 @@ function AnimatedLabel({
           styles.labelText, 
           { 
             color: isPlaceholder ? theme.colors.textSecondary : theme.colors.text,
-            fontFamily: isPlaceholder ? "Inter_500Medium" : "Inter_600SemiBold",
+            fontFamily: isPlaceholder ? "Inter_500Medium" : "Inter_700Bold",
             fontSize: isPlaceholder ? 14 : 16,
           }
         ]}
