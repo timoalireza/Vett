@@ -1063,6 +1063,24 @@ export default function AuthScreen() {
                   disabled={loading || !phoneNumber}
                 />
 
+                <TouchableOpacity
+                  onPress={() => router.push("/onboarding/email-auth")}
+                  disabled={loading}
+                  style={{ marginTop: theme.spacing(2) }}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.textSecondary,
+                      fontSize: theme.typography.caption,
+                      textAlign: "center",
+                      fontFamily: "Inter_500Medium",
+                      opacity: loading ? 0.5 : 1,
+                    }}
+                  >
+                    Or sign in with email instead
+                  </Text>
+                </TouchableOpacity>
+
                 {error && (
                   <View
                     style={[

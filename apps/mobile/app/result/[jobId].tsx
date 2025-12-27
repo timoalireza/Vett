@@ -15,7 +15,7 @@ import Animated, {
   interpolate,
 } from "react-native-reanimated";
 
-import { fetchAnalysis } from "../../src/api/analysis";
+import { AnalysisResponse, fetchAnalysis } from "../../src/api/analysis";
 import { LensMotif } from "../../src/components/Lens/LensMotif";
 import { AnimatedLens } from "../../src/components/Lens/AnimatedLens";
 import { ScoreRing } from "../../src/components/Lens/ScoreRing";
@@ -45,7 +45,7 @@ const Card = ({ label, children }: { label: string, children: React.ReactNode })
 );
 
 export default function ResultScreen() {
-  const { jobId, claimText } = useLocalSearchParams<{ jobId: string; claimText?: string }>();
+  const { jobId, claimText, demo } = useLocalSearchParams<{ jobId: string; claimText?: string; demo?: string }>();
   const router = useRouter();
   const { getToken } = useAuth();
   const { registerVideo } = useVideoAnimationState();
@@ -55,8 +55,42 @@ export default function ResultScreen() {
   const sourcesChevronRotation = useSharedValue(0);
   const insets = useSafeAreaInsets();
 
+  const isDemo = jobId === "demo" || demo === "1";
+  const [demoAnalysis, setDemoAnalysis] = useState<AnalysisResponse | null>(() => {
+    if (!isDemo) return null;
+    const now = new Date().toISOString();
+    const claim = claimText || "Scientists have discovered that drinking coffee can extend your lifespan by up to 10 years.";
+    return {
+      id: "demo",
+      status: "QUEUED",
+      createdAt: now,
+      score: null,
+      verdict: null,
+      confidence: null,
+      bias: null,
+      title: null,
+      summary: null,
+      recommendation: null,
+      rawInput: claim,
+      claims: [
+        {
+          id: "demo-claim-1",
+          text: claim,
+          verdict: null,
+          confidence: null,
+          extractionConfidence: null,
+        },
+      ],
+      sources: [],
+    };
+  });
+
   // Ensure token is set
   useEffect(() => {
+    if (isDemo) {
+      tokenProvider.setToken(null);
+      return;
+    }
     const setToken = async () => {
       try {
         const token = await getToken();
@@ -67,17 +101,117 @@ export default function ResultScreen() {
       }
     };
     setToken();
-  }, [getToken]);
+  }, [getToken, isDemo]);
 
-  const { data: analysis, isLoading, error } = useQuery({
+  // Demo flow: simulate job progress and completion locally (no API/auth required)
+  useEffect(() => {
+    if (!isDemo) return;
+
+    const claim = claimText || "Scientists have discovered that drinking coffee can extend your lifespan by up to 10 years.";
+    const now = new Date().toISOString();
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+
+    // Ensure we start from a clean queued state when entering demo
+    setDemoAnalysis({
+      id: "demo",
+      status: "QUEUED",
+      createdAt: now,
+      score: null,
+      verdict: null,
+      confidence: null,
+      bias: null,
+      title: "Coffee extends lifespan by 10 years",
+      summary: null,
+      recommendation: null,
+      rawInput: claim,
+      claims: [
+        {
+          id: "demo-claim-1",
+          text: claim,
+          verdict: null,
+          confidence: null,
+          extractionConfidence: null,
+        },
+      ],
+      sources: [],
+    });
+
+    timers.push(
+      setTimeout(() => {
+        setDemoAnalysis((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "PROCESSING",
+              }
+            : prev
+        );
+      }, 900)
+    );
+
+    timers.push(
+      setTimeout(() => {
+        setDemoAnalysis((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: "COMPLETED",
+            // Use server-style verdicts so the existing label/color mapping matches homescreen/results.
+            verdict: "Partially Accurate",
+            score: 42,
+            confidence: 0.78,
+            summary:
+              "Some research links moderate coffee intake to improved health outcomes, but the claim of adding 10 years to lifespan is exaggerated and not supported by strong evidence.",
+            recommendation:
+              "If you see a claim like this, look for the exact study being cited (sample size, duration, and outcomes). Most coffee research is observational and can’t prove causation. Treat large, specific lifespan numbers as a red flag unless multiple high-quality studies agree.",
+            sources: [
+              {
+                id: "demo-source-1",
+                provider: "web",
+                title: "Coffee and health: What does the evidence actually show?",
+                url: "https://www.nih.gov/",
+                reliability: 0.9,
+                summary: "Overview of what health research can and can't conclude from observational studies.",
+              },
+              {
+                id: "demo-source-2",
+                provider: "web",
+                title: "Coffee and longevity: Benefits and limitations",
+                url: "https://www.hsph.harvard.edu/",
+                reliability: 0.85,
+                summary: "Summary of findings plus common over-interpretations in headlines.",
+              },
+            ],
+            claims: [
+              {
+                id: "demo-claim-1",
+                text: claim,
+                verdict: "Partially Accurate",
+                confidence: 0.78,
+                extractionConfidence: 0.95,
+              },
+            ],
+          };
+        });
+      }, 3200)
+    );
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [isDemo, claimText]);
+
+  const { data: apiAnalysis, isLoading, error } = useQuery({
     queryKey: ["analysis", jobId],
     queryFn: () => fetchAnalysis(jobId!),
-    enabled: !!jobId,
+    enabled: !!jobId && !isDemo,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "COMPLETED" || status === "FAILED" ? false : 2000;
     },
   });
+
+  const analysis = isDemo ? demoAnalysis : apiAnalysis;
 
   // Back handler
   useEffect(() => {

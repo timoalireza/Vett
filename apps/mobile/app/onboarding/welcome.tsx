@@ -6,6 +6,7 @@ import PagerView from "react-native-pager-view";
 import Animated, { 
   FadeInUp,
   FadeInDown,
+  FadeIn,
 } from "react-native-reanimated";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -23,18 +24,15 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 // Recommended dimensions: 1170 x 2532 pixels (iPhone 14 Pro Max)
 // Format: PNG or JPG
 // 
-// UNCOMMENT the lines below after uploading your images:
-
 const SLIDE_BACKGROUNDS: { [key: number]: ImageSourcePropType | null } = {
-  // 0: require("../../assets/onboarding/slide-1-info-moves-fast.png"),
-  // 1: require("../../assets/onboarding/slide-2-verification.png"),
-  // 2: require("../../assets/onboarding/slide-3-frictionless.png"),
-  // 3: require("../../assets/onboarding/slide-4-truth-layer.png"),
-  // 4: require("../../assets/onboarding/slide-5-vett-it.png"),
-  0: null,
-  1: null,
+  // NOTE: Expo requires static `require(...)` to bundle images.
+  // Only the images that exist in `apps/mobile/assets/onboarding/` are wired here.
+  0: require("../../assets/onboarding/slide-1-info-moves-fast.png"),
+  1: require("../../assets/onboarding/slide-2-verification.png"),
+  // TODO: add `slide-3-frictionless.png`
   2: null,
-  3: null,
+  3: require("../../assets/onboarding/slide-4-truth-layer.png"),
+  // TODO: add `slide-5-vett-it.png`
   4: null,
 };
 
@@ -67,21 +65,39 @@ const AUTO_ADVANCE_INTERVAL = 4000;
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const pagerRef = useRef<PagerView>(null);
+  const headlinePagerRef = useRef<PagerView>(null);
+  const subtextPagerRef = useRef<PagerView>(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const currentPageRef = useRef(0);
 
   // Auto-advance carousel
   useEffect(() => {
+    // Keep the ref in sync so the interval callback always has the latest page,
+    // without needing `currentPage` in the dependency array (which would reset the timer).
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  // Auto-advance carousel (stable interval; no stale closure on `currentPage`)
+  useEffect(() => {
     const interval = setInterval(() => {
-      const nextPage = (currentPage + 1) % CAROUSEL_SLIDES.length;
-      pagerRef.current?.setPage(nextPage);
+      const nextPage = (currentPageRef.current + 1) % CAROUSEL_SLIDES.length;
+      currentPageRef.current = nextPage;
+      headlinePagerRef.current?.setPage(nextPage);
+      subtextPagerRef.current?.setPage(nextPage);
+      // Update immediately for the progress bar; `onPageSelected` will keep it in sync too.
+      setCurrentPage(nextPage);
     }, AUTO_ADVANCE_INTERVAL);
 
     return () => clearInterval(interval);
-  }, [currentPage]);
+  }, []);
 
   const handlePageSelected = (e: any) => {
-    setCurrentPage(e.nativeEvent.position);
+    const position = e.nativeEvent.position;
+    currentPageRef.current = position;
+    setCurrentPage(position);
+    // Sync both pagers
+    headlinePagerRef.current?.setPage(position);
+    subtextPagerRef.current?.setPage(position);
   };
 
   const handleSignUp = () => {
@@ -93,6 +109,36 @@ export default function WelcomeScreen() {
   };
 
   const currentBackground = SLIDE_BACKGROUNDS[currentPage];
+
+  // Helper to split text into words and render with animation
+  const renderAnimatedWords = (text: string, pageIndex: number, baseDelay: number = 0) => {
+    const lines = text.split('\n');
+    let wordIndex = 0;
+    
+    return lines.map((line, lineIndex) => {
+      const words = line.split(' ');
+      const lineWords = words.map((word, idx) => {
+        const currentWordIndex = wordIndex++;
+        return (
+          <Animated.Text
+            key={`page-${pageIndex}-line-${lineIndex}-word-${idx}`}
+            entering={FadeInUp.delay(baseDelay + currentWordIndex * 80).duration(500)}
+            style={[styles.headline, { fontFamily: "Inter_800ExtraBold" }]}
+          >
+            {word}
+            {idx < words.length - 1 ? ' ' : ''}
+          </Animated.Text>
+        );
+      });
+      
+      return (
+        <View key={`page-${pageIndex}-line-${lineIndex}`} style={styles.wordLine}>
+          {lineWords}
+          {lineIndex < lines.length - 1 ? <Text style={styles.lineBreak}>{'\n'}</Text> : null}
+        </View>
+      );
+    });
+  };
 
   // Render content (shared between with/without background)
   const renderContent = () => (
@@ -123,22 +169,48 @@ export default function WelcomeScreen() {
         <Text style={[styles.logo, { fontFamily: "Inter_700Bold" }]}>Vett</Text>
       </Animated.View>
 
-      {/* Carousel Section */}
-      <View style={styles.carouselContainer}>
+      {/* Headline at Top */}
+      <View style={styles.headlineSection}>
         <PagerView
-          ref={pagerRef}
-          style={styles.pager}
+          ref={headlinePagerRef}
+          style={styles.headlinePager}
           initialPage={0}
           onPageSelected={handlePageSelected}
         >
           {CAROUSEL_SLIDES.map((slide, index) => (
-            <View key={index} style={styles.slideContainer}>
-              <Text style={[styles.headline, { fontFamily: "Inter_800ExtraBold" }]}>
-                {slide.headline}
-              </Text>
-              <Text style={[styles.subtext, { fontFamily: "Inter_400Regular" }]}>
-                {slide.subtext}
-              </Text>
+            <View key={`headline-${index}`} style={styles.headlineContainer}>
+              {currentPage === index && (
+                <View style={styles.wordContainer}>
+                  {renderAnimatedWords(slide.headline, index, 300)}
+                </View>
+              )}
+            </View>
+          ))}
+        </PagerView>
+      </View>
+
+      {/* Spacer to push content to edges */}
+      <View style={styles.spacer} />
+
+      {/* Subtext Above Buttons */}
+      <View style={styles.subtextSection}>
+        <PagerView
+          ref={subtextPagerRef}
+          style={styles.subtextPager}
+          initialPage={0}
+          scrollEnabled={false}
+        >
+          {CAROUSEL_SLIDES.map((slide, index) => (
+            <View key={`subtext-${index}`} style={styles.subtextContainer}>
+              {currentPage === index && (
+                <Animated.Text 
+                  key={`subtext-animated-${index}`}
+                  entering={FadeIn.delay(700).duration(600)}
+                  style={[styles.subtext, { fontFamily: "Inter_400Regular" }]}
+                >
+                  {slide.subtext}
+                </Animated.Text>
+              )}
             </View>
           ))}
         </PagerView>
@@ -174,27 +246,22 @@ export default function WelcomeScreen() {
     </SafeAreaView>
   );
 
-  // If no background image, render with solid color
-  if (!currentBackground) {
-    return (
-      <View style={styles.container}>
-        {renderContent()}
-      </View>
-    );
-  }
-
-  // With background image
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={currentBackground}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        {/* Dark overlay for text readability */}
-        <View style={styles.overlay} />
-        {renderContent()}
-      </ImageBackground>
+      {/* Keep the carousel content mounted in a stable position to avoid PagerView jitter/resets. */}
+      {currentBackground ? (
+        <>
+          <ImageBackground
+            source={currentBackground}
+            style={StyleSheet.absoluteFillObject}
+            resizeMode="cover"
+          />
+          {/* Dark overlay for text readability */}
+          <View style={styles.overlay} pointerEvents="none" />
+        </>
+      ) : null}
+
+      {renderContent()}
     </View>
   );
 }
@@ -203,11 +270,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000000",
-  },
-  backgroundImage: {
-    flex: 1,
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -241,17 +303,27 @@ const styles = StyleSheet.create({
     fontSize: 28,
     letterSpacing: -0.5,
   },
-  carouselContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  pager: {
-    height: 280,
-  },
-  slideContainer: {
-    flex: 1,
+  headlineSection: {
+    paddingTop: 32,
     paddingHorizontal: 24,
-    justifyContent: "center",
+  },
+  headlinePager: {
+    height: 180,
+  },
+  headlineContainer: {
+    flex: 1,
+    justifyContent: "flex-start",
+  },
+  wordContainer: {
+    flexDirection: "column",
+  },
+  wordLine: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  lineBreak: {
+    height: 0,
+    width: 0,
   },
   headline: {
     color: "#FFFFFF",
@@ -259,11 +331,24 @@ const styles = StyleSheet.create({
     lineHeight: 40,
     letterSpacing: -0.5,
   },
+  spacer: {
+    flex: 1,
+  },
+  subtextSection: {
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+  },
+  subtextPager: {
+    height: 80,
+  },
+  subtextContainer: {
+    flex: 1,
+    justifyContent: "flex-start",
+  },
   subtext: {
     color: "rgba(255, 255, 255, 0.6)",
     fontSize: 15,
     lineHeight: 22,
-    marginTop: 20,
     letterSpacing: 0.2,
   },
   bottomSection: {

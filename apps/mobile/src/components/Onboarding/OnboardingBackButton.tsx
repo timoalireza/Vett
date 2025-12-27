@@ -17,7 +17,13 @@ export function OnboardingBackButton({ onPress, goTo }: OnboardingBackButtonProp
     if (onPress) {
       onPress();
     } else if (goTo) {
-      router.push(goTo);
+      // Prefer a real "back" (pop) to ensure the transition animates in the
+      // correct direction. Fall back to replace when there's no history.
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace(goTo);
+      }
     } else {
       router.back();
     }

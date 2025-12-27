@@ -76,14 +76,26 @@ function NavigationGate() {
       console.log("[NavigationGate] State:", { isReady, authMode, hasOnboarded, pathname });
       
       // Check if user needs onboarding
-      if (!hasOnboarded && !pathname.startsWith("/onboarding") && !pathname.startsWith("/signin")) {
+      // Allow visiting /result/* during onboarding so the onboarding demo can show the real results screen UI.
+      if (
+        !hasOnboarded &&
+        !pathname.startsWith("/onboarding") &&
+        !pathname.startsWith("/signin") &&
+        !pathname.startsWith("/result")
+      ) {
         router.replace("/onboarding");
         return;
       }
 
       // Force authentication - no guest mode
       const needsAuth = authMode !== "signedIn";
-      if (needsAuth && !pathname.startsWith("/signin") && !pathname.startsWith("/onboarding")) {
+      // Allow /result/* even when signed out so onboarding demo can show the real results UI.
+      if (
+        needsAuth &&
+        !pathname.startsWith("/signin") &&
+        !pathname.startsWith("/onboarding") &&
+        !pathname.startsWith("/result")
+      ) {
         router.replace("/signin");
         return;
       }
@@ -182,15 +194,15 @@ function NavigationGate() {
         options={onboardingScreenOptions}
       />
       <Stack.Screen 
-        name="onboarding/intro" 
-        options={onboardingScreenOptions}
-      />
-      <Stack.Screen 
         name="onboarding/name" 
         options={onboardingScreenOptions}
       />
       <Stack.Screen 
         name="onboarding/auth" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
+        name="onboarding/email-auth" 
         options={onboardingScreenOptions}
       />
       <Stack.Screen 
