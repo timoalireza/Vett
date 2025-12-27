@@ -241,7 +241,12 @@ export const AnimatedLens: React.FC<AnimatedLensProps> = ({ size = 240, claimTex
               textShadowOffset: { width: 0, height: 1 },
               textShadowRadius: 2,
             }}
-            numberOfLines={4}
+            // Never truncate: auto-scale so the claim always fits inside the lens.
+            adjustsFontSizeToFit
+            minimumFontScale={0.05}
+            numberOfLines={10}
+            allowFontScaling={false}
+            ellipsizeMode="clip"
           >
             {claimText}
           </Text>

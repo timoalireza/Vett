@@ -82,6 +82,8 @@ export default function WelcomeScreen() {
   const [currentPage, setCurrentPage] = useState(0);
   const currentPageRef = useRef(0);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Used to detect true user-driven swipes (vs programmatic page changes).
+  const userSwipeInProgressRef = useRef(false);
 
   // Background crossfade state (keep previous + current mounted while animating)
   const [bgFromPage, setBgFromPage] = useState<number | null>(null);
@@ -146,6 +148,17 @@ export default function WelcomeScreen() {
     return () => clearAutoAdvanceTimer();
   }, []);
 
+  const handleHeadlineScrollStateChanged = (e: any) => {
+    const state = e?.nativeEvent?.pageScrollState;
+    if (state === "dragging") {
+      userSwipeInProgressRef.current = true;
+      return;
+    }
+    if (state === "idle") {
+      userSwipeInProgressRef.current = false;
+    }
+  };
+
   const handlePageSelected = (e: any) => {
     const position = e.nativeEvent.position;
     const fromPage = currentPageRef.current;
@@ -154,6 +167,12 @@ export default function WelcomeScreen() {
     setCurrentPage(position);
     // Sync subtext pager only (headline pager is the source of truth here).
     (subtextPagerRef.current as any)?.setPageWithoutAnimation?.(position);
+
+    // If the user manually swiped, reset the auto-advance interval so it doesn't fire "too soon".
+    if (userSwipeInProgressRef.current) {
+      startAutoAdvanceTimer();
+      userSwipeInProgressRef.current = false;
+    }
   };
 
   const handleSignUp = () => {
@@ -241,6 +260,7 @@ export default function WelcomeScreen() {
           ref={headlinePagerRef}
           style={styles.headlinePager}
           initialPage={0}
+          onPageScrollStateChanged={handleHeadlineScrollStateChanged}
           onPageSelected={handlePageSelected}
         >
           {CAROUSEL_SLIDES.map((slide, index) => (

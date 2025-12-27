@@ -57,6 +57,17 @@ export default function DemoScreen() {
   const insets = useSafeAreaInsets();
   const { registerVideo } = useVideoAnimationState();
 
+  // Layout tuning constants (used to line up overlay text with the background video)
+  // Title position from top (aligns "Try it out" with reference cursor position)
+  const INSTRUCTION_TOP_OFFSET = 100;
+  // Negative moves the entire lens + CTA stack upward (claim text only, NOT the button).
+  const LENS_STACK_OFFSET_Y = -20;
+  // Negative moves the claim upward relative to the lens center.
+  const CLAIM_BASE_TRANSLATE_Y = -90;
+  // Button vertical center position
+  const ANALYZE_BUTTON_HEIGHT = 52;
+  const buttonCenterY = screenHeight / 2 - ANALYZE_BUTTON_HEIGHT / 2;
+
   // Start directly in input state with claim pre-filled
   const [demoStep, setDemoStep] = useState<DemoStep>("input");
   const [showResults, setShowResults] = useState(false);
@@ -147,7 +158,8 @@ export default function DemoScreen() {
 
   const claimStyle = useAnimatedStyle(() => ({
     opacity: claimOpacity.value,
-    transform: [{ translateY: claimTranslateY.value }],
+    // IMPORTANT: include a base offset so we can precisely align the claim with the lens in the background video.
+    transform: [{ translateY: claimTranslateY.value + CLAIM_BASE_TRANSLATE_Y }],
   }));
 
   const actionRowStyle = useAnimatedStyle(() => ({
@@ -235,7 +247,7 @@ export default function DemoScreen() {
         <Animated.View 
           entering={FadeInDown.duration(400).delay(200)} 
           exiting={FadeOut.duration(200)}
-          style={[styles.instructionContainer, { top: insets.top + 80 }]}
+          style={[styles.instructionContainer, { top: insets.top + INSTRUCTION_TOP_OFFSET }]}
         >
           <Text style={styles.instructionTitle}>Try it out</Text>
           <Text style={styles.instructionSubtitle}>
@@ -249,7 +261,7 @@ export default function DemoScreen() {
         <Animated.View 
           entering={FadeIn.duration(400)} 
           exiting={FadeOut.duration(200)}
-          style={[styles.instructionContainer, { top: insets.top + 80 }]}
+          style={[styles.instructionContainer, { top: insets.top + INSTRUCTION_TOP_OFFSET }]}
         >
           <Text style={styles.instructionTitle}>Analyzing...</Text>
           <Text style={styles.instructionSubtitle}>
@@ -261,7 +273,7 @@ export default function DemoScreen() {
       <View style={[styles.content, { zIndex: 10 }]}>
         {/* Main interactive area - only show lens/input when not showing results */}
         {!showResults && (
-          <View style={styles.lensContainer}>
+          <View style={[styles.lensContainer, { marginTop: LENS_STACK_OFFSET_Y }]}>
             <View style={{ width: 420, height: 420, position: "relative", alignItems: "center", justifyContent: "center" }}>
               {/* Claim text overlay - read-only, positioned in the lens */}
               {demoStep === "input" && (
@@ -271,21 +283,25 @@ export default function DemoScreen() {
               )}
             </View>
 
-            {/* Actions */}
-            <View style={styles.belowLens}>
-              {demoStep === "input" && (
-                <Animated.View style={[styles.actionRow, actionRowStyle]}>
-                  <TouchableOpacity
-                    onPress={handleAnalyze}
-                    style={styles.pillButton}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.pillButtonText}>Analyze</Text>
-                    <Ionicons name="arrow-forward" size={20} color="#000" />
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-            </View>
+            {/* Actions - positioned at exact vertical center of screen */}
+            {demoStep === "input" && (
+              <Animated.View 
+                style={[
+                  styles.analyzeButtonContainer,
+                  { top: buttonCenterY },
+                  actionRowStyle
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={handleAnalyze}
+                  style={styles.pillButton}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.pillButtonText}>Analyze</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#000" />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
           </View>
         )}
 
@@ -430,8 +446,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     justifyContent: "center",
     alignItems: "center",
-    // Position slightly above center to align with the lens visual
-    transform: [{ translateY: -30 }],
   },
   claimText: {
     fontFamily: "Inter_400Regular",
@@ -439,27 +453,27 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     textAlign: "center",
     lineHeight: 22,
-    textShadowColor: "rgba(0, 0, 0, 0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    // Enhanced drop shadow for better readability against bright video frames
+    textShadowColor: "rgba(0, 0, 0, 0.9)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
-  belowLens: {
-    marginTop: -40,
-    width: "100%",
+  analyzeButtonContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
     alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  actionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    justifyContent: "center",
+    zIndex: 20,
   },
   pillButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingHorizontal: 24,
+    // Extend CTA width so it's visually longer.
+    minWidth: 260,
+    paddingHorizontal: 36,
     height: 52,
     borderRadius: 26,
     backgroundColor: "#FFFFFF",
