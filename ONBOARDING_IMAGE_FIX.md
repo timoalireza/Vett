@@ -36,10 +36,8 @@ const SLIDE_BACKGROUNDS: { [key: number]: ImageSourcePropType | null } = {
 
 This ensures Metro bundler can properly resolve and bundle the images.
 
-### 2. Added error handling and logging
-Added `onError` and `onLoad` callbacks to the AnimatedImage components to help debug any image loading issues:
-- Logs successful image loads to console
-- Logs errors if images fail to load
+### 2. Code cleanup
+Ensured the code is production-ready without temporary debugging statements.
 
 ## Next Steps for User
 
@@ -64,10 +62,8 @@ After Metro restarts, reload the app on your device/simulator:
 - Android Emulator: RR (double tap R)
 - Physical device: Shake device and select "Reload"
 
-### 3. Check Console Logs
-Open the Metro bundler terminal output and watch for:
-- "toBackground image loaded successfully" - indicates images are loading correctly
-- "Failed to load toBackground image" - indicates there's still an issue
+### 3. Verify Images Display
+Open the app and navigate to the welcome/onboarding screen to verify all carousel images display correctly as you swipe through them.
 
 ## Additional Notes
 

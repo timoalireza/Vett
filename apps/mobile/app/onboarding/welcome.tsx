@@ -345,12 +345,6 @@ export default function WelcomeScreen() {
           style={[StyleSheet.absoluteFillObject, { width: screenWidth, height: screenHeight }, fromBackgroundStyle]}
           resizeMode="cover"
           fadeDuration={0}
-          onError={(error) => {
-            console.error("Failed to load fromBackground image:", error);
-          }}
-          onLoad={() => {
-            console.log("fromBackground image loaded successfully");
-          }}
         />
       ) : null}
 
@@ -360,12 +354,6 @@ export default function WelcomeScreen() {
           style={[StyleSheet.absoluteFillObject, { width: screenWidth, height: screenHeight }, toBackgroundStyle]}
           resizeMode="cover"
           fadeDuration={0}
-          onError={(error) => {
-            console.error("Failed to load toBackground image:", error);
-          }}
-          onLoad={() => {
-            console.log("toBackground image loaded successfully");
-          }}
         />
       ) : null}
 
