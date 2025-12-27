@@ -27,13 +27,18 @@ import Animated, {
 // Recommended dimensions: 1170 x 2532 pixels (iPhone 14 Pro Max)
 // Format: PNG or JPG
 // 
+// NOTE: Expo requires static `require(...)` to bundle images.
+// Extract them as constants first to ensure Metro bundler can properly resolve them.
+const SLIDE_IMAGE_1 = require("../../assets/onboarding/slide-1-info-moves-fast.png");
+const SLIDE_IMAGE_2 = require("../../assets/onboarding/slide-2-verification.png");
+const SLIDE_IMAGE_3 = require("../../assets/onboarding/slide-3-frictionless.png");
+const SLIDE_IMAGE_4 = require("../../assets/onboarding/slide-4-truth-layer.png");
+
 const SLIDE_BACKGROUNDS: { [key: number]: ImageSourcePropType | null } = {
-  // NOTE: Expo requires static `require(...)` to bundle images.
-  // Only the images that exist in `apps/mobile/assets/onboarding/` are wired here.
-  0: require("../../assets/onboarding/slide-1-info-moves-fast.png"),
-  1: require("../../assets/onboarding/slide-2-verification.png"),
-  2: require("../../assets/onboarding/slide-3-frictionless.png"),
-  3: require("../../assets/onboarding/slide-4-truth-layer.png"),
+  0: SLIDE_IMAGE_1,
+  1: SLIDE_IMAGE_2,
+  2: SLIDE_IMAGE_3,
+  3: SLIDE_IMAGE_4,
   // TODO: add `slide-5-vett-it.png`
   4: null,
 };
@@ -340,6 +345,12 @@ export default function WelcomeScreen() {
           style={[StyleSheet.absoluteFillObject, { width: screenWidth, height: screenHeight }, fromBackgroundStyle]}
           resizeMode="cover"
           fadeDuration={0}
+          onError={(error) => {
+            console.error("Failed to load fromBackground image:", error);
+          }}
+          onLoad={() => {
+            console.log("fromBackground image loaded successfully");
+          }}
         />
       ) : null}
 
@@ -349,6 +360,12 @@ export default function WelcomeScreen() {
           style={[StyleSheet.absoluteFillObject, { width: screenWidth, height: screenHeight }, toBackgroundStyle]}
           resizeMode="cover"
           fadeDuration={0}
+          onError={(error) => {
+            console.error("Failed to load toBackground image:", error);
+          }}
+          onLoad={() => {
+            console.log("toBackground image loaded successfully");
+          }}
         />
       ) : null}
 
