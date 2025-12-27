@@ -771,9 +771,12 @@ export default function SignInScreen() {
     try {
       setLoading(true);
       const startOAuth = strategy === "oauth_google" ? startGoogleOAuth : startAppleOAuth;
+      const redirectUrl = LinkingModule.createURL("analyze", { scheme: "vett" });
 
       const { createdSessionId } = await startOAuth({
-        redirectUrl: LinkingModule.createURL("/(tabs)/analyze", { scheme: "vett" })
+        // NOTE: expo-router route groups like `/(tabs)` are not part of deep links.
+        // Also avoid leading "/" so we don't generate `vett:///...` which can break Clerk allowlisting.
+        redirectUrl
       });
 
       if (createdSessionId && setActive) {
@@ -782,7 +785,21 @@ export default function SignInScreen() {
         router.replace("/(tabs)/analyze");
       }
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || err.message || `Failed to sign in with ${strategy === "oauth_google" ? "Google" : "Apple"}`;
+      const providerLabel = strategy === "oauth_google" ? "Google" : "Apple";
+      const rawMessage =
+        err?.errors?.[0]?.message ||
+        err?.message ||
+        `Failed to sign in with ${providerLabel}`;
+
+      let errorMessage = rawMessage;
+      if (/redirect url mismatch/i.test(rawMessage)) {
+        const redirectUrl = LinkingModule.createURL("analyze", { scheme: "vett" });
+        errorMessage =
+          `Redirect URL mismatch.\n\n` +
+          `In Clerk Dashboard → Configure → OAuth Applications → ${providerLabel}, add this Redirect URL:\n` +
+          `\`${redirectUrl}\``;
+      }
+
       Alert.alert("Error", errorMessage);
       console.error("OAuth error:", err);
     } finally {
@@ -1225,8 +1242,8 @@ export default function SignInScreen() {
                       <SocialButton
                         icon="logo-google"
                         iconColor="#000000"
-                        onPress={() => handleOAuth("oauth_google")}
-                        disabled={loading}
+                        onPress={() => Alert.alert("Coming soon", "Google sign-in will be available soon.")}
+                        disabled={true}
                       />
                     </View>
 
@@ -1397,8 +1414,8 @@ export default function SignInScreen() {
                       <SocialButton
                         icon="logo-google"
                         iconColor="#000000"
-                        onPress={() => handleOAuth("oauth_google")}
-                        disabled={loading}
+                      onPress={() => Alert.alert("Coming soon", "Google sign-in will be available soon.")}
+                      disabled={true}
                       />
                     </View>
 

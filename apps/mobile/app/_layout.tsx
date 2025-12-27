@@ -171,7 +171,9 @@ function NavigationGate() {
         },
       },
     },
-    cardStyle: {
+    // For native-stack, use contentStyle (cardStyle is for the JS stack navigator).
+    // This keeps onboarding screens transparent while ensuring the base layer is the app background.
+    contentStyle: {
       backgroundColor: "transparent",
     },
     fullScreenGestureEnabled: Platform.OS === "ios",
@@ -181,7 +183,10 @@ function NavigationGate() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: Platform.OS === "android" ? "slide_from_right" : "fade"
+        animation: Platform.OS === "android" ? "slide_from_right" : "fade",
+        // Ensure the base layer underneath all screens matches the app background.
+        // This prevents white "edges" from appearing during transitions.
+        contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
       <Stack.Screen name="(tabs)" />
@@ -236,11 +241,41 @@ function NavigationGate() {
       <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="settings/privacy" />
       <Stack.Screen name="settings/terms" />
-      <Stack.Screen name="modals/claim" options={{ presentation: "transparentModal" }} />
-      <Stack.Screen name="modals/source" options={{ presentation: "transparentModal" }} />
-      <Stack.Screen name="modals/share" options={{ presentation: "transparentModal" }} />
-      <Stack.Screen name="modals/permission" options={{ presentation: "transparentModal" }} />
-      <Stack.Screen name="modals/subscription" options={{ presentation: "transparentModal" }} />
+      <Stack.Screen
+        name="modals/claim"
+        options={{
+          presentation: "transparentModal",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
+      <Stack.Screen
+        name="modals/source"
+        options={{
+          presentation: "transparentModal",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
+      <Stack.Screen
+        name="modals/share"
+        options={{
+          presentation: "transparentModal",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
+      <Stack.Screen
+        name="modals/permission"
+        options={{
+          presentation: "transparentModal",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
+      <Stack.Screen
+        name="modals/subscription"
+        options={{
+          presentation: "transparentModal",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      />
       <Stack.Screen name="error-states" />
     </Stack>
   );
@@ -300,8 +335,10 @@ export default function RootLayout() {
           <VideoAnimationProvider>
             <RevenueCatAuthSync />
             <CrashBoundary>
-              <StatusBar style="light" translucent />
-              <NavigationGate />
+              <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+                <StatusBar style="light" translucent />
+                <NavigationGate />
+              </View>
             </CrashBoundary>
           </VideoAnimationProvider>
         </AppStateProvider>

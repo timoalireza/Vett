@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, TextInput, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -1112,11 +1112,6 @@ export default function AuthScreen() {
               </View>
             )}
 
-            {loading && (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color={theme.colors.primary} size="small" />
-              </View>
-            )}
           </GlassCard>
         </ScrollView>
         </KeyboardAvoidingView>
@@ -1166,10 +1161,6 @@ const styles = StyleSheet.create({
   },
   phoneForm: {
     marginTop: 16,
-  },
-  loadingContainer: {
-    marginTop: 16,
-    alignItems: "center",
   },
   input: {
     padding: 16,

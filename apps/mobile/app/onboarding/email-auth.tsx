@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -180,9 +180,12 @@ export default function EmailAuthScreen() {
       setLoading(true);
       setError(null);
       const startOAuth = strategy === "oauth_google" ? startGoogleOAuth : startAppleOAuth;
+      const redirectUrl = LinkingModule.createURL("onboarding/trust", { scheme: "vett" });
 
       const { createdSessionId } = await startOAuth({
-        redirectUrl: LinkingModule.createURL("/onboarding/trust", { scheme: "vett" })
+        // NOTE: Avoid leading "/" here; `Linking.createURL("/...")` often produces `vett:///...` (triple slash)
+        // which can trigger Clerk "Redirect url mismatch" if you allowlisted `vett://...`.
+        redirectUrl
       });
 
       if (createdSessionId && setActive) {
@@ -191,7 +194,21 @@ export default function EmailAuthScreen() {
         router.push("/onboarding/trust");
       }
     } catch (err: any) {
-      const errorMessage = err.errors?.[0]?.message || err.message || `Failed to sign in with ${strategy === "oauth_google" ? "Google" : "Apple"}`;
+      const providerLabel = strategy === "oauth_google" ? "Google" : "Apple";
+      const rawMessage =
+        err?.errors?.[0]?.message ||
+        err?.message ||
+        `Failed to sign in with ${providerLabel}`;
+
+      let errorMessage = rawMessage;
+      if (/redirect url mismatch/i.test(rawMessage)) {
+        const redirectUrl = LinkingModule.createURL("onboarding/trust", { scheme: "vett" });
+        errorMessage =
+          `Redirect URL mismatch.\n\n` +
+          `In Clerk Dashboard → Configure → OAuth Applications → ${providerLabel}, add this Redirect URL:\n` +
+          `\`${redirectUrl}\``;
+      }
+
       setError(errorMessage);
       console.error("OAuth error:", err);
     } finally {
@@ -503,8 +520,11 @@ export default function EmailAuthScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    onPress={() => handleOAuth("oauth_google")}
-                    disabled={loading}
+                    onPress={() => {
+                      // Google OAuth is intentionally disabled for now until configured in Clerk.
+                      Alert.alert("Coming soon", "Google sign-in will be available soon.");
+                    }}
+                    disabled={true}
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
@@ -514,7 +534,7 @@ export default function EmailAuthScreen() {
                       padding: theme.spacing(2),
                       borderWidth: 1,
                       borderColor: theme.colors.border,
-                      opacity: loading ? 0.5 : 1,
+                      opacity: 0.5,
                     }}
                   >
                     <Ionicons name="logo-google" size={20} color={theme.colors.text} style={{ marginRight: theme.spacing(1) }} />
@@ -525,17 +545,12 @@ export default function EmailAuthScreen() {
                         fontFamily: "Inter_500Medium",
                       }}
                     >
-                      Continue with Google
+                      Continue with Google (soon)
                     </Text>
                   </TouchableOpacity>
                 </View>
               )}
 
-              {loading && (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator color={theme.colors.primary} size="small" />
-                </View>
-              )}
             </GlassCard>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -582,10 +597,6 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     width: "100%",
-  },
-  loadingContainer: {
-    marginTop: 16,
-    alignItems: "center",
   },
 });
 

@@ -1,6 +1,6 @@
 # Clerk Authentication Setup Guide
 
-This guide explains how to configure Clerk authentication for the Vett mobile app with email, Google, and Apple sign-in options.
+This guide explains how to configure Clerk authentication for the Vett mobile app with email and Apple sign-in options.
 
 ## Prerequisites
 
@@ -17,16 +17,9 @@ This guide explains how to configure Clerk authentication for the Vett mobile ap
 
 ### 1.2 Enable OAuth Providers
 
-#### Google OAuth
+#### Google OAuth (coming soon)
 
-1. Go to **User & Authentication** → **Social Connections**
-2. Click **Add connection** → Select **Google**
-3. Follow the setup instructions:
-   - Create a Google OAuth 2.0 Client ID in [Google Cloud Console](https://console.cloud.google.com/)
-   - Add authorized redirect URIs:
-     - `https://your-clerk-domain.clerk.accounts.dev/v1/oauth_callback`
-     - `vett://oauth-callback` (for mobile app)
-   - Copy the Client ID and Client Secret to Clerk
+Google is currently **disabled in the app UI** until it’s configured in Clerk and the Google developer console.
 
 #### Apple OAuth
 
@@ -37,7 +30,8 @@ This guide explains how to configure Clerk authentication for the Vett mobile ap
    - Configure Sign in with Apple
    - Add redirect URIs:
      - `https://your-clerk-domain.clerk.accounts.dev/v1/oauth_callback`
-     - `vett://oauth-callback` (for mobile app)
+     - `vett://onboarding/trust`
+     - `vett://analyze`
    - Copy the Client ID and Client Secret to Clerk
 
 ### 1.3 Configure Application Settings
@@ -75,7 +69,8 @@ Or add to `app.json`:
 
 The app is already configured with the scheme `vett://` in `app.json`. Make sure your Clerk OAuth redirect URIs include:
 
-- `vett://oauth-callback` (for OAuth callbacks)
+- `vett://onboarding/trust`
+- `vett://analyze`
 
 ## Step 3: Configure API Server
 
@@ -105,25 +100,12 @@ The API already has Clerk authentication configured in `apps/api/src/plugins/aut
 4. Check email for verification code
 5. Enter code to complete sign-up
 
-### 4.2 Test Google Sign-In
-
-1. Open the mobile app
-2. Tap "Continue with Google"
-3. Complete Google OAuth flow
-4. Should redirect back to app and sign in
-
-### 4.3 Test Apple Sign-In
+### 4.2 Test Apple Sign-In
 
 1. Open the mobile app
 2. Tap "Continue with Apple"
 3. Complete Apple Sign-In flow
 4. Should redirect back to app and sign in
-
-### 4.4 Test Guest Mode
-
-1. Open the mobile app
-2. Tap "Continue as Guest"
-3. Should allow access without authentication
 
 ## Step 5: Production Setup
 

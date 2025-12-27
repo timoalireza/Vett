@@ -1,0 +1,620 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Dimensions,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from "react-native-reanimated";
+import { ResizeMode } from "expo-av";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { VideoAnimation } from "../../src/components/Video/VideoAnimation";
+import { useVideoAnimationState } from "../../src/components/Video/VideoAnimationProvider";
+import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
+
+// Match homescreen videos
+const VIDEO_TYPING = require("../../assets/animations/home-typing.mp4");
+const VIDEO_LOADING = require("../../assets/animations/loading.mp4");
+const VIDEO_RESULT_AMBER = require("../../assets/animations/result-amber.mp4");
+const HOME_IDLE_STILL = require("../../assets/animations/home-idle-still.png");
+
+const DEMO_CLAIM = "Scientists have discovered that drinking coffee can extend your lifespan by up to 10 years.";
+
+// Pre-loaded demo result
+const DEMO_RESULT = {
+  verdict: "Disputed",
+  score: 42,
+  summary:
+    "Some research links moderate coffee intake to improved health outcomes, but the claim of adding 10 years to lifespan is exaggerated and not supported by strong evidence.",
+  sources: [
+    { title: "Coffee and health: What does the evidence actually show?", provider: "NIH" },
+    { title: "Coffee and longevity: Benefits and limitations", provider: "Harvard" },
+  ],
+};
+
+type DemoStep = "input" | "loading" | "result";
+
+export default function DemoScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { registerVideo } = useVideoAnimationState();
+
+  // Start directly in input state with claim pre-filled
+  const [demoStep, setDemoStep] = useState<DemoStep>("input");
+  const [showResults, setShowResults] = useState(false);
+
+  // Background video state - keep all mounted and crossfade
+  const [activeVideoSource, setActiveVideoSource] = useState(VIDEO_TYPING);
+  const typingOpacity = useSharedValue(1);
+  const loadingOpacity = useSharedValue(0);
+  const resultOpacity = useSharedValue(0);
+  const isAnimatingRef = useRef(false);
+  const animationTargetRef = useRef<typeof VIDEO_TYPING | null>(null);
+
+  // Claim text animation
+  const claimOpacity = useSharedValue(0);
+  const claimTranslateY = useSharedValue(20);
+  const actionRowOpacity = useSharedValue(0);
+  const actionRowTranslateY = useSharedValue(20);
+
+  const screenDimensions = Dimensions.get("window");
+  const screenWidth = screenDimensions.width;
+  const screenHeight = screenDimensions.height;
+
+  const resetAnimationFlags = useCallback(() => {
+    isAnimatingRef.current = false;
+    animationTargetRef.current = null;
+  }, []);
+
+  // Initial animation - fade in the claim text
+  useEffect(() => {
+    // Animate claim text in after a short delay
+    claimOpacity.value = withDelay(400, withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) }));
+    claimTranslateY.value = withDelay(400, withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) }));
+    // Action row appears shortly after
+    actionRowOpacity.value = withDelay(700, withTiming(1, { duration: 500, easing: Easing.out(Easing.exp) }));
+    actionRowTranslateY.value = withDelay(700, withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) }));
+    
+    // Register typing video
+    registerVideo("home-typing");
+  }, []);
+
+  // Video crossfade logic
+  useEffect(() => {
+    let newSource = VIDEO_TYPING;
+    if (demoStep === "result") {
+      newSource = VIDEO_RESULT_AMBER;
+      registerVideo("result-amber");
+    } else if (demoStep === "loading") {
+      newSource = VIDEO_LOADING;
+      registerVideo("loading");
+    } else {
+      newSource = VIDEO_TYPING;
+      registerVideo("home-typing");
+    }
+
+    if (isAnimatingRef.current && animationTargetRef.current === newSource && activeVideoSource === newSource) {
+      return;
+    }
+
+    if (newSource !== activeVideoSource) {
+      if (isAnimatingRef.current && animationTargetRef.current !== newSource) {
+        cancelAnimation(typingOpacity);
+        cancelAnimation(loadingOpacity);
+        cancelAnimation(resultOpacity);
+        isAnimatingRef.current = false;
+        animationTargetRef.current = null;
+      }
+
+      setActiveVideoSource(newSource);
+
+      // Crossfade animations
+      const duration = 400;
+      const easing = Easing.out(Easing.ease);
+
+      isAnimatingRef.current = true;
+      animationTargetRef.current = newSource;
+
+      typingOpacity.value = withTiming(newSource === VIDEO_TYPING ? 1 : 0, { duration, easing });
+      loadingOpacity.value = withTiming(newSource === VIDEO_LOADING ? 1 : 0, { duration, easing });
+      resultOpacity.value = withTiming(newSource === VIDEO_RESULT_AMBER ? 1 : 0, { duration, easing }, (finished) => {
+        if (finished) runOnJS(resetAnimationFlags)();
+      });
+    }
+  }, [demoStep, registerVideo, activeVideoSource, typingOpacity, loadingOpacity, resultOpacity, resetAnimationFlags]);
+
+  const typingVideoStyle = useAnimatedStyle(() => ({ opacity: typingOpacity.value }));
+  const loadingVideoStyle = useAnimatedStyle(() => ({ opacity: loadingOpacity.value }));
+  const resultVideoStyle = useAnimatedStyle(() => ({ opacity: resultOpacity.value }));
+
+  const claimStyle = useAnimatedStyle(() => ({
+    opacity: claimOpacity.value,
+    transform: [{ translateY: claimTranslateY.value }],
+  }));
+
+  const actionRowStyle = useAnimatedStyle(() => ({
+    opacity: actionRowOpacity.value,
+    transform: [{ translateY: actionRowTranslateY.value }],
+  }));
+
+  const handleAnalyze = () => {
+    if (demoStep !== "input") return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Fade out claim text
+    claimOpacity.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.ease) });
+    actionRowOpacity.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) });
+
+    setTimeout(() => {
+      setDemoStep("loading");
+    }, 400);
+
+    // Show results after 3.5 seconds of loading
+    setTimeout(() => {
+      setDemoStep("result");
+      setShowResults(true);
+    }, 4000);
+  };
+
+  const handleContinue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/onboarding/auth");
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 85) return "#22C55E";
+    if (score >= 40) return "#F59E0B";
+    return "#EF4444";
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Background videos */}
+      <View style={[StyleSheet.absoluteFill, { zIndex: 0, width: screenWidth, height: screenHeight, overflow: "hidden" }]}>
+        <Image source={HOME_IDLE_STILL} style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]} resizeMode="cover" />
+
+        <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 1, width: screenWidth, height: screenHeight }, typingVideoStyle]} pointerEvents="none">
+          <VideoAnimation
+            source={VIDEO_TYPING}
+            shouldPlay={activeVideoSource === VIDEO_TYPING}
+            style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
+            resizeMode={ResizeMode.COVER}
+            loopFromSeconds={4}
+            isLooping={false}
+          />
+        </Animated.View>
+
+        <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 2, width: screenWidth, height: screenHeight }, loadingVideoStyle]} pointerEvents="none">
+          <VideoAnimation
+            source={VIDEO_LOADING}
+            shouldPlay={activeVideoSource === VIDEO_LOADING}
+            style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
+            resizeMode={ResizeMode.COVER}
+            isLooping={true}
+          />
+        </Animated.View>
+
+        <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 3, width: screenWidth, height: screenHeight }, resultVideoStyle]} pointerEvents="none">
+          <VideoAnimation
+            source={VIDEO_RESULT_AMBER}
+            shouldPlay={activeVideoSource === VIDEO_RESULT_AMBER}
+            style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
+            resizeMode={ResizeMode.COVER}
+            loopFromSeconds={4}
+            isLooping={false}
+            freezeAtSeconds={6}
+          />
+        </Animated.View>
+      </View>
+
+      {/* Onboarding back */}
+      <View style={styles.topBar}>
+        <OnboardingBackButton goTo="/onboarding/stats" />
+      </View>
+
+      {/* Instructional text overlay - Step: Input */}
+      {demoStep === "input" && !showResults && (
+        <Animated.View 
+          entering={FadeInDown.duration(400).delay(200)} 
+          exiting={FadeOut.duration(200)}
+          style={[styles.instructionContainer, { top: insets.top + 80 }]}
+        >
+          <Text style={styles.instructionTitle}>Try it out</Text>
+          <Text style={styles.instructionSubtitle}>
+            Tap "Analyze" to verify this claim
+          </Text>
+        </Animated.View>
+      )}
+
+      {/* Instructional text overlay - Step: Loading */}
+      {demoStep === "loading" && !showResults && (
+        <Animated.View 
+          entering={FadeIn.duration(400)} 
+          exiting={FadeOut.duration(200)}
+          style={[styles.instructionContainer, { top: insets.top + 80 }]}
+        >
+          <Text style={styles.instructionTitle}>Analyzing...</Text>
+          <Text style={styles.instructionSubtitle}>
+            Vett searches sources and verifies facts
+          </Text>
+        </Animated.View>
+      )}
+
+      <View style={[styles.content, { zIndex: 10 }]}>
+        {/* Main interactive area - only show lens/input when not showing results */}
+        {!showResults && (
+          <View style={styles.lensContainer}>
+            <View style={{ width: 420, height: 420, position: "relative", alignItems: "center", justifyContent: "center" }}>
+              {/* Claim text overlay - read-only, positioned in the lens */}
+              {demoStep === "input" && (
+                <Animated.View style={[styles.claimOverlay, claimStyle]} pointerEvents="none">
+                  <Text style={styles.claimText}>{DEMO_CLAIM}</Text>
+                </Animated.View>
+              )}
+            </View>
+
+            {/* Actions */}
+            <View style={styles.belowLens}>
+              {demoStep === "input" && (
+                <Animated.View style={[styles.actionRow, actionRowStyle]}>
+                  <TouchableOpacity
+                    onPress={handleAnalyze}
+                    style={styles.pillButton}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.pillButtonText}>Analyze</Text>
+                    <Ionicons name="arrow-forward" size={20} color="#000" />
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Results display */}
+        {showResults && (
+          <Animated.View 
+            entering={FadeInUp.duration(600).delay(200)}
+            style={styles.resultsContainer}
+          >
+            {/* Verdict header */}
+            <View style={styles.verdictHeader}>
+              <Text style={[styles.verdictText, { color: getScoreColor(DEMO_RESULT.score) }]}>
+                {DEMO_RESULT.verdict}
+              </Text>
+              <View style={styles.scoreContainer}>
+                <Text style={[styles.scoreText, { color: getScoreColor(DEMO_RESULT.score) }]}>
+                  {DEMO_RESULT.score}
+                </Text>
+                <Text style={styles.scoreLabel}>/100</Text>
+              </View>
+            </View>
+
+            {/* Summary card */}
+            <View style={styles.summaryCard}>
+              <Text style={styles.cardLabel}>SUMMARY</Text>
+              <Text style={styles.summaryText}>{DEMO_RESULT.summary}</Text>
+            </View>
+
+            {/* Sources preview */}
+            <View style={styles.sourcesCard}>
+              <View style={styles.sourcesHeader}>
+                <Text style={styles.cardLabel}>SOURCES</Text>
+                <View style={styles.sourcesBadge}>
+                  <Text style={styles.sourcesBadgeText}>{DEMO_RESULT.sources.length}</Text>
+                </View>
+              </View>
+              {DEMO_RESULT.sources.map((source, index) => (
+                <View key={index} style={styles.sourceItem}>
+                  <Ionicons name="link-outline" size={16} color="#8A8A8A" />
+                  <Text style={styles.sourceTitle} numberOfLines={1}>{source.title}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* How it works explanation */}
+            <Animated.View 
+              entering={FadeInUp.duration(400).delay(600)}
+              style={styles.howItWorksCard}
+            >
+              <Text style={styles.howItWorksTitle}>How Vett works</Text>
+              <View style={styles.howItWorksStep}>
+                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
+                <Text style={styles.stepText}>Paste any claim, URL, or screenshot</Text>
+              </View>
+              <View style={styles.howItWorksStep}>
+                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
+                <Text style={styles.stepText}>AI searches credible sources</Text>
+              </View>
+              <View style={styles.howItWorksStep}>
+                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
+                <Text style={styles.stepText}>Get an instant fact-check verdict</Text>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        )}
+      </View>
+
+      {/* Continue button - shows after results */}
+      {showResults && (
+        <Animated.View 
+          entering={FadeInUp.duration(400).delay(800)}
+          style={[styles.continueContainer, { paddingBottom: insets.bottom + 20 }]}
+        >
+          <TouchableOpacity
+            onPress={handleContinue}
+            style={styles.continueButton}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color="#000" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  topBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    zIndex: 20,
+  },
+  instructionContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 15,
+    paddingHorizontal: 40,
+  },
+  instructionTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 28,
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 8,
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  instructionSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  lensContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  claimOverlay: {
+    position: "absolute",
+    width: 260,
+    paddingHorizontal: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    // Position slightly above center to align with the lens visual
+    transform: [{ translateY: -30 }],
+  },
+  claimText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: "#FFFFFF",
+    textAlign: "center",
+    lineHeight: 22,
+    textShadowColor: "rgba(0, 0, 0, 0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  belowLens: {
+    marginTop: -40,
+    width: "100%",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  pillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#FFFFFF",
+  },
+  pillButtonText: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+    color: "#000000",
+  },
+  resultsContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 120,
+  },
+  verdictHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  verdictText: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 36,
+  },
+  scoreContainer: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  scoreText: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 48,
+  },
+  scoreLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 18,
+    color: "rgba(255, 255, 255, 0.5)",
+    marginLeft: 2,
+  },
+  summaryCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  cardLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    color: "#6B6B6B",
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  summaryText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: "#E5E5E5",
+    lineHeight: 22,
+  },
+  sourcesCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  sourcesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  sourcesBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  sourcesBadgeText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: "#FFFFFF",
+  },
+  sourceItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  sourceTitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: "#AAAAAA",
+    flex: 1,
+  },
+  howItWorksCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+  },
+  howItWorksTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: "#FFFFFF",
+    marginBottom: 16,
+  },
+  howItWorksStep: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNumberText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: "#FFFFFF",
+  },
+  stepText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: "rgba(255, 255, 255, 0.8)",
+    flex: 1,
+  },
+  continueContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+  },
+  continueButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingVertical: 16,
+  },
+  continueButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: "#000000",
+  },
+});

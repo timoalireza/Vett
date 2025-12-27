@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ImageBackground, ImageSourcePropType } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image, ImageSourcePropType, Pressable, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import PagerView from "react-native-pager-view";
@@ -7,9 +7,12 @@ import Animated, {
   FadeInUp,
   FadeInDown,
   FadeIn,
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // Background images for each slide
 // Upload your images to: apps/mobile/assets/onboarding/
@@ -61,14 +64,74 @@ const CAROUSEL_SLIDES = [
 ];
 
 // Auto-advance interval in ms
-const AUTO_ADVANCE_INTERVAL = 4000;
+const AUTO_ADVANCE_INTERVAL = 5000;
+
+const BACKGROUND_FADE_MS = 300; // 250–350ms target
+const BACKGROUND_INCOMING_SHIFT_PX = 3; // subtle "continuity of thought" drift
+const TAP_ZONE_BOTTOM_EXCLUSION_PX = 140; // keep buttons fully tappable
+const TAP_ZONE_WIDTH_PERCENT = "22%"; // keep swipe interactions mostly in the center
+const SUBTEXT_VERTICAL_OFFSET_PX = 10; // nudge body text down slightly for visual alignment
+
+const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const headlinePagerRef = useRef<PagerView>(null);
   const subtextPagerRef = useRef<PagerView>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const currentPageRef = useRef(0);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Background crossfade state (keep previous + current mounted while animating)
+  const [bgFromPage, setBgFromPage] = useState<number | null>(null);
+  const [bgToPage, setBgToPage] = useState<number>(0);
+  const bgProgress = useSharedValue(1);
+
+  const startBackgroundCrossfade = (fromPage: number | null, toPage: number) => {
+    // Ensure the incoming image layer is mounted BEFORE we start fading.
+    // This avoids a single-frame flash where the outgoing fade begins with no incoming image yet.
+    setBgFromPage(fromPage);
+    setBgToPage(toPage);
+
+    cancelAnimation(bgProgress);
+    bgProgress.value = 0;
+    requestAnimationFrame(() => {
+      bgProgress.value = withTiming(1, {
+        duration: BACKGROUND_FADE_MS,
+        easing: Easing.inOut(Easing.ease),
+      });
+    });
+  };
+
+  const goToPage = (page: number) => {
+    const fromPage = currentPageRef.current;
+    const nextPage = (page + CAROUSEL_SLIDES.length) % CAROUSEL_SLIDES.length;
+    currentPageRef.current = nextPage;
+    startBackgroundCrossfade(fromPage, nextPage);
+    // For programmatic navigation, avoid PagerView's horizontal animation.
+    // It can cause slight jitter when combined with JS-driven state updates + background crossfade.
+    (headlinePagerRef.current as any)?.setPageWithoutAnimation?.(nextPage);
+    (subtextPagerRef.current as any)?.setPageWithoutAnimation?.(nextPage);
+    setCurrentPage(nextPage);
+  };
+
+  const goNext = () => goToPage(currentPageRef.current + 1);
+  const goPrev = () => goToPage(currentPageRef.current - 1);
+
+  const clearAutoAdvanceTimer = () => {
+    if (autoAdvanceTimerRef.current) {
+      clearInterval(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  };
+
+  const startAutoAdvanceTimer = () => {
+    clearAutoAdvanceTimer();
+    autoAdvanceTimerRef.current = setInterval(() => {
+      goToPage(currentPageRef.current + 1);
+    }, AUTO_ADVANCE_INTERVAL);
+  };
 
   // Auto-advance carousel
   useEffect(() => {
@@ -77,27 +140,20 @@ export default function WelcomeScreen() {
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  // Auto-advance carousel (stable interval; no stale closure on `currentPage`)
+  // Auto-advance carousel (stable interval; resettable on user interaction)
   useEffect(() => {
-    const interval = setInterval(() => {
-      const nextPage = (currentPageRef.current + 1) % CAROUSEL_SLIDES.length;
-      currentPageRef.current = nextPage;
-      headlinePagerRef.current?.setPage(nextPage);
-      subtextPagerRef.current?.setPage(nextPage);
-      // Update immediately for the progress bar; `onPageSelected` will keep it in sync too.
-      setCurrentPage(nextPage);
-    }, AUTO_ADVANCE_INTERVAL);
-
-    return () => clearInterval(interval);
+    startAutoAdvanceTimer();
+    return () => clearAutoAdvanceTimer();
   }, []);
 
   const handlePageSelected = (e: any) => {
     const position = e.nativeEvent.position;
+    const fromPage = currentPageRef.current;
     currentPageRef.current = position;
+    startBackgroundCrossfade(fromPage, position);
     setCurrentPage(position);
-    // Sync both pagers
-    headlinePagerRef.current?.setPage(position);
-    subtextPagerRef.current?.setPage(position);
+    // Sync subtext pager only (headline pager is the source of truth here).
+    (subtextPagerRef.current as any)?.setPageWithoutAnimation?.(position);
   };
 
   const handleSignUp = () => {
@@ -108,7 +164,17 @@ export default function WelcomeScreen() {
     router.push("/signin");
   };
 
-  const currentBackground = SLIDE_BACKGROUNDS[currentPage];
+  const fromBackground = bgFromPage === null ? null : SLIDE_BACKGROUNDS[bgFromPage];
+  const toBackground = SLIDE_BACKGROUNDS[bgToPage];
+
+  const fromBackgroundStyle = useAnimatedStyle(() => ({
+    opacity: 1 - bgProgress.value,
+  }));
+
+  const toBackgroundStyle = useAnimatedStyle(() => ({
+    opacity: bgProgress.value,
+    transform: [{ translateY: (1 - bgProgress.value) * BACKGROUND_INCOMING_SHIFT_PX }],
+  }));
 
   // Helper to split text into words and render with animation
   const renderAnimatedWords = (text: string, pageIndex: number, baseDelay: number = 0) => {
@@ -249,17 +315,48 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       {/* Keep the carousel content mounted in a stable position to avoid PagerView jitter/resets. */}
-      {currentBackground ? (
-        <>
-          <ImageBackground
-            source={currentBackground}
-            style={StyleSheet.absoluteFillObject}
-            resizeMode="cover"
-          />
-          {/* Dark overlay for text readability */}
-          <View style={styles.overlay} pointerEvents="none" />
-        </>
+      {fromBackground ? (
+        <AnimatedImage
+          source={fromBackground}
+          style={[StyleSheet.absoluteFillObject, { width: screenWidth, height: screenHeight }, fromBackgroundStyle]}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
       ) : null}
+
+      {toBackground ? (
+        <AnimatedImage
+          source={toBackground}
+          style={[StyleSheet.absoluteFillObject, { width: screenWidth, height: screenHeight }, toBackgroundStyle]}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
+      ) : null}
+
+      {/* Dark overlay for text readability */}
+      <View style={styles.overlay} pointerEvents="none" />
+
+      {/* Edge tap zones: left = back, right = next */}
+      <View style={styles.tapZones} pointerEvents="box-none">
+        <Pressable
+          onPress={() => {
+            goPrev();
+            startAutoAdvanceTimer();
+          }}
+          style={styles.tapZoneLeft}
+          accessibilityRole="button"
+          accessibilityLabel="Previous slide"
+        />
+        <Pressable
+          onPress={() => {
+            goNext();
+            startAutoAdvanceTimer();
+          }}
+          style={styles.tapZoneRight}
+          accessibilityRole="button"
+          accessibilityLabel="Next slide"
+        />
+      </View>
 
       {renderContent()}
     </View>
@@ -275,12 +372,32 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.4)", // Adjust opacity as needed for text readability
   },
+  tapZones: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
+  },
+  tapZoneLeft: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    // Explicitly respect the bottom exclusion zone so we never cover the CTA buttons.
+    bottom: TAP_ZONE_BOTTOM_EXCLUSION_PX,
+    width: TAP_ZONE_WIDTH_PERCENT,
+  },
+  tapZoneRight: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    // Explicitly respect the bottom exclusion zone so we never cover the CTA buttons.
+    bottom: TAP_ZONE_BOTTOM_EXCLUSION_PX,
+    width: TAP_ZONE_WIDTH_PERCENT,
+  },
   safeArea: {
     flex: 1,
   },
   progressBarContainer: {
     flexDirection: "row",
-    width: SCREEN_WIDTH,
+    width: "100%",
     paddingHorizontal: 0,
     gap: 4,
   },
@@ -350,6 +467,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     letterSpacing: 0.2,
+    marginTop: SUBTEXT_VERTICAL_OFFSET_PX,
   },
   bottomSection: {
     paddingHorizontal: 20,
