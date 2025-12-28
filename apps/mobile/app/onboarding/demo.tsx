@@ -62,15 +62,18 @@ export default function DemoScreen() {
   const screenHeight = screenDimensions.height;
 
   // Layout tuning constants (used to line up overlay text with the background video)
-  // Title position from top (aligns "Try it out" with reference cursor position)
-  const INSTRUCTION_TOP_OFFSET = 100;
-  // Negative moves the entire lens + CTA stack upward (claim text only, NOT the button).
+  const LENS_SIZE = 420;
+  const INSTRUCTION_BOTTOM_SPACING = 18;
+  const ANALYZE_BUTTON_TOP_SPACING = 22;
+  // Negative moves the Analyze button upward without affecting the title or claim positioning.
+  const ANALYZE_BUTTON_TRANSLATE_Y = -120;
+  // Negative moves the whole demo stack upward so the lens lives in the upper-mid area (button lands around mid-screen).
+  const STACK_TRANSLATE_Y = -80;
+  // Negative nudges just the lens (to match the background video's lens highlight).
   const LENS_STACK_OFFSET_Y = -20;
   // Negative moves the claim upward relative to the lens center.
-  const CLAIM_BASE_TRANSLATE_Y = -90;
-  // Button vertical center position
-  const ANALYZE_BUTTON_HEIGHT = 52;
-  const buttonCenterY = screenHeight / 2 - ANALYZE_BUTTON_HEIGHT / 2;
+  // Tuned to align the claim with the lens highlight (and the reference cursor in the screenshot).
+  const CLAIM_BASE_TRANSLATE_Y = -60;
 
   // Start directly in input state with claim pre-filled
   const [demoStep, setDemoStep] = useState<DemoStep>("input");
@@ -197,6 +200,10 @@ export default function DemoScreen() {
     return "#EF4444";
   };
 
+  const instructionTitle = demoStep === "loading" ? "Analyzing..." : "Try it out";
+  const instructionSubtitle =
+    demoStep === "loading" ? "Vett searches sources and verifies facts" : 'Tap "Analyze" to verify this claim';
+
   return (
     <View style={styles.container}>
       {/* Background videos */}
@@ -242,39 +249,36 @@ export default function DemoScreen() {
         <OnboardingBackButton goTo="/onboarding/stats" />
       </View>
 
-      {/* Instructional text overlay - Step: Input */}
-      {demoStep === "input" && !showResults && (
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(200)} 
-          exiting={FadeOut.duration(200)}
-          style={[styles.instructionContainer, { top: insets.top + INSTRUCTION_TOP_OFFSET }]}
-        >
-          <Text style={styles.instructionTitle}>Try it out</Text>
-          <Text style={styles.instructionSubtitle}>
-            Tap "Analyze" to verify this claim
-          </Text>
-        </Animated.View>
-      )}
-
-      {/* Instructional text overlay - Step: Loading */}
-      {demoStep === "loading" && !showResults && (
-        <Animated.View 
-          entering={FadeIn.duration(400)} 
-          exiting={FadeOut.duration(200)}
-          style={[styles.instructionContainer, { top: insets.top + INSTRUCTION_TOP_OFFSET }]}
-        >
-          <Text style={styles.instructionTitle}>Analyzing...</Text>
-          <Text style={styles.instructionSubtitle}>
-            Vett searches sources and verifies facts
-          </Text>
-        </Animated.View>
-      )}
-
       <View style={[styles.content, { zIndex: 10 }]}>
         {/* Main interactive area - only show lens/input when not showing results */}
         {!showResults && (
-          <View style={[styles.lensContainer, { marginTop: LENS_STACK_OFFSET_Y }]}>
-            <View style={{ width: 420, height: 420, position: "relative", alignItems: "center", justifyContent: "center" }}>
+          <View
+            style={[
+              styles.lensContainer,
+              { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24, transform: [{ translateY: STACK_TRANSLATE_Y }] },
+            ]}
+          >
+            {(demoStep === "input" || demoStep === "loading") && (
+              <Animated.View
+                entering={demoStep === "input" ? FadeInDown.duration(400).delay(200) : FadeIn.duration(400)}
+                exiting={FadeOut.duration(200)}
+                style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING }]}
+              >
+                <Text style={styles.instructionTitle}>{instructionTitle}</Text>
+                <Text style={styles.instructionSubtitle}>{instructionSubtitle}</Text>
+              </Animated.View>
+            )}
+
+            <View
+              style={{
+                width: LENS_SIZE,
+                height: LENS_SIZE,
+                position: "relative",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: LENS_STACK_OFFSET_Y,
+              }}
+            >
               {/* Claim text overlay - read-only, positioned in the lens */}
               {demoStep === "input" && (
                 <Animated.View style={[styles.claimOverlay, claimStyle]} pointerEvents="none">
@@ -283,12 +287,12 @@ export default function DemoScreen() {
               )}
             </View>
 
-            {/* Actions - positioned at exact vertical center of screen */}
+            {/* Actions - positioned just below the lens (roughly mid-screen) */}
             {demoStep === "input" && (
               <Animated.View 
                 style={[
                   styles.analyzeButtonContainer,
-                  { top: buttonCenterY },
+                  { marginTop: ANALYZE_BUTTON_TOP_SPACING, transform: [{ translateY: ANALYZE_BUTTON_TRANSLATE_Y }] },
                   actionRowStyle
                 ]}
               >
@@ -404,12 +408,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     zIndex: 20,
   },
-  instructionContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
+  instructionContainerInline: {
     alignItems: "center",
-    zIndex: 15,
     paddingHorizontal: 40,
   },
   instructionTitle: {
@@ -459,9 +459,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   analyzeButtonContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 20,
