@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, Switch, Text, View, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -13,10 +13,6 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [credibilityMode, setCredibilityMode] = useState<"standard" | "strict" | "max">("strict");
-  const [notifications, setNotifications] = useState({
-    analyses: true,
-    community: false
-  });
 
   return (
     <GradientBackground>
@@ -82,10 +78,6 @@ export default function SettingsScreen() {
               </GlassCard>
             ))}
           </View>
-        </Section>
-        <Section title="Notifications">
-          <Row label="Analysis complete" value={<Switch value={notifications.analyses} onValueChange={(val) => setNotifications((prev) => ({ ...prev, analyses: val }))} />} />
-          <Row label="Community updates" value={<Switch value={notifications.community} onValueChange={(val) => setNotifications((prev) => ({ ...prev, community: val }))} />} />
         </Section>
         
         {/* Dev Reset Button - Only in development */}

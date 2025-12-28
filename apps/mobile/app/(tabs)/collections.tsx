@@ -4,30 +4,11 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@clerk/clerk-expo";
 import { fetchAnalyses } from "../../src/api/analysis";
-import { tokenProvider } from "../../src/api/token-provider";
 import { HistoryItem } from "../../src/components/Common/HistoryItem";
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const { isSignedIn, getToken } = useAuth();
-  
-  // Update token provider
-  useEffect(() => {
-    const updateToken = async () => {
-      if (isSignedIn && getToken) {
-        try {
-          const token = await getToken();
-          tokenProvider.setToken(token);
-        } catch (error) {
-          console.error("[History] Error getting token:", error);
-          tokenProvider.setToken(null);
-        }
-      } else {
-        tokenProvider.setToken(null);
-      }
-    };
-    updateToken();
-  }, [isSignedIn, getToken]);
+  const { isSignedIn } = useAuth();
 
   const { data, refetch, isLoading } = useQuery({
     queryKey: ["analyses", "history"],

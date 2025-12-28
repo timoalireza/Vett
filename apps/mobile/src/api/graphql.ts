@@ -18,9 +18,29 @@ async function getAuthToken(): Promise<string | null> {
     console.log("[GraphQL] Using token from provider");
     return providerToken;
   }
-  
+
   // Fallback to SecureStore lookup
-  return getClerkToken();
+  const secureStoreToken = await getClerkToken();
+  if (secureStoreToken) {
+    return secureStoreToken;
+  }
+
+  // Last resort: small bounded retry to avoid a "signed in but token not synced yet" race on app start.
+  // This prevents authenticated-only queries from firing without a token due to effect timing.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await new Promise((r) => setTimeout(r, 150));
+    const retryProviderToken = tokenProvider.getToken();
+    if (retryProviderToken) {
+      console.log("[GraphQL] Using token from provider (retry)");
+      return retryProviderToken;
+    }
+    const retrySecureStoreToken = await getClerkToken();
+    if (retrySecureStoreToken) {
+      return retrySecureStoreToken;
+    }
+  }
+
+  return null;
 }
 
 export async function graphqlRequest<TData, TVariables = Record<string, unknown>>(
@@ -81,10 +101,14 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
   console.log("[GraphQL] Response:", JSON.stringify(json, null, 2));
   
   if (json.errors?.length) {
-    console.error("[GraphQL] Errors:", JSON.stringify(json.errors, null, 2));
+    const isAuthError = json.errors.some((e: any) =>
+      typeof e?.message === "string" && e.message.toLowerCase().includes("authentication required")
+    );
+    const log = isAuthError ? console.warn : console.error;
+    log("[GraphQL] Errors:", JSON.stringify(json.errors, null, 2));
     const errorMessages = json.errors.map((error: any) => {
       // Log full error details
-      console.error("[GraphQL] Error details:", {
+      log("[GraphQL] Error details:", {
         message: error.message,
         extensions: error.extensions,
         path: error.path,

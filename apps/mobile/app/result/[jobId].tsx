@@ -4,7 +4,6 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/clerk-expo";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -22,7 +21,6 @@ import { ScoreRing } from "../../src/components/Lens/ScoreRing";
 import { ColorTintOverlay } from "../../src/components/Lens/ColorTintOverlay";
 import { SummaryCard } from "../../src/components/Results/SummaryCard";
 import { SourcesCard } from "../../src/components/Results/SourcesCard";
-import { tokenProvider } from "../../src/api/token-provider";
 import { getScoreColor } from "../../src/utils/scoreColors";
 import { VideoAnimation } from "../../src/components/Video/VideoAnimation";
 import { useVideoAnimationState } from "../../src/components/Video/VideoAnimationProvider";
@@ -47,7 +45,6 @@ const Card = ({ label, children }: { label: string, children: React.ReactNode })
 export default function ResultScreen() {
   const { jobId, claimText, demo } = useLocalSearchParams<{ jobId: string; claimText?: string; demo?: string }>();
   const router = useRouter();
-  const { getToken } = useAuth();
   const { registerVideo } = useVideoAnimationState();
   const [videoError, setVideoError] = useState(false);
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
@@ -84,24 +81,6 @@ export default function ResultScreen() {
       sources: [],
     };
   });
-
-  // Ensure token is set
-  useEffect(() => {
-    if (isDemo) {
-      tokenProvider.setToken(null);
-      return;
-    }
-    const setToken = async () => {
-      try {
-        const token = await getToken();
-        tokenProvider.setToken(token);
-      } catch (e) {
-        console.error("Failed to set token", e);
-        tokenProvider.setToken(null);
-      }
-    };
-    setToken();
-  }, [getToken, isDemo]);
 
   // Demo flow: simulate job progress and completion locally (no API/auth required)
   useEffect(() => {

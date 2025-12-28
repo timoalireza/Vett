@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useShareIntent } from "expo-share-intent";
@@ -30,7 +29,6 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 
-import { tokenProvider } from "../../src/api/token-provider";
 import { submitAnalysis } from "../../src/api/analysis";
 import { useTheme } from "../../src/hooks/use-theme";
 import { LensMotif } from "../../src/components/Lens/LensMotif";
@@ -54,7 +52,6 @@ export default function AnalyzeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { isSignedIn, getToken } = useAuth();
   
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -264,23 +261,6 @@ export default function AnalyzeScreen() {
       isTransitioningToInputRef.current = false; // Reset transition flag
     }, [reset, inputOpacity, inputScale, actionRowOpacity, actionRowTranslateY])
   );
-
-  useEffect(() => {
-    const updateToken = async () => {
-      if (isSignedIn && getToken) {
-        try {
-          const token = await getToken();
-          tokenProvider.setToken(token);
-        } catch (error) {
-          console.error("[Analyze] Error getting token:", error);
-          tokenProvider.setToken(null);
-        }
-      } else {
-        tokenProvider.setToken(null);
-      }
-    };
-    updateToken();
-  }, [isSignedIn, getToken]);
 
   useEffect(() => {
     if (hasShareIntent && shareIntent) {

@@ -32,6 +32,8 @@ import { VideoAnimation } from "../../src/components/Video/VideoAnimation";
 import { useVideoAnimationState } from "../../src/components/Video/VideoAnimationProvider";
 import { OnboardingBackButton } from "../../src/components/Onboarding/OnboardingBackButton";
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 // Match homescreen videos
 const VIDEO_TYPING = require("../../assets/animations/home-typing.mp4");
 const VIDEO_LOADING = require("../../assets/animations/loading.mp4");
@@ -40,9 +42,11 @@ const HOME_IDLE_STILL = require("../../assets/animations/home-idle-still.png");
 
 const DEMO_CLAIM = "Scientists have discovered that drinking coffee can extend your lifespan by up to 10 years.";
 const DEMO_CLAIM_DISPLAY =
-  "“Scientists have discovered that\n" +
-  "drinking coffee can extend\n" +
-  "your lifespan by up to\n" +
+  "“Scientists have\n" +
+  "discovered that\n" +
+  "drinking coffee\n" +
+  "can extend your\n" +
+  "lifespan by up to\n" +
   "10 years.”";
 
 const LOADING_STEPS = ["Extracting claim…", "Gathering evidence…", "Cross-checking sources…", "Generating verdict…"] as const;
@@ -71,23 +75,29 @@ export default function DemoScreen() {
   const screenDimensions = Dimensions.get("window");
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
+  const availableHeight = screenHeight - insets.top - insets.bottom;
+  const isShortScreen = availableHeight < 720;
 
   // Layout tuning constants (used to line up overlay text with the background video)
-  const LENS_SIZE = 420;
+  // Cap to screen width so we don't clip on smaller devices.
+  const LENS_SIZE = Math.min(420, Math.round(screenWidth));
   const INSTRUCTION_BOTTOM_SPACING = 18;
   const ANALYZE_BUTTON_TOP_SPACING = 22;
   // Negative moves the Analyze button upward without affecting the title or claim positioning.
-  const ANALYZE_BUTTON_TRANSLATE_Y = -120;
+  // Preserve original (non-short) positioning to avoid layout drift on standard devices.
+  const ANALYZE_BUTTON_TRANSLATE_Y = isShortScreen ? -90 : -120;
   // Negative moves the whole demo stack upward so the lens lives in the upper-mid area (button lands around mid-screen).
-  const STACK_TRANSLATE_Y = -80;
+  // Preserve original (non-short) positioning to avoid layout drift on standard devices.
+  const STACK_TRANSLATE_Y = isShortScreen ? -50 : -80;
   // Negative nudges just the lens (to match the background video's lens highlight).
   const LENS_STACK_OFFSET_Y = -20;
-  // Negative moves the claim upward relative to the lens center.
-  // Tuned to align the claim with the lens highlight (and the reference cursor in the screenshot).
-  const CLAIM_BASE_TRANSLATE_Y = -165;
   // Inner text area of the ring. Keep it safely within the bright ring highlight.
   const CLAIM_RING_SIZE = Math.round(Math.min(screenWidth, LENS_SIZE) * 0.64);
   const CLAIM_RING_PADDING_H = 18;
+  // Negative moves the claim upward relative to the lens center.
+  // Make it responsive so it doesn't collide with the header / safe area on smaller screens.
+  // Extra -10px per design tweak request.
+  const CLAIM_BASE_TRANSLATE_Y = -(clamp(Math.round(CLAIM_RING_SIZE * 0.18), 28, isShortScreen ? 44 : 58) + 10);
 
   // Start directly in input state with claim pre-filled
   const [demoStep, setDemoStep] = useState<DemoStep>("input");
@@ -251,7 +261,7 @@ export default function DemoScreen() {
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push("/onboarding/premium");
+    router.push("/onboarding/instagram");
   };
 
   const getScoreColor = (score: number) => {
@@ -324,8 +334,12 @@ export default function DemoScreen() {
                 exiting={FadeOut.duration(200)}
                 style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING }]}
               >
-                <Text style={styles.instructionTitle}>{instructionTitle}</Text>
-                <Text style={styles.instructionSubtitle}>{instructionSubtitle}</Text>
+                <Text style={styles.instructionTitle} maxFontSizeMultiplier={1.15}>
+                  {instructionTitle}
+                </Text>
+                <Text style={styles.instructionSubtitle} maxFontSizeMultiplier={1.2}>
+                  {instructionSubtitle}
+                </Text>
               </Animated.View>
             ) : null}
 
@@ -356,8 +370,9 @@ export default function DemoScreen() {
                   <Text
                     style={styles.claimText}
                     adjustsFontSizeToFit
-                    minimumFontScale={0.7}
-                    numberOfLines={5}
+                    minimumFontScale={0.55}
+                    maxFontSizeMultiplier={1.15}
+                    numberOfLines={6}
                   >
                     {DEMO_CLAIM_DISPLAY}
                   </Text>
@@ -425,7 +440,7 @@ export default function DemoScreen() {
             <View style={styles.resultsHeader}>
               <Animated.View 
                 entering={FadeInUp.duration(600).delay(200)}
-                style={styles.resultsLensContainer}
+                style={[styles.resultsLensContainer, { width: LENS_SIZE, height: LENS_SIZE }]}
               >
                 <View
                   style={[
@@ -440,8 +455,9 @@ export default function DemoScreen() {
                   <Text 
                     style={styles.resultsClaimText}
                     adjustsFontSizeToFit
-                    minimumFontScale={0.55}
-                    numberOfLines={5}
+                    minimumFontScale={0.35}
+                    maxFontSizeMultiplier={1.1}
+                    numberOfLines={6}
                   >
                     {DEMO_CLAIM_DISPLAY}
                   </Text>
@@ -607,7 +623,8 @@ const styles = StyleSheet.create({
   },
   claimText: {
     fontFamily: "Inter_400Regular",
-    fontSize: 20,
+    fontSize: 16,
+    lineHeight: 21,
     color: "#FFFFFF",
     textAlign: "center",
     includeFontPadding: false,
@@ -662,8 +679,6 @@ const styles = StyleSheet.create({
     minHeight: Dimensions.get('window').height,
   },
   resultsLensContainer: {
-    width: 420,
-    height: 420,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
@@ -674,13 +689,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-    // The background ring sits a bit higher than the geometric center of this container.
-    // Negative moves the text up to visually center inside the ring.
-    transform: [{ translateY: -40 }],
+    // Slightly lift the claim within the ring for better balance against the verdict/score row.
+    transform: [{ translateY: -60 }],
   },
   resultsClaimText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 40,
+    fontSize: 20,
+    lineHeight: 25,
     color: '#FFFFFF',
     textAlign: 'center',
     includeFontPadding: false,
@@ -691,8 +706,8 @@ const styles = StyleSheet.create({
   verdictScoreRow: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: -140,
-    marginBottom: 16,
+    marginTop: -100,
+    marginBottom: 0,
     width: '100%',
   },
   verdictBox: {

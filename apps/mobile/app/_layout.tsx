@@ -33,6 +33,8 @@ import { theme } from "../src/theme";
 import { queryClient } from "../src/state/query-client";
 import { initializeRevenueCat } from "../src/services/revenuecat";
 import { RevenueCatAuthSync } from "./_layout-revenuecat";
+import { tokenProvider } from "../src/api/token-provider";
+import { clearClerkTokenCache } from "../src/api/clerk-token";
 
 // Token cache for Clerk
 const tokenCache = {
@@ -59,6 +61,40 @@ const clerkPublishableKey =
   "";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function AuthTokenSync() {
+  const { isSignedIn, getToken } = useAuth();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const sync = async () => {
+      if (!isSignedIn) {
+        tokenProvider.setToken(null);
+        clearClerkTokenCache();
+        return;
+      }
+
+      try {
+        const token = await getToken?.();
+        if (cancelled) return;
+        tokenProvider.setToken(token ?? null);
+      } catch (error) {
+        if (cancelled) return;
+        console.warn("[AuthTokenSync] Failed to get token:", error);
+        tokenProvider.setToken(null);
+      }
+    };
+
+    sync();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, getToken]);
+
+  return null;
+}
 
 function NavigationGate() {
   const { isReady, authMode, hasOnboarded, subscriptionPromptShown, markSubscriptionPromptShown } = useAppState();
@@ -239,7 +275,6 @@ function NavigationGate() {
       <Stack.Screen name="result/political" />
       <Stack.Screen name="settings/index" />
       <Stack.Screen name="settings/about" />
-      <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="settings/privacy" />
       <Stack.Screen name="settings/terms" />
       <Stack.Screen
@@ -332,6 +367,7 @@ export default function RootLayout() {
       tokenCache={tokenCache}
       {...(passkeys ? { __experimental_passkeys: passkeys } : {})}
     >
+      <AuthTokenSync />
       <QueryClientProvider client={queryClient}>
         <AppStateProvider>
           <VideoAnimationProvider>

@@ -123,9 +123,6 @@ export default function ProfileScreen() {
               <Text style={styles.statisticLabel}>Time Saved</Text>
             </View>
           </View>
-          <Text style={styles.userEmail}>
-            {user?.primaryEmailAddress?.emailAddress || "user@vett.app"}
-          </Text>
         </View>
 
         {/* Divider */}
@@ -133,22 +130,6 @@ export default function ProfileScreen() {
 
         {/* Settings list */}
         <View style={styles.settingsList}>
-          <SettingsRow 
-            icon="settings-outline" 
-            label="Settings" 
-            onPress={() => router.push("/settings")} 
-          />
-          <SettingsRow 
-            icon="notifications-outline" 
-            label="Notifications" 
-            onPress={() => router.push("/settings/notifications")} 
-          />
-          <SettingsRow 
-            icon="color-palette-outline" 
-            label="Appearance" 
-            onPress={() => {}} 
-            value="Dark"
-          />
           <SettingsRow 
             icon="help-circle-outline" 
             label="Help & Support" 
@@ -212,12 +193,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#8A8A8A",
     textAlign: "center",
-  },
-  userEmail: {
-    marginTop: 0,
-    fontFamily: "Inter_400Regular",
-    fontSize: 16,
-    color: "#E5E5E5",
   },
   divider: {
     height: 1,

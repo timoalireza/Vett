@@ -60,7 +60,7 @@ export default function PremiumScreen() {
       <GradientBackground>
         <SafeAreaView style={styles.container} edges={["top"]}>
           <View style={styles.backButtonContainer}>
-            <OnboardingBackButton goTo="/onboarding/demo" />
+            <OnboardingBackButton goTo="/onboarding/instagram" />
           </View>
           <ScrollView
             contentContainerStyle={styles.scrollContent}
