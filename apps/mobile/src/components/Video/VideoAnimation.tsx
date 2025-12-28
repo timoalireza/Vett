@@ -22,7 +22,9 @@ interface VideoAnimationProps {
   shouldPlay: boolean;
   style?: StyleProp<ViewStyle>;
   resizeMode?: any; // ResizeMode type, but optional since module might not be available
+  startAtSeconds?: number; // Initial playback position when starting (in seconds)
   loopFromSeconds?: number;
+  loopToSeconds?: number; // If provided, loops back to loopFromSeconds when position reaches this time (in seconds)
   isLooping?: boolean; // If true, loops normally. If false, we handle custom loop logic.
   onError?: () => void;
   onLoad?: (loadedSource: any) => void; // Callback when video is loaded and ready, passes the source that loaded
@@ -39,7 +41,9 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
   shouldPlay,
   style,
   resizeMode,
+  startAtSeconds = 0,
   loopFromSeconds = 5,
+  loopToSeconds,
   isLooping = false,
   onError,
   onLoad,
@@ -55,8 +59,7 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
   const [isFrozen, setIsFrozen] = useState(false);
   const previousSourceRef = useRef<any>(null);
   const hasStartedPlayingRef = useRef(false);
-  const freezeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const playbackStartTimeRef = useRef<number>(0); // Track when playback actually started
+  const hasFiredFreezeRef = useRef(false);
   
   // Default resize mode if available
   const defaultResizeMode = ResizeMode ? ResizeMode.COVER : undefined;
@@ -69,25 +72,11 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       setIsLoaded(false);
       setIsFrozen(false);
       hasStartedPlayingRef.current = false;
-      playbackStartTimeRef.current = 0;
-      // Clear any pending freeze timeout
-      if (freezeTimeoutRef.current) {
-        clearTimeout(freezeTimeoutRef.current);
-        freezeTimeoutRef.current = null;
-      }
+      hasFiredFreezeRef.current = false;
       previousSourceRef.current = source;
     }
   }, [source]);
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (freezeTimeoutRef.current) {
-        clearTimeout(freezeTimeoutRef.current);
-      }
-    };
-  }, []);
-  
   // If Video component is not available, trigger error immediately
   useEffect(() => {
     if (!Video) {
@@ -98,7 +87,20 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
     }
   }, [onError]);
 
-  // Handle custom looping logic and errors (NOT freeze - that's handled by timeout)
+  const freezeNow = useCallback(() => {
+    if (hasFiredFreezeRef.current) return;
+    hasFiredFreezeRef.current = true;
+    setIsFrozen(true);
+    // Ensure we pause on the desired frame if possible.
+    if (freezeAtSeconds != null) {
+      const t = Math.max(0, freezeAtSeconds * 1000);
+      videoRef.current?.setPositionAsync?.(t).catch(() => {});
+    }
+    videoRef.current?.pauseAsync?.().catch(() => {});
+    onFreeze?.();
+  }, [freezeAtSeconds, onFreeze]);
+
+  // Handle custom looping logic, freezing, and errors
   const handlePlaybackStatusUpdate = useCallback((status: any) => {
     if (!status.isLoaded) {
       // Handle error state
@@ -108,6 +110,36 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
           onError();
         }
       }
+      return;
+    }
+
+    // Freeze based on actual playback position (deterministic; avoids wall-clock drift/buffering)
+    if (
+      freezeAtSeconds != null &&
+      shouldPlay &&
+      !isFrozen &&
+      !hasFiredFreezeRef.current &&
+      typeof status.positionMillis === "number" &&
+      status.positionMillis >= freezeAtSeconds * 1000
+    ) {
+      freezeNow();
+      return;
+    }
+
+    // Segment loop (3–30 etc.): loop when we reach loopToSeconds instead of waiting for didJustFinish.
+    if (
+      !isLooping &&
+      !isFrozen &&
+      shouldPlay &&
+      loopToSeconds != null &&
+      typeof status.positionMillis === "number" &&
+      status.positionMillis >= loopToSeconds * 1000
+    ) {
+      videoRef.current?.setPositionAsync(loopFromSeconds * 1000).then(() => {
+        videoRef.current?.playAsync().catch(() => {});
+      }).catch(() => {
+        videoRef.current?.playAsync().catch(() => {});
+      });
       return;
     }
 
@@ -121,46 +153,7 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
         videoRef.current?.playAsync().catch(() => {});
       });
     }
-  }, [isLooping, loopFromSeconds, shouldPlay, onError, isFrozen]);
-
-  // Handle freeze timeout - uses real wall-clock time, not video position
-  useEffect(() => {
-    if (freezeAtSeconds && shouldPlay && isLoaded && !isFrozen) {
-      // Clear any existing timeout
-      if (freezeTimeoutRef.current) {
-        clearTimeout(freezeTimeoutRef.current);
-      }
-      
-      // Calculate remaining time if playback already started
-      const now = Date.now();
-      let delay = freezeAtSeconds * 1000;
-      
-      if (playbackStartTimeRef.current > 0) {
-        // Playback already started - calculate remaining time
-        const elapsed = now - playbackStartTimeRef.current;
-        delay = Math.max(0, (freezeAtSeconds * 1000) - elapsed);
-      } else {
-        // Record when playback started
-        playbackStartTimeRef.current = now;
-      }
-      
-      // Set timeout to freeze
-      freezeTimeoutRef.current = setTimeout(() => {
-        setIsFrozen(true);
-        videoRef.current?.pauseAsync().catch(() => {});
-        if (onFreeze) {
-          onFreeze();
-        }
-      }, delay);
-    }
-    
-    return () => {
-      if (freezeTimeoutRef.current) {
-        clearTimeout(freezeTimeoutRef.current);
-        freezeTimeoutRef.current = null;
-      }
-    };
-  }, [freezeAtSeconds, shouldPlay, isLoaded, isFrozen, onFreeze]);
+  }, [freezeAtSeconds, freezeNow, isLooping, isFrozen, loopFromSeconds, loopToSeconds, onError, shouldPlay]);
 
   // Handle play/pause
   useEffect(() => {
@@ -173,16 +166,13 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       } else {
         // For custom looping videos, reset position only on first play
         if (!hasStartedPlayingRef.current) {
-          videoRef.current.setPositionAsync(0).then(() => {
+          const startMillis = Math.max(0, (startAtSeconds || 0) * 1000);
+          videoRef.current.setPositionAsync(startMillis).then(() => {
             videoRef.current?.playAsync().catch(() => {});
           }).catch(() => {
             videoRef.current?.playAsync().catch(() => {});
           });
           hasStartedPlayingRef.current = true;
-          // Record playback start time for freeze calculation
-          if (freezeAtSeconds) {
-            playbackStartTimeRef.current = Date.now();
-          }
         } else {
           videoRef.current.playAsync().catch(() => {});
         }
@@ -193,14 +183,10 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       // Reset state when stopping (but not when frozen)
       if (!shouldPlay && !isFrozen) {
         hasStartedPlayingRef.current = false;
-        playbackStartTimeRef.current = 0;
-        if (freezeTimeoutRef.current) {
-          clearTimeout(freezeTimeoutRef.current);
-          freezeTimeoutRef.current = null;
-        }
+        hasFiredFreezeRef.current = false;
       }
     }
-  }, [shouldPlay, isLoaded, isFrozen, isLooping, freezeAtSeconds]);
+  }, [shouldPlay, isLoaded, isFrozen, isLooping, startAtSeconds]);
 
   // If Video component is not available or error occurred, return empty view
   // Parent component should handle fallback
@@ -241,6 +227,7 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
               if (!freezeAtSeconds) {
                 setIsFrozen(false);
               }
+              hasFiredFreezeRef.current = false;
               // Notify parent that video is loaded, passing the source that just loaded
               // Don't position or play here - let the useEffect handle it to avoid race conditions
               // The useEffect will call setPositionAsync(0) and playAsync() when isLoaded becomes true

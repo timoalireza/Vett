@@ -39,6 +39,15 @@ const VIDEO_RESULT_AMBER = require("../../assets/animations/result-amber.mp4");
 const HOME_IDLE_STILL = require("../../assets/animations/home-idle-still.png");
 
 const DEMO_CLAIM = "Scientists have discovered that drinking coffee can extend your lifespan by up to 10 years.";
+const DEMO_CLAIM_DISPLAY =
+  "“Scientists have discovered that\n" +
+  "drinking coffee can extend\n" +
+  "your lifespan by up to\n" +
+  "10 years.”";
+
+const LOADING_STEPS = ["Extracting claim…", "Gathering evidence…", "Cross-checking sources…", "Generating verdict…"] as const;
+const LOADING_DURATION_MS = 3500;
+const RESULTS_UI_REVEAL_DELAY_MS = 3000;
 
 // Pre-loaded demo result
 const DEMO_RESULT = {
@@ -75,11 +84,16 @@ export default function DemoScreen() {
   const LENS_STACK_OFFSET_Y = -20;
   // Negative moves the claim upward relative to the lens center.
   // Tuned to align the claim with the lens highlight (and the reference cursor in the screenshot).
-  const CLAIM_BASE_TRANSLATE_Y = -60;
+  const CLAIM_BASE_TRANSLATE_Y = -165;
+  // Inner text area of the ring. Keep it safely within the bright ring highlight.
+  const CLAIM_RING_SIZE = Math.round(Math.min(screenWidth, LENS_SIZE) * 0.64);
+  const CLAIM_RING_PADDING_H = 18;
 
   // Start directly in input state with claim pre-filled
   const [demoStep, setDemoStep] = useState<DemoStep>("input");
-  const [showResults, setShowResults] = useState(false);
+  const [showResultsUI, setShowResultsUI] = useState(false);
+  const [loadingStepIndex, setLoadingStepIndex] = useState(0);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Background video state - keep all mounted and crossfade
   const [activeVideoSource, setActiveVideoSource] = useState(VIDEO_TYPING);
@@ -107,7 +121,7 @@ export default function DemoScreen() {
 
   // Animated style for background - moves at same speed as scroll (1:1 ratio)
   const backgroundScrollStyle = useAnimatedStyle(() => {
-    if (!showResults) return {};
+    if (!showResultsUI) return {};
     return {
       transform: [{ translateY: -scrollY.value }],
     };
@@ -130,6 +144,24 @@ export default function DemoScreen() {
     // Register typing video
     registerVideo("home-typing");
   }, []);
+
+  // Cleanup pending timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current = [];
+    };
+  }, []);
+
+  // Loading step ticker
+  useEffect(() => {
+    if (demoStep !== "loading") return;
+    setLoadingStepIndex(0);
+    const interval = setInterval(() => {
+      setLoadingStepIndex((i) => (i + 1) % LOADING_STEPS.length);
+    }, 850);
+    return () => clearInterval(interval);
+  }, [demoStep]);
 
   // Video crossfade logic
   useEffect(() => {
@@ -194,24 +226,32 @@ export default function DemoScreen() {
     if (demoStep !== "input") return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // Clear any previous timers in case of weird double-taps
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+
+    // Ensure results UI is hidden until we explicitly reveal it
+    setShowResultsUI(false);
+
     // Fade out claim text
-    claimOpacity.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.ease) });
-    actionRowOpacity.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) });
+    claimOpacity.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.ease) });
+    actionRowOpacity.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.ease) });
 
-    setTimeout(() => {
-      setDemoStep("loading");
-    }, 400);
+    // Enter loading after the outgoing UI has cleared
+    timeoutsRef.current.push(setTimeout(() => setDemoStep("loading"), 240));
 
-    // Show results after 3.5 seconds of loading
-    setTimeout(() => {
-      setDemoStep("result");
-      setShowResults(true);
-    }, 4000);
+    // After loading completes, switch to results video immediately
+    timeoutsRef.current.push(setTimeout(() => setDemoStep("result"), 240 + LOADING_DURATION_MS));
+
+    // Reveal the rest of the UI after the results video has had time to play its intro animation
+    timeoutsRef.current.push(
+      setTimeout(() => setShowResultsUI(true), 240 + LOADING_DURATION_MS + RESULTS_UI_REVEAL_DELAY_MS)
+    );
   };
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push("/onboarding/auth");
+    router.push("/onboarding/premium");
   };
 
   const getScoreColor = (score: number) => {
@@ -220,14 +260,13 @@ export default function DemoScreen() {
     return "#EF4444";
   };
 
-  const instructionTitle = demoStep === "loading" ? "Analyzing..." : "Try it out";
-  const instructionSubtitle =
-    demoStep === "loading" ? "Vett searches sources and verifies facts" : 'Tap "Analyze" to verify this claim';
+  const instructionTitle = "Try it out";
+  const instructionSubtitle = 'Tap "Analyze" to verify this claim';
 
   return (
     <View style={styles.container}>
       {/* Background videos */}
-      <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 0, width: screenWidth, height: screenHeight, overflow: "hidden" }, showResults && backgroundScrollStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 0, width: screenWidth, height: screenHeight, overflow: "hidden" }, showResultsUI && backgroundScrollStyle]}>
         <Image source={HOME_IDLE_STILL} style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]} resizeMode="cover" />
 
         <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 1, width: screenWidth, height: screenHeight }, typingVideoStyle]} pointerEvents="none">
@@ -236,7 +275,9 @@ export default function DemoScreen() {
             shouldPlay={activeVideoSource === VIDEO_TYPING}
             style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
             resizeMode={ResizeMode.COVER}
-            loopFromSeconds={4}
+            startAtSeconds={3}
+            loopFromSeconds={3}
+            loopToSeconds={30}
             isLooping={false}
           />
         </Animated.View>
@@ -257,9 +298,8 @@ export default function DemoScreen() {
             shouldPlay={activeVideoSource === VIDEO_RESULT_AMBER}
             style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
             resizeMode={ResizeMode.COVER}
-            loopFromSeconds={4}
             isLooping={false}
-            freezeAtSeconds={6}
+            freezeAtSeconds={5}
           />
         </Animated.View>
       </Animated.View>
@@ -270,15 +310,15 @@ export default function DemoScreen() {
       </View>
 
       <View style={[styles.content, { zIndex: 10 }]}>
-        {/* Main interactive area - only show lens/input when not showing results */}
-        {!showResults && (
+        {/* Input + loading overlay area */}
+        {(demoStep === "input" || demoStep === "loading") && (
           <View
             style={[
               styles.lensContainer,
               { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24, transform: [{ translateY: STACK_TRANSLATE_Y }] },
             ]}
           >
-            {demoStep === "input" && (
+            {demoStep === "input" ? (
               <Animated.View
                 entering={FadeInDown.duration(400).delay(200)}
                 exiting={FadeOut.duration(200)}
@@ -287,18 +327,7 @@ export default function DemoScreen() {
                 <Text style={styles.instructionTitle}>{instructionTitle}</Text>
                 <Text style={styles.instructionSubtitle}>{instructionSubtitle}</Text>
               </Animated.View>
-            )}
-
-            {demoStep === "loading" && (
-              <Animated.View
-                entering={FadeIn.duration(400)}
-                exiting={FadeOut.duration(200)}
-                style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING }]}
-              >
-                <Text style={styles.instructionTitle}>{instructionTitle}</Text>
-                <Text style={styles.instructionSubtitle}>{instructionSubtitle}</Text>
-              </Animated.View>
-            )}
+            ) : null}
 
             <View
               style={{
@@ -312,8 +341,46 @@ export default function DemoScreen() {
             >
               {/* Claim text overlay - read-only, positioned in the lens */}
               {demoStep === "input" && (
-                <Animated.View style={[styles.claimOverlay, claimStyle]} pointerEvents="none">
-                  <Text style={styles.claimText}>{DEMO_CLAIM}</Text>
+                <Animated.View
+                  style={[
+                    styles.claimOverlay,
+                    {
+                      width: CLAIM_RING_SIZE,
+                      height: CLAIM_RING_SIZE,
+                      paddingHorizontal: CLAIM_RING_PADDING_H,
+                    },
+                    claimStyle,
+                  ]}
+                  pointerEvents="none"
+                >
+                  <Text
+                    style={styles.claimText}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    numberOfLines={5}
+                  >
+                    {DEMO_CLAIM_DISPLAY}
+                  </Text>
+                </Animated.View>
+              )}
+
+              {/* Loading step overlay - in the exact same position as the claim */}
+              {demoStep === "loading" && (
+                <Animated.View
+                  entering={FadeIn.duration(160)}
+                  exiting={FadeOut.duration(160)}
+                  style={[
+                    styles.claimOverlay,
+                    {
+                      width: CLAIM_RING_SIZE,
+                      height: CLAIM_RING_SIZE,
+                      paddingHorizontal: CLAIM_RING_PADDING_H,
+                      transform: [{ translateY: CLAIM_BASE_TRANSLATE_Y }],
+                    },
+                  ]}
+                  pointerEvents="none"
+                >
+                  <Text style={styles.loadingStepText}>{LOADING_STEPS[loadingStepIndex]}</Text>
                 </Animated.View>
               )}
             </View>
@@ -341,7 +408,7 @@ export default function DemoScreen() {
         )}
 
         {/* Results display */}
-        {showResults && (
+        {showResultsUI && (
           <Animated.ScrollView 
             ref={scrollViewRef}
             style={styles.resultsScrollView}
@@ -360,14 +427,23 @@ export default function DemoScreen() {
                 entering={FadeInUp.duration(600).delay(200)}
                 style={styles.resultsLensContainer}
               >
-                <View style={styles.lensArea}>
+                <View
+                  style={[
+                    styles.lensArea,
+                    {
+                      width: CLAIM_RING_SIZE,
+                      height: CLAIM_RING_SIZE,
+                      paddingHorizontal: CLAIM_RING_PADDING_H,
+                    },
+                  ]}
+                >
                   <Text 
                     style={styles.resultsClaimText}
                     adjustsFontSizeToFit
-                    minimumFontScale={0.5}
-                    numberOfLines={6}
+                    minimumFontScale={0.55}
+                    numberOfLines={5}
                   >
-                    "{DEMO_CLAIM}"
+                    {DEMO_CLAIM_DISPLAY}
                   </Text>
                 </View>
               </Animated.View>
@@ -458,7 +534,7 @@ export default function DemoScreen() {
       </View>
 
       {/* Continue button - shows after results */}
-      {showResults && (
+      {showResultsUI && (
         <Animated.View 
           entering={FadeInUp.duration(400).delay(1000)}
           style={[styles.continueContainer, { paddingBottom: insets.bottom + 20 }]}
@@ -526,18 +602,26 @@ const styles = StyleSheet.create({
   },
   claimOverlay: {
     position: "absolute",
-    width: 260,
-    paddingHorizontal: 20,
     justifyContent: "center",
     alignItems: "center",
   },
   claimText: {
     fontFamily: "Inter_400Regular",
-    fontSize: 14,
+    fontSize: 20,
     color: "#FFFFFF",
     textAlign: "center",
-    lineHeight: 22,
+    includeFontPadding: false,
     // Enhanced drop shadow for better readability against bright video frames
+    textShadowColor: "rgba(0, 0, 0, 0.9)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  loadingStepText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: "#FFFFFF",
+    textAlign: "center",
+    includeFontPadding: false,
     textShadowColor: "rgba(0, 0, 0, 0.9)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
@@ -590,14 +674,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-    transform: [{ translateY: 80 }],
+    // The background ring sits a bit higher than the geometric center of this container.
+    // Negative moves the text up to visually center inside the ring.
+    transform: [{ translateY: -40 }],
   },
   resultsClaimText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 52,
+    fontSize: 40,
     color: '#FFFFFF',
     textAlign: 'center',
-    maxWidth: 420 * 0.85,
+    includeFontPadding: false,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
