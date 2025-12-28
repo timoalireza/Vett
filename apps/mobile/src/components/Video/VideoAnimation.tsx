@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { StyleSheet, View, Pressable, ViewStyle, StyleProp, Image } from 'react-native';
 
 // Dynamically import expo-av to handle cases where native module isn't available
@@ -35,6 +35,61 @@ interface VideoAnimationProps {
   volume?: number; // Volume level 0.0 to 1.0 (default: 0.0, only used if isMuted is false)
 }
 
+function stableStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+
+  const stringify = (v: any): any => {
+    if (v == null) return v;
+    const t = typeof v;
+    if (t === "string" || t === "number" || t === "boolean") return v;
+    if (t !== "object") return String(v);
+
+    if (seen.has(v)) return "[Circular]";
+    seen.add(v);
+
+    if (Array.isArray(v)) return v.map(stringify);
+
+    const out: Record<string, any> = {};
+    for (const key of Object.keys(v).sort()) {
+      out[key] = stringify(v[key]);
+    }
+    return out;
+  };
+
+  return JSON.stringify(stringify(value));
+}
+
+function getVideoSourceKey(source: any): string {
+  if (source == null) return "null";
+
+  const t = typeof source;
+  if (t === "number") return `module:${source}`; // RN/Expo `require()` is commonly a numeric module id
+  if (t === "string") return `str:${source}`;
+
+  // Expo/RN video sources are frequently objects like { uri }, or packager asset objects
+  if (t === "object") {
+    const uri = (source as any)?.uri;
+    if (typeof uri === "string" && uri.length) return `uri:${uri}`;
+
+    const localUri = (source as any)?.localUri;
+    if (typeof localUri === "string" && localUri.length) return `localUri:${localUri}`;
+
+    const assetId = (source as any)?.assetId;
+    if (typeof assetId === "number") return `assetId:${assetId}`;
+
+    // React Native packager asset object (often used on web / some bundlers)
+    if ((source as any)?.__packager_asset) {
+      const { httpServerLocation, name, type, hash, width, height } = source as any;
+      return `packager:${httpServerLocation ?? ""}/${name ?? ""}.${type ?? ""}:${hash ?? ""}:${width ?? ""}x${height ?? ""}`;
+    }
+
+    // Fallback: stable stringify so different objects don't collapse to "[object Object]"
+    return `obj:${stableStringify(source)}`;
+  }
+
+  return `unknown:${String(source)}`;
+}
+
 export const VideoAnimation: React.FC<VideoAnimationProps> = ({
   source,
   onSkip,
@@ -59,11 +114,13 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
   const [isFrozen, setIsFrozen] = useState(false);
   const previousSourceRef = useRef<any>(null);
   const hasStartedPlayingRef = useRef(false);
+  const lastStartedSourceRef = useRef<any>(null);
   const hasFiredFreezeRef = useRef(false);
   
   // Default resize mode if available
   const defaultResizeMode = ResizeMode ? ResizeMode.COVER : undefined;
   const finalResizeMode = resizeMode || defaultResizeMode;
+  const videoKey = useMemo(() => `video:${getVideoSourceKey(source)}`, [source]);
 
   // Reset video state when source changes
   useEffect(() => {
@@ -72,6 +129,7 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       setIsLoaded(false);
       setIsFrozen(false);
       hasStartedPlayingRef.current = false;
+      lastStartedSourceRef.current = null;
       hasFiredFreezeRef.current = false;
       previousSourceRef.current = source;
     }
@@ -164,8 +222,11 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       if (isLooping) {
         videoRef.current.playAsync().catch(() => {});
       } else {
-        // For custom looping videos, reset position only on first play
-        if (!hasStartedPlayingRef.current) {
+        // For custom looping videos, always reset position on first play *for this source*.
+        // This avoids a race where `source` changes but state/refs reset happens in a later effect,
+        // which can cause the new animation to start from a non-zero frame.
+        const isNewSourceStart = lastStartedSourceRef.current !== source;
+        if (!hasStartedPlayingRef.current || isNewSourceStart) {
           const startMillis = Math.max(0, (startAtSeconds || 0) * 1000);
           videoRef.current.setPositionAsync(startMillis).then(() => {
             videoRef.current?.playAsync().catch(() => {});
@@ -173,6 +234,7 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
             videoRef.current?.playAsync().catch(() => {});
           });
           hasStartedPlayingRef.current = true;
+          lastStartedSourceRef.current = source;
         } else {
           videoRef.current.playAsync().catch(() => {});
         }
@@ -183,10 +245,11 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
       // Reset state when stopping (but not when frozen)
       if (!shouldPlay && !isFrozen) {
         hasStartedPlayingRef.current = false;
+        lastStartedSourceRef.current = null;
         hasFiredFreezeRef.current = false;
       }
     }
-  }, [shouldPlay, isLoaded, isFrozen, isLooping, startAtSeconds]);
+  }, [shouldPlay, isLoaded, isFrozen, isLooping, startAtSeconds, source]);
 
   // If Video component is not available or error occurred, return empty view
   // Parent component should handle fallback
@@ -213,6 +276,8 @@ export const VideoAnimation: React.FC<VideoAnimationProps> = ({
           {/* Video - hidden when frozen if still frame is provided */}
           <Video
             ref={videoRef}
+            // Force a fresh native Video instance when the source changes so playback always starts at frame 0.
+            key={videoKey}
             style={[StyleSheet.absoluteFill, isFrozen && stillFrameSource && { opacity: 0 }]}
             source={source}
             useNativeControls={false}

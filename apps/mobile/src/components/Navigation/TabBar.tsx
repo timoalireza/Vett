@@ -4,13 +4,12 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, RadialGradient, Stop, Circle } from "react-native-svg";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
-import { LensMotif } from "../Lens/LensMotif";
-
 export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
   const id = React.useId();
   
   const tabs = [
-    { key: "analyze", label: "Analyze", icon: "scan-outline", activeIcon: "scan" },
+    // `analyze` is the app's "home" route
+    { key: "analyze", label: "Analyze", icon: "home-outline", activeIcon: "home" },
     { key: "collections", label: "History", icon: "time-outline", activeIcon: "time" },
     { key: "profile", label: "Profile", icon: "person-outline", activeIcon: "person" },
   ] as const;
@@ -72,15 +71,11 @@ export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, naviga
                   </Svg>
                 </View>
               )}
-              {tab.key === "analyze" ? (
-                <LensMotif size={28} showPrompt={false} />
-              ) : (
-                <Ionicons
-                  name={isFocused ? (tab.activeIcon as any) : (tab.icon as any)}
-                  size={24}
-                  color={isFocused ? "#FFFFFF" : "#6B6B6B"}
-                />
-              )}
+              <Ionicons
+                name={isFocused ? (tab.activeIcon as any) : (tab.icon as any)}
+                size={24}
+                color={isFocused ? "#FFFFFF" : "#6B6B6B"}
+              />
             </View>
           </Pressable>
         );

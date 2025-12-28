@@ -69,6 +69,9 @@ function AuthTokenSync() {
     let cancelled = false;
 
     const sync = async () => {
+      // Keep a coarse auth state in the token provider so API calls can avoid app-start races.
+      tokenProvider.setAuthState(isSignedIn ? "signedIn" : "signedOut");
+
       if (!isSignedIn) {
         tokenProvider.setToken(null);
         clearClerkTokenCache();
@@ -76,7 +79,9 @@ function AuthTokenSync() {
       }
 
       try {
-        const token = await getToken?.();
+        const template = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE;
+        // Prefer a configured JWT template if provided; otherwise fall back to default token behavior.
+        const token = template ? await getToken?.({ template }) : await getToken?.();
         if (cancelled) return;
         tokenProvider.setToken(token ?? null);
       } catch (error) {

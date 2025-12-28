@@ -7,6 +7,12 @@ interface GraphQLResponse<T> {
   errors?: Array<{ message: string }>;
 }
 
+function isJwtLike(token: string): boolean {
+  // Basic heuristic: 3 dot-separated base64url-ish segments
+  const parts = token.split(".");
+  return parts.length === 3 && parts[0].length > 0 && parts[1].length > 0;
+}
+
 /**
  * Get authentication token from Clerk
  * Tries token provider first (set by React components), then falls back to SecureStore
@@ -15,8 +21,17 @@ async function getAuthToken(): Promise<string | null> {
   // First try token from provider (set by React components)
   const providerToken = tokenProvider.getToken();
   if (providerToken) {
-    console.log("[GraphQL] Using token from provider");
+    console.log("[GraphQL] Using token from provider", { jwtLike: isJwtLike(providerToken) });
     return providerToken;
+  }
+
+  // Wait briefly for Clerk->tokenProvider sync to complete.
+  // This prevents firing authenticated-only queries without a token due to effect timing on app start.
+  const state = tokenProvider.getAuthState();
+  const waited = await tokenProvider.waitForToken({ timeoutMs: state === "unknown" ? 750 : 2000 });
+  if (waited) {
+    console.log("[GraphQL] Using token from provider (wait)", { jwtLike: isJwtLike(waited) });
+    return waited;
   }
 
   // Fallback to SecureStore lookup
@@ -27,7 +42,7 @@ async function getAuthToken(): Promise<string | null> {
 
   // Last resort: small bounded retry to avoid a "signed in but token not synced yet" race on app start.
   // This prevents authenticated-only queries from firing without a token due to effect timing.
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     await new Promise((r) => setTimeout(r, 150));
     const retryProviderToken = tokenProvider.getToken();
     if (retryProviderToken) {

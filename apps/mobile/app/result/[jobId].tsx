@@ -474,7 +474,7 @@ export default function ResultScreen() {
                   shouldPlay={true}
                   loopFromSeconds={4}
                   isLooping={false}
-                  freezeAtSeconds={6}
+                  freezeAtSeconds={5}
                   style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
                   resizeMode={ResizeMode.COVER}
                   onError={() => setVideoError(true)}

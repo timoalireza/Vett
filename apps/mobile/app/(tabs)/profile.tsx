@@ -5,6 +5,8 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAnalyses } from "../../src/api/analysis";
 import { SettingsRow } from "../../src/components/Common/SettingsRow";
+import { useAppState } from "../../src/state/app-state";
+import { getStrings } from "../../src/i18n/strings";
 
 // Time saved calculation based on complexity
 const COMPLEXITY_TIMES = {
@@ -32,6 +34,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
   const { user } = useUser();
+  const { language } = useAppState();
+  const strings = useMemo(() => getStrings(language), [language]);
 
   // Fetch all analyses for statistics
   const { data: analysesData } = useQuery({
@@ -134,9 +138,19 @@ export default function ProfileScreen() {
         {/* Settings list */}
         <View style={styles.settingsList}>
           <SettingsRow 
-            icon="settings-outline" 
-            label="Settings" 
-            onPress={() => router.push("/settings")} 
+            icon="diamond-outline"
+            label={strings.membershipTab}
+            onPress={() => router.push("/settings/membership")}
+          />
+          <SettingsRow
+            icon="person-circle-outline"
+            label={strings.accountTab}
+            onPress={() => router.push("/settings/account")}
+          />
+          <SettingsRow
+            icon="language-outline"
+            label={strings.languageTab}
+            onPress={() => router.push("/settings/language")}
           />
           <SettingsRow 
             icon="help-circle-outline" 
