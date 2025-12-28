@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image, ImageSourcePropType, Pressable, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import PagerView from "react-native-pager-view";
 import Animated, { 
   FadeInUp,
@@ -88,13 +88,36 @@ export default function WelcomeScreen() {
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Used to detect true user-driven swipes (vs programmatic page changes).
   const userSwipeInProgressRef = useRef(false);
+  const isFocusedRef = useRef(false);
 
   // Background crossfade state (keep previous + current mounted while animating)
   const [bgFromPage, setBgFromPage] = useState<number | null>(null);
   const [bgToPage, setBgToPage] = useState<number>(0);
   const bgProgress = useSharedValue(1);
 
-  const startBackgroundCrossfade = (fromPage: number | null, toPage: number) => {
+  const pageCount = CAROUSEL_SLIDES.length;
+
+  const normalizePageIndex = useCallback(
+    (value: unknown) => {
+      const n = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(n)) {
+        return null;
+      }
+      const i = Math.round(n);
+      // Ensure 0..pageCount-1
+      return ((i % pageCount) + pageCount) % pageCount;
+    },
+    [pageCount]
+  );
+
+  const clearAutoAdvanceTimer = useCallback(() => {
+    if (autoAdvanceTimerRef.current) {
+      clearInterval(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  }, []);
+
+  const startBackgroundCrossfade = useCallback((fromPage: number | null, toPage: number) => {
     // Ensure the incoming image layer is mounted BEFORE we start fading.
     // This avoids a single-frame flash where the outgoing fade begins with no incoming image yet.
     setBgFromPage(fromPage);
@@ -108,36 +131,35 @@ export default function WelcomeScreen() {
         easing: Easing.inOut(Easing.ease),
       });
     });
-  };
+  }, [bgProgress]);
 
-  const goToPage = (page: number) => {
+  const goToPage = useCallback((page: unknown) => {
     const fromPage = currentPageRef.current;
-    const nextPage = (page + CAROUSEL_SLIDES.length) % CAROUSEL_SLIDES.length;
+    const nextPage = normalizePageIndex(page);
+    if (nextPage === null) {
+      return;
+    }
     currentPageRef.current = nextPage;
     startBackgroundCrossfade(fromPage, nextPage);
     // For programmatic navigation, avoid PagerView's horizontal animation.
     // It can cause slight jitter when combined with JS-driven state updates + background crossfade.
-    (headlinePagerRef.current as any)?.setPageWithoutAnimation?.(nextPage);
-    (subtextPagerRef.current as any)?.setPageWithoutAnimation?.(nextPage);
+    // Also avoid dispatching native commands when the screen isn't focused (native-stack may detach views).
+    if (isFocusedRef.current) {
+      (headlinePagerRef.current as any)?.setPageWithoutAnimation?.(nextPage);
+      (subtextPagerRef.current as any)?.setPageWithoutAnimation?.(nextPage);
+    }
     setCurrentPage(nextPage);
-  };
+  }, [normalizePageIndex, startBackgroundCrossfade]);
 
   const goNext = () => goToPage(currentPageRef.current + 1);
   const goPrev = () => goToPage(currentPageRef.current - 1);
 
-  const clearAutoAdvanceTimer = () => {
-    if (autoAdvanceTimerRef.current) {
-      clearInterval(autoAdvanceTimerRef.current);
-      autoAdvanceTimerRef.current = null;
-    }
-  };
-
-  const startAutoAdvanceTimer = () => {
+  const startAutoAdvanceTimer = useCallback(() => {
     clearAutoAdvanceTimer();
     autoAdvanceTimerRef.current = setInterval(() => {
       goToPage(currentPageRef.current + 1);
     }, AUTO_ADVANCE_INTERVAL);
-  };
+  }, [clearAutoAdvanceTimer, goToPage]);
 
   // Auto-advance carousel
   useEffect(() => {
@@ -146,11 +168,18 @@ export default function WelcomeScreen() {
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  // Auto-advance carousel (stable interval; resettable on user interaction)
-  useEffect(() => {
-    startAutoAdvanceTimer();
-    return () => clearAutoAdvanceTimer();
-  }, []);
+  // Only auto-advance while focused. Native-stack can detach screens when navigating,
+  // and dispatching PagerView commands to a detached view can corrupt the bridge ("Malformed calls from JS").
+  useFocusEffect(
+    useCallback(() => {
+      isFocusedRef.current = true;
+      startAutoAdvanceTimer();
+      return () => {
+        isFocusedRef.current = false;
+        clearAutoAdvanceTimer();
+      };
+    }, [clearAutoAdvanceTimer, startAutoAdvanceTimer])
+  );
 
   const handleHeadlineScrollStateChanged = (e: any) => {
     const state = e?.nativeEvent?.pageScrollState;
@@ -164,13 +193,18 @@ export default function WelcomeScreen() {
   };
 
   const handlePageSelected = (e: any) => {
-    const position = e.nativeEvent.position;
+    const position = normalizePageIndex(e?.nativeEvent?.position);
+    if (position === null) {
+      return;
+    }
     const fromPage = currentPageRef.current;
     currentPageRef.current = position;
     startBackgroundCrossfade(fromPage, position);
     setCurrentPage(position);
     // Sync subtext pager only (headline pager is the source of truth here).
-    (subtextPagerRef.current as any)?.setPageWithoutAnimation?.(position);
+    if (isFocusedRef.current) {
+      (subtextPagerRef.current as any)?.setPageWithoutAnimation?.(position);
+    }
 
     // If the user manually swiped, reset the auto-advance interval so it doesn't fire "too soon".
     if (userSwipeInProgressRef.current) {
@@ -180,10 +214,12 @@ export default function WelcomeScreen() {
   };
 
   const handleSignUp = () => {
+    clearAutoAdvanceTimer();
     router.push("/onboarding/name");
   };
 
   const handleLogin = () => {
+    clearAutoAdvanceTimer();
     router.push("/signin");
   };
 
