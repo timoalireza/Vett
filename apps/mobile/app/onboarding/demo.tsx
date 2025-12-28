@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,6 +18,7 @@ import Animated, {
   FadeInUp,
   FadeOut,
   runOnJS,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -45,8 +47,8 @@ const DEMO_RESULT = {
   summary:
     "Some research links moderate coffee intake to improved health outcomes, but the claim of adding 10 years to lifespan is exaggerated and not supported by strong evidence.",
   sources: [
-    { title: "Coffee and health: What does the evidence actually show?", provider: "NIH" },
-    { title: "Coffee and longevity: Benefits and limitations", provider: "Harvard" },
+    { title: "Coffee and health: What does the evidence actually show?", provider: "NIH", url: "https://www.nih.gov/" },
+    { title: "Coffee and longevity: Benefits and limitations", provider: "Harvard", url: "https://www.hsph.harvard.edu/" },
   ],
 };
 
@@ -92,6 +94,24 @@ export default function DemoScreen() {
   const claimTranslateY = useSharedValue(20);
   const actionRowOpacity = useSharedValue(0);
   const actionRowTranslateY = useSharedValue(20);
+
+  // Scroll handler for results - makes background scroll with content
+  const scrollY = useSharedValue(0);
+  const scrollViewRef = useRef<any>(null);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      const offsetY = Math.max(0, event.contentOffset.y);
+      scrollY.value = offsetY;
+    },
+  });
+
+  // Animated style for background - moves at same speed as scroll (1:1 ratio)
+  const backgroundScrollStyle = useAnimatedStyle(() => {
+    if (!showResults) return {};
+    return {
+      transform: [{ translateY: -scrollY.value }],
+    };
+  });
 
   const resetAnimationFlags = useCallback(() => {
     isAnimatingRef.current = false;
@@ -207,7 +227,7 @@ export default function DemoScreen() {
   return (
     <View style={styles.container}>
       {/* Background videos */}
-      <View style={[StyleSheet.absoluteFill, { zIndex: 0, width: screenWidth, height: screenHeight, overflow: "hidden" }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 0, width: screenWidth, height: screenHeight, overflow: "hidden" }, showResults && backgroundScrollStyle]}>
         <Image source={HOME_IDLE_STILL} style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]} resizeMode="cover" />
 
         <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 1, width: screenWidth, height: screenHeight }, typingVideoStyle]} pointerEvents="none">
@@ -242,7 +262,7 @@ export default function DemoScreen() {
             freezeAtSeconds={6}
           />
         </Animated.View>
-      </View>
+      </Animated.View>
 
       {/* Onboarding back */}
       <View style={styles.topBar}>
@@ -322,72 +342,125 @@ export default function DemoScreen() {
 
         {/* Results display */}
         {showResults && (
-          <Animated.View 
-            entering={FadeInUp.duration(600).delay(200)}
-            style={styles.resultsContainer}
+          <Animated.ScrollView 
+            ref={scrollViewRef}
+            style={styles.resultsScrollView}
+            contentContainerStyle={[
+              styles.resultsContainer,
+              { paddingBottom: insets.bottom + 100 }
+            ]}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
           >
-            {/* Verdict header */}
-            <View style={styles.verdictHeader}>
-              <Text style={[styles.verdictText, { color: getScoreColor(DEMO_RESULT.score) }]}>
-                {DEMO_RESULT.verdict}
-              </Text>
-              <View style={styles.scoreContainer}>
-                <Text style={[styles.scoreText, { color: getScoreColor(DEMO_RESULT.score) }]}>
-                  {DEMO_RESULT.score}
-                </Text>
-                <Text style={styles.scoreLabel}>/100</Text>
-              </View>
-            </View>
-
-            {/* Summary card */}
-            <View style={styles.summaryCard}>
-              <Text style={styles.cardLabel}>SUMMARY</Text>
-              <Text style={styles.summaryText}>{DEMO_RESULT.summary}</Text>
-            </View>
-
-            {/* Sources preview */}
-            <View style={styles.sourcesCard}>
-              <View style={styles.sourcesHeader}>
-                <Text style={styles.cardLabel}>SOURCES</Text>
-                <View style={styles.sourcesBadge}>
-                  <Text style={styles.sourcesBadgeText}>{DEMO_RESULT.sources.length}</Text>
+            {/* Lens area with claim text inside */}
+            <View style={styles.resultsHeader}>
+              <Animated.View 
+                entering={FadeInUp.duration(600).delay(200)}
+                style={styles.resultsLensContainer}
+              >
+                <View style={styles.lensArea}>
+                  <Text 
+                    style={styles.resultsClaimText}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.5}
+                    numberOfLines={6}
+                  >
+                    "{DEMO_CLAIM}"
+                  </Text>
                 </View>
-              </View>
-              {DEMO_RESULT.sources.map((source, index) => (
-                <View key={index} style={styles.sourceItem}>
-                  <Ionicons name="link-outline" size={16} color="#8A8A8A" />
-                  <Text style={styles.sourceTitle} numberOfLines={1}>{source.title}</Text>
-                </View>
-              ))}
-            </View>
+              </Animated.View>
 
-            {/* How it works explanation */}
-            <Animated.View 
-              entering={FadeInUp.duration(400).delay(600)}
-              style={styles.howItWorksCard}
-            >
-              <Text style={styles.howItWorksTitle}>How Vett works</Text>
-              <View style={styles.howItWorksStep}>
-                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
-                <Text style={styles.stepText}>Paste any claim, URL, or screenshot</Text>
-              </View>
-              <View style={styles.howItWorksStep}>
-                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
-                <Text style={styles.stepText}>AI searches credible sources</Text>
-              </View>
-              <View style={styles.howItWorksStep}>
-                <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
-                <Text style={styles.stepText}>Get an instant fact-check verdict</Text>
-              </View>
-            </Animated.View>
-          </Animated.View>
+              {/* Verdict and Score boxes below the lens */}
+              <Animated.View 
+                entering={FadeInUp.duration(600).delay(400)}
+                style={styles.verdictScoreRow}
+              >
+                <View style={styles.verdictBox}>
+                  <Text style={styles.verdictBoxLabel}>Verdict:</Text>
+                  <View style={styles.verdictValueContainer}>
+                    <Text style={[styles.verdictBoxValue, { color: getScoreColor(DEMO_RESULT.score) }]}>
+                      {DEMO_RESULT.verdict}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.scoreBox}>
+                  <Text style={styles.verdictBoxLabel}>Score:</Text>
+                  <Text style={[styles.scoreBoxValue, { color: getScoreColor(DEMO_RESULT.score) }]}>
+                    {DEMO_RESULT.score}
+                  </Text>
+                </View>
+              </Animated.View>
+
+              {/* Summary card */}
+              <Animated.View 
+                entering={FadeInUp.duration(400).delay(600)}
+                style={styles.summaryCard}
+              >
+                <Text style={styles.cardLabel}>SUMMARY</Text>
+                <Text style={styles.summaryText}>{DEMO_RESULT.summary}</Text>
+              </Animated.View>
+
+              {/* Sources card */}
+              <Animated.View 
+                entering={FadeInUp.duration(400).delay(700)}
+                style={styles.sourcesCard}
+              >
+                <View style={styles.sourcesHeader}>
+                  <Text style={styles.cardLabel}>SOURCES</Text>
+                  <View style={styles.sourcesBadge}>
+                    <Text style={styles.sourcesBadgeText}>{DEMO_RESULT.sources.length}</Text>
+                  </View>
+                </View>
+                <View style={styles.sourcesList}>
+                  {DEMO_RESULT.sources.map((source, index) => (
+                    <View key={index} style={styles.sourceItem}>
+                      <View style={styles.sourceContent}>
+                        <Text style={styles.sourceTitle} numberOfLines={2}>{source.title}</Text>
+                        <Text style={styles.sourceProvider}>{source.provider}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.sourceButton}
+                        onPress={() => Linking.openURL(source.url)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="open-outline" size={18} color="#FFFFFF" />
+                        <Text style={styles.sourceButtonText}>Open</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </Animated.View>
+
+              {/* How it works explanation */}
+              <Animated.View 
+                entering={FadeInUp.duration(400).delay(800)}
+                style={styles.howItWorksCard}
+              >
+                <Text style={styles.howItWorksTitle}>How Vett works</Text>
+                <View style={styles.howItWorksStep}>
+                  <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
+                  <Text style={styles.stepText}>Paste any claim, URL, or screenshot</Text>
+                </View>
+                <View style={styles.howItWorksStep}>
+                  <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
+                  <Text style={styles.stepText}>AI searches credible sources</Text>
+                </View>
+                <View style={styles.howItWorksStep}>
+                  <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
+                  <Text style={styles.stepText}>Get an instant fact-check verdict</Text>
+                </View>
+              </Animated.View>
+            </View>
+          </Animated.ScrollView>
         )}
       </View>
 
       {/* Continue button - shows after results */}
       {showResults && (
         <Animated.View 
-          entering={FadeInUp.duration(400).delay(800)}
+          entering={FadeInUp.duration(400).delay(1000)}
           style={[styles.continueContainer, { paddingBottom: insets.bottom + 20 }]}
         >
           <TouchableOpacity
@@ -491,42 +564,98 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#000000",
   },
-  resultsContainer: {
+  resultsScrollView: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 120,
   },
-  verdictHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  resultsContainer: {
+    paddingBottom: 40,
+  },
+  resultsHeader: {
+    alignItems: 'center',
+    paddingTop: 40,
     marginBottom: 20,
+    paddingHorizontal: 20,
+    minHeight: Dimensions.get('window').height,
   },
-  verdictText: {
-    fontFamily: "Inter_700Bold",
+  resultsLensContainer: {
+    width: 420,
+    height: 420,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lensArea: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    transform: [{ translateY: 80 }],
+  },
+  resultsClaimText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 52,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    maxWidth: 420 * 0.85,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  verdictScoreRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: -140,
+    marginBottom: 16,
+    width: '100%',
+  },
+  verdictBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  verdictValueContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scoreBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  verdictBoxLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#6B6B6B',
+    letterSpacing: 1,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  verdictBoxValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 28,
+    textAlign: 'center',
+  },
+  scoreBoxValue: {
+    fontFamily: 'Inter_700Bold',
     fontSize: 36,
-  },
-  scoreContainer: {
-    flexDirection: "row",
-    alignItems: "baseline",
-  },
-  scoreText: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 48,
-  },
-  scoreLabel: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 18,
-    color: "rgba(255, 255, 255, 0.5)",
-    marginLeft: 2,
+    textAlign: 'center',
   },
   summaryCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
     padding: 20,
-    marginBottom: 12,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
+    width: '100%',
   },
   cardLabel: {
     fontFamily: "Inter_500Medium",
@@ -534,6 +663,7 @@ const styles = StyleSheet.create({
     color: "#6B6B6B",
     letterSpacing: 1,
     marginBottom: 8,
+    textTransform: 'uppercase',
   },
   summaryText: {
     fontFamily: "Inter_400Regular",
@@ -542,48 +672,84 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   sourcesCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
     padding: 20,
-    marginBottom: 12,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
+    width: '100%',
   },
   sourcesHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 12,
   },
   sourcesBadge: {
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 12,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   sourcesBadgeText: {
     fontFamily: "Inter_500Medium",
     fontSize: 12,
     color: "#FFFFFF",
   },
+  sourcesList: {
+    marginTop: 16,
+    gap: 12,
+  },
   sourceItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 6,
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+    gap: 12,
+  },
+  sourceContent: {
+    flex: 1,
+    marginRight: 8,
   },
   sourceTitle: {
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Inter_500Medium",
     fontSize: 14,
-    color: "#AAAAAA",
-    flex: 1,
+    color: "#FFFFFF",
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  sourceProvider: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#8A8A8A",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sourceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  sourceButtonText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: "#FFFFFF",
   },
   howItWorksCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 16,
     padding: 20,
+    marginTop: 16,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    width: '100%',
   },
   howItWorksTitle: {
     fontFamily: "Inter_600SemiBold",
@@ -624,6 +790,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     backgroundColor: "rgba(0, 0, 0, 0.8)",
+    zIndex: 30,
   },
   continueButton: {
     flexDirection: "row",
