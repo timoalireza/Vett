@@ -10,7 +10,7 @@ interface GraphQLResponse<T> {
 function isJwtLike(token: string): boolean {
   // Basic heuristic: 3 dot-separated base64url-ish segments
   const parts = token.split(".");
-  return parts.length === 3 && parts[0].length > 0 && parts[1].length > 0;
+  return parts.length === 3 && parts[0].length > 0 && parts[1].length > 0 && parts[2].length > 0;
 }
 
 /**
