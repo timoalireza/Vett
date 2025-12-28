@@ -274,6 +274,37 @@ export const schema = `
     success: Boolean!
   }
 
+  enum PrivacyRequestType {
+    DATA_EXPORT
+    DATA_DELETION
+  }
+
+  enum PrivacyRequestStatus {
+    PENDING
+    COMPLETED
+    CANCELLED
+  }
+
+  type PrivacyRequest {
+    id: ID!
+    type: PrivacyRequestType!
+    status: PrivacyRequestStatus!
+    note: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type PrivacyRequestPayload {
+    success: Boolean!
+    request: PrivacyRequest
+    error: String
+  }
+
+  type DeleteAccountPayload {
+    success: Boolean!
+    error: String
+  }
+
   type SocialAccount {
     id: ID!
     platform: String!
@@ -320,6 +351,9 @@ export const schema = `
     submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
     chatWithVettAI(input: VettAIChatInput!): VettAIChatPayload!
     deleteAnalysis(id: ID!): DeleteAnalysisPayload!
+    requestDataExport(note: String): PrivacyRequestPayload!
+    requestDataDeletion(note: String): PrivacyRequestPayload!
+    deleteAccount: DeleteAccountPayload!
     generateInstagramVerificationCode: GenerateInstagramVerificationCodePayload!
     linkInstagramAccount(verificationCode: String!): LinkInstagramAccountPayload!
     unlinkInstagramAccount: UnlinkInstagramAccountPayload!

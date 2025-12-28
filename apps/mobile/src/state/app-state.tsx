@@ -11,6 +11,7 @@ interface AppStateValue {
   hasOnboarded: boolean;
   authMode: AuthMode;
   theme: Theme;
+  language: string;
   subscriptionPromptShown: boolean;
   userIntent: string | null;
   trustLevel: number | null;
@@ -20,6 +21,7 @@ interface AppStateValue {
   countryCode: string | null;
   markOnboarded: () => Promise<void>;
   setAuthMode: (mode: AuthMode) => Promise<void>;
+  setLanguage: (language: string) => Promise<void>;
   markSubscriptionPromptShown: () => Promise<void>;
   setUserIntent: (intent: string) => Promise<void>;
   setTrustLevel: (level: number) => Promise<void>;
@@ -33,6 +35,7 @@ const STORAGE_KEYS = {
   onboarded: "vett.hasOnboarded",
   authMode: "vett.authMode",
   subscriptionPromptShown: "vett.subscriptionPromptShown",
+  language: "vett.language",
   userIntent: "vett.userIntent",
   trustLevel: "vett.trustLevel",
   alertStyle: "vett.alertStyle",
@@ -49,6 +52,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
   const [authMode, setAuthModeValue] = useState<AuthMode>("signedOut");
   const [isReady, setIsReady] = useState(false);
   const [subscriptionPromptShown, setSubscriptionPromptShown] = useState(false);
+  const [language, setLanguageValue] = useState<string>("en");
   const [userIntent, setUserIntentValue] = useState<string | null>(null);
   const [trustLevel, setTrustLevelValue] = useState<number | null>(null);
   const [alertStyle, setAlertStyleValue] = useState<string | null>(null);
@@ -83,6 +87,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
         const [
           storedOnboarding,
           storedSubscriptionPrompt,
+          storedLanguage,
           storedUserIntent,
           storedTrustLevel,
           storedAlertStyle,
@@ -92,6 +97,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
         ] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.onboarded),
           AsyncStorage.getItem(STORAGE_KEYS.subscriptionPromptShown),
+          AsyncStorage.getItem(STORAGE_KEYS.language),
           AsyncStorage.getItem(STORAGE_KEYS.userIntent),
           AsyncStorage.getItem(STORAGE_KEYS.trustLevel),
           AsyncStorage.getItem(STORAGE_KEYS.alertStyle),
@@ -102,6 +108,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
         if (mounted) {
           setHasOnboarded(storedOnboarding === "true");
           setSubscriptionPromptShown(storedSubscriptionPrompt === "true");
+          setLanguageValue(storedLanguage || "en");
           setUserIntentValue(storedUserIntent);
           setTrustLevelValue(
             storedTrustLevel ? parseInt(storedTrustLevel, 10) : null
@@ -143,6 +150,11 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEYS.authMode, mode);
   }, []);
 
+  const setLanguage = useCallback(async (lang: string) => {
+    setLanguageValue(lang);
+    await AsyncStorage.setItem(STORAGE_KEYS.language, lang);
+  }, []);
+
   const markSubscriptionPromptShown = useCallback(async () => {
     setSubscriptionPromptShown(true);
     await AsyncStorage.setItem(STORAGE_KEYS.subscriptionPromptShown, "true");
@@ -181,6 +193,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
     setHasOnboarded(false);
     setAuthModeValue("signedOut");
     setSubscriptionPromptShown(false);
+    // Preserve user preferences (like language) across auth state resets.
     setUserIntentValue(null);
     setTrustLevelValue(null);
     setAlertStyleValue(null);
@@ -208,6 +221,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       hasOnboarded,
       authMode,
       theme,
+      language,
       subscriptionPromptShown,
       userIntent,
       trustLevel,
@@ -217,6 +231,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       countryCode,
       markOnboarded,
       setAuthMode,
+      setLanguage,
       markSubscriptionPromptShown,
       setUserIntent,
       setTrustLevel,
@@ -230,6 +245,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       hasOnboarded,
       authMode,
       theme,
+      language,
       subscriptionPromptShown,
       userIntent,
       trustLevel,
@@ -239,6 +255,7 @@ function AppStateProviderInner({ children }: { children: ReactNode }) {
       countryCode,
       markOnboarded,
       setAuthMode,
+      setLanguage,
       markSubscriptionPromptShown,
       setUserIntent,
       setTrustLevel,

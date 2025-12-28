@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Text, TouchableOpacity, View, ScrollView, StyleSheet, ActivityIndicator, Alert, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { MotiView } from "moti";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useTheme } from "../../src/hooks/use-theme";
@@ -38,35 +37,58 @@ const FEATURES = [
 export default function SubscriptionModal() {
   const theme = useTheme();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Plan>("PRO");
+  const params = useLocalSearchParams<{ plan?: string }>();
+  const initialPlan = (params.plan === "PLUS" || params.plan === "PRO" ? params.plan : "PRO") as Plan;
+  const [activeTab, setActiveTab] = useState<Plan>(initialPlan);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual");
   const [purchasing, setPurchasing] = useState(false);
   
   const { offerings, loading, purchase, getMonthlyPackage, getAnnualPackage } = useRevenueCat();
 
-  const handleSubscribe = async (plan: Plan) => {
+  const selectedPackage = useMemo(() => {
+    if (!offerings) return null;
+
+    const planKey = activeTab.toLowerCase();
+    const cycleKey = billingCycle === "annual" ? "annual" : "monthly";
+
+    const haystack = (pkg: any) =>
+      `${pkg.identifier} ${pkg.product?.identifier ?? ""} ${pkg.product?.title ?? ""}`.toLowerCase();
+
+    const planMatches = offerings.availablePackages.filter((pkg) => haystack(pkg).includes(planKey));
+    const cycleMatches = planMatches.filter((pkg) => {
+      const h = haystack(pkg);
+      if (cycleKey === "annual") return h.includes("annual") || h.includes("year") || h.includes("yearly");
+      return h.includes("month") || h.includes("monthly");
+    });
+
+    // Fallbacks:
+    // - If RevenueCat offering doesn't separate plan packages, fall back to default monthly/annual.
+    return (
+      cycleMatches[0] ||
+      planMatches[0] ||
+      (billingCycle === "monthly" ? offerings.monthly : offerings.annual) ||
+      (billingCycle === "monthly" ? getMonthlyPackage() : getAnnualPackage())
+    );
+  }, [offerings, activeTab, billingCycle, getMonthlyPackage, getAnnualPackage]);
+
+  const handleSubscribe = async () => {
     if (purchasing) return;
 
     try {
       setPurchasing(true);
 
-      // Get the appropriate package based on billing cycle
-      const pkg = billingCycle === "monthly" 
-        ? getMonthlyPackage() 
-        : getAnnualPackage();
-
-      if (!pkg) {
+      if (!selectedPackage) {
         Alert.alert("Error", "Package not available. Please try again later.");
         return;
       }
 
       // Purchase the package
-      const customerInfo = await purchase(pkg);
+      const customerInfo = await purchase(selectedPackage);
 
       // Check if purchase was successful
       // entitlements.active is an object (dictionary), not an array
       if (Object.keys(customerInfo.entitlements.active).length > 0) {
-        Alert.alert("Success", `Vett ${plan} subscription activated successfully!`, [
+        Alert.alert("Success", `Vett ${activeTab} subscription activated successfully!`, [
           {
             text: "OK",
             onPress: () => router.back()
@@ -471,13 +493,11 @@ export default function SubscriptionModal() {
             <GlassCard
               intensity="medium"
               radius="lg"
-              style={[
-                styles.planCard,
-                {
-                  padding: theme.spacing(3),
-                  marginTop: theme.spacing(2)
-                }
-              ]}
+              style={{
+                ...styles.planCard,
+                padding: theme.spacing(3),
+                marginTop: theme.spacing(2)
+              }}
             >
               <View style={{ alignItems: "center" }}>
                 <Text
@@ -591,7 +611,7 @@ export default function SubscriptionModal() {
               </View>
             ) : (
               <TouchableOpacity
-                onPress={() => handleSubscribe(activeTab)}
+                onPress={handleSubscribe}
                 disabled={purchasing}
                 style={[
                   styles.ctaButton,

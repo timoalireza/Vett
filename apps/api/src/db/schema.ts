@@ -55,6 +55,17 @@ export const analysisComplexityEnum = pgEnum("analysis_complexity", [
   "complex"
 ]);
 
+export const privacyRequestTypeEnum = pgEnum("privacy_request_type", [
+  "DATA_EXPORT",
+  "DATA_DELETION"
+]);
+
+export const privacyRequestStatusEnum = pgEnum("privacy_request_status", [
+  "PENDING",
+  "COMPLETED",
+  "CANCELLED"
+]);
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   externalId: text("external_id").notNull().unique(), // Clerk/Firebase ID
@@ -302,6 +313,19 @@ export const userUsage = pgTable("user_usage", {
   periodStart: timestamp("period_start", { withTimezone: true }).notNull(), // Start of current billing period
   periodEnd: timestamp("period_end", { withTimezone: true }).notNull(), // End of current billing period
   lastResetAt: timestamp("last_reset_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+});
+
+// Privacy requests table - tracks user requests for data export or data deletion (GDPR/CCPA)
+export const privacyRequests = pgTable("privacy_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: privacyRequestTypeEnum("type").notNull(),
+  status: privacyRequestStatusEnum("status").default("PENDING").notNull(),
+  note: text("note"), // Optional user-provided context
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 });

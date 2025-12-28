@@ -91,7 +91,10 @@ export default function ProfileScreen() {
   const handleSignOut = async () => {
     try {
       await signOut();
-      router.replace("/signin");
+      // Always restart onboarding from the beginning after an explicit sign out.
+      // NOTE: We must route directly to /onboarding/welcome (not /onboarding) because
+      // /onboarding/index redirects onboarded users into the main app.
+      router.replace("/onboarding/welcome");
     } catch (error) {
       console.error("Sign out error:", error);
       Alert.alert("Error", "Failed to sign out. Please try again.");
@@ -130,6 +133,11 @@ export default function ProfileScreen() {
 
         {/* Settings list */}
         <View style={styles.settingsList}>
+          <SettingsRow 
+            icon="settings-outline" 
+            label="Settings" 
+            onPress={() => router.push("/settings")} 
+          />
           <SettingsRow 
             icon="help-circle-outline" 
             label="Help & Support" 

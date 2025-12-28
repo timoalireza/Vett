@@ -1,4 +1,5 @@
 import type { IResolvers } from "mercurius";
+import { createClerkClient } from "@clerk/backend";
 
 import { analysisService } from "../services/analysis-service.js";
 import { userService } from "../services/user-service.js";
@@ -7,9 +8,16 @@ import { cacheService } from "../services/cache-service.js";
 import { feedbackService } from "../services/feedback-service.js";
 import { vettAIService } from "../services/vettai-service.js";
 import { socialLinkingService } from "../services/social-linking-service.js";
+import { privacyRequestService } from "../services/privacy-request-service.js";
+import { accountService } from "../services/account-service.js";
 import type { DataLoaderContext } from "../loaders/index.js";
 import type { PaginationArgs } from "../utils/pagination.js";
 import { trackGraphQLMutation, trackGraphQLError } from "../plugins/metrics.js";
+import { env } from "../env.js";
+
+const clerk = createClerkClient({
+  secretKey: env.CLERK_SECRET_KEY
+});
 
 interface GraphQLContext {
   userId?: string;
@@ -450,6 +458,119 @@ export const resolvers: IResolvers<GraphQLContext> = {
           error: error.message
         });
         throw error;
+      }
+    },
+    requestDataExport: async (_parent, args, context) => {
+      trackGraphQLMutation("requestDataExport");
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+        const request = await privacyRequestService.createOrReusePendingRequest(
+          dbUserId,
+          "DATA_EXPORT",
+          args?.note ?? null
+        );
+
+        return {
+          success: true,
+          request: {
+            id: request.id,
+            type: request.type,
+            status: request.status,
+            note: request.note,
+            createdAt: request.createdAt.toISOString(),
+            updatedAt: request.updatedAt.toISOString()
+          },
+          error: null
+        };
+      } catch (error: any) {
+        trackGraphQLError();
+        console.error("[GraphQL] Error requesting data export:", {
+          userId: ctx.userId,
+          error: error.message
+        });
+        return {
+          success: false,
+          request: null,
+          error: error.message || "Failed to submit data export request"
+        };
+      }
+    },
+    requestDataDeletion: async (_parent, args, context) => {
+      trackGraphQLMutation("requestDataDeletion");
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+        const request = await privacyRequestService.createOrReusePendingRequest(
+          dbUserId,
+          "DATA_DELETION",
+          args?.note ?? null
+        );
+
+        return {
+          success: true,
+          request: {
+            id: request.id,
+            type: request.type,
+            status: request.status,
+            note: request.note,
+            createdAt: request.createdAt.toISOString(),
+            updatedAt: request.updatedAt.toISOString()
+          },
+          error: null
+        };
+      } catch (error: any) {
+        trackGraphQLError();
+        console.error("[GraphQL] Error requesting data deletion:", {
+          userId: ctx.userId,
+          error: error.message
+        });
+        return {
+          success: false,
+          request: null,
+          error: error.message || "Failed to submit data deletion request"
+        };
+      }
+    },
+    deleteAccount: async (_parent, _args, context) => {
+      trackGraphQLMutation("deleteAccount");
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+
+        // Delete application data first, then delete the Clerk user.
+        await accountService.deleteUserData(dbUserId);
+
+        try {
+          await clerk.users.deleteUser(ctx.userId);
+        } catch (clerkError: any) {
+          // Non-fatal: app data is already deleted. Log and proceed.
+          console.warn("[GraphQL] Clerk user deletion failed (non-fatal):", {
+            userId: ctx.userId,
+            error: clerkError?.message
+          });
+        }
+
+        return { success: true, error: null };
+      } catch (error: any) {
+        trackGraphQLError();
+        console.error("[GraphQL] Error deleting account:", {
+          userId: ctx.userId,
+          error: error.message
+        });
+        return { success: false, error: error.message || "Failed to delete account" };
       }
     },
     generateInstagramVerificationCode: async (_parent, _args, context) => {
