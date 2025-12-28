@@ -90,6 +90,34 @@ const getRevenueCatApiKey = (): string => {
 
 let revenueCatInitialized = false;
 let initializationPromise: Promise<void> | null = null;
+let revenueCatDisabled = false;
+
+/**
+ * Ensure RevenueCat is initialized before calling any Purchases API.
+ * In dev / misconfigured environments, RevenueCat may not be configured at all.
+ * Calling Purchases APIs before configure() can trigger native errors and even destabilize the JS/native bridge.
+ */
+async function ensureRevenueCatReady(userIdForInit?: string): Promise<boolean> {
+  if (revenueCatDisabled) {
+    return false;
+  }
+  if (revenueCatInitialized) {
+    return true;
+  }
+  try {
+    await initializeRevenueCat(userIdForInit);
+  } catch (e) {
+    // Disable RevenueCat for the remainder of the session in dev so we don't keep hammering native calls.
+    // In production, you can choose to make this fatal by removing this branch.
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      revenueCatDisabled = true;
+      console.warn("[RevenueCat] Disabled for this session (failed to initialize).", e);
+      return false;
+    }
+    return false;
+  }
+  return revenueCatInitialized;
+}
 
 /**
  * Initialize RevenueCat SDK
@@ -102,6 +130,9 @@ export async function initializeRevenueCat(userId?: string): Promise<void> {
   // If already initialized, return immediately
   if (revenueCatInitialized) {
     console.log("[RevenueCat] Already initialized");
+    return;
+  }
+  if (revenueCatDisabled) {
     return;
   }
 
@@ -131,6 +162,12 @@ export async function initializeRevenueCat(userId?: string): Promise<void> {
       // Reset promise on error so retry is possible
       initializationPromise = null;
       console.error("[RevenueCat] Initialization failed:", error);
+      // In dev, allow the app to continue without RevenueCat configured.
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        revenueCatDisabled = true;
+        console.warn("[RevenueCat] RevenueCat disabled (dev mode) due to initialization failure.");
+        return;
+      }
       throw error;
     }
   })();
@@ -144,6 +181,10 @@ export async function initializeRevenueCat(userId?: string): Promise<void> {
  */
 export async function identifyUser(userId: string, email?: string): Promise<void> {
   try {
+    const ready = await ensureRevenueCatReady(userId);
+    if (!ready) {
+      return;
+    }
     await Purchases.logIn(userId);
     
     // Set user attributes if email provided
@@ -163,6 +204,10 @@ export async function identifyUser(userId: string, email?: string): Promise<void
  */
 export async function resetUser(): Promise<void> {
   try {
+    const ready = await ensureRevenueCatReady();
+    if (!ready) {
+      return;
+    }
     // Check if user is anonymous before logging out
     // RevenueCat throws an error if you try to log out an anonymous user
     const customerInfo = await Purchases.getCustomerInfo();
@@ -188,6 +233,10 @@ export async function resetUser(): Promise<void> {
  */
 export async function getOfferings(): Promise<PurchasesOffering | null> {
   try {
+    const ready = await ensureRevenueCatReady();
+    if (!ready) {
+      return null;
+    }
     const offerings = await Purchases.getOfferings();
     return offerings.current;
   } catch (error) {
@@ -201,6 +250,10 @@ export async function getOfferings(): Promise<PurchasesOffering | null> {
  */
 export async function purchasePackage(pkg: PurchasesPackage): Promise<CustomerInfo> {
   try {
+    const ready = await ensureRevenueCatReady();
+    if (!ready) {
+      throw new Error("RevenueCat not initialized");
+    }
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     return customerInfo;
   } catch (error: any) {
@@ -217,6 +270,10 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<CustomerIn
  */
 export async function restorePurchases(): Promise<CustomerInfo> {
   try {
+    const ready = await ensureRevenueCatReady();
+    if (!ready) {
+      throw new Error("RevenueCat not initialized");
+    }
     const customerInfo = await Purchases.restorePurchases();
     return customerInfo;
   } catch (error) {
@@ -230,6 +287,10 @@ export async function restorePurchases(): Promise<CustomerInfo> {
  */
 export async function hasActiveSubscription(): Promise<boolean> {
   try {
+    const ready = await ensureRevenueCatReady();
+    if (!ready) {
+      return false;
+    }
     const customerInfo = await Purchases.getCustomerInfo();
     // entitlements.active is an object (dictionary), not an array
     return Object.keys(customerInfo.entitlements.active).length > 0;
@@ -244,6 +305,10 @@ export async function hasActiveSubscription(): Promise<boolean> {
  */
 export async function getCustomerInfo(): Promise<CustomerInfo> {
   try {
+    const ready = await ensureRevenueCatReady();
+    if (!ready) {
+      throw new Error("RevenueCat not initialized");
+    }
     return await Purchases.getCustomerInfo();
   } catch (error) {
     console.error("[RevenueCat] Failed to get customer info:", error);
@@ -256,6 +321,10 @@ export async function getCustomerInfo(): Promise<CustomerInfo> {
  */
 export async function hasEntitlement(entitlementId: string): Promise<boolean> {
   try {
+    const ready = await ensureRevenueCatReady();
+    if (!ready) {
+      return false;
+    }
     const customerInfo = await Purchases.getCustomerInfo();
     return customerInfo.entitlements.active[entitlementId] !== undefined;
   } catch (error) {

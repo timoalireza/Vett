@@ -57,6 +57,10 @@ export default function DemoScreen() {
   const insets = useSafeAreaInsets();
   const { registerVideo } = useVideoAnimationState();
 
+  const screenDimensions = Dimensions.get("window");
+  const screenWidth = screenDimensions.width;
+  const screenHeight = screenDimensions.height;
+
   // Layout tuning constants (used to line up overlay text with the background video)
   // Title position from top (aligns "Try it out" with reference cursor position)
   const INSTRUCTION_TOP_OFFSET = 100;
@@ -85,10 +89,6 @@ export default function DemoScreen() {
   const claimTranslateY = useSharedValue(20);
   const actionRowOpacity = useSharedValue(0);
   const actionRowTranslateY = useSharedValue(20);
-
-  const screenDimensions = Dimensions.get("window");
-  const screenWidth = screenDimensions.width;
-  const screenHeight = screenDimensions.height;
 
   const resetAnimationFlags = useCallback(() => {
     isAnimatingRef.current = false;
