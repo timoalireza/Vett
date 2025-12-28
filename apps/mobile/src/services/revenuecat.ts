@@ -107,12 +107,12 @@ async function ensureRevenueCatReady(userIdForInit?: string): Promise<boolean> {
   try {
     await initializeRevenueCat(userIdForInit);
   } catch (e) {
-    // Disable RevenueCat for the remainder of the session in dev so we don't keep hammering native calls.
-    // In production, you can choose to make this fatal by removing this branch.
+    // Disable RevenueCat for the remainder of the session to prevent repeated failed native calls.
+    revenueCatDisabled = true;
     if (typeof __DEV__ !== "undefined" && __DEV__) {
-      revenueCatDisabled = true;
       console.warn("[RevenueCat] Disabled for this session (failed to initialize).", e);
-      return false;
+    } else {
+      console.error("[RevenueCat] Disabled for this session (failed to initialize).", e);
     }
     return false;
   }

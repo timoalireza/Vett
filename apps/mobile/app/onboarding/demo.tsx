@@ -258,9 +258,20 @@ export default function DemoScreen() {
               { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24, transform: [{ translateY: STACK_TRANSLATE_Y }] },
             ]}
           >
-            {(demoStep === "input" || demoStep === "loading") && (
+            {demoStep === "input" && (
               <Animated.View
-                entering={demoStep === "input" ? FadeInDown.duration(400).delay(200) : FadeIn.duration(400)}
+                entering={FadeInDown.duration(400).delay(200)}
+                exiting={FadeOut.duration(200)}
+                style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING }]}
+              >
+                <Text style={styles.instructionTitle}>{instructionTitle}</Text>
+                <Text style={styles.instructionSubtitle}>{instructionSubtitle}</Text>
+              </Animated.View>
+            )}
+
+            {demoStep === "loading" && (
+              <Animated.View
+                entering={FadeIn.duration(400)}
                 exiting={FadeOut.duration(200)}
                 style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING }]}
               >
