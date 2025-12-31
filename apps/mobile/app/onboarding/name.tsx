@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
@@ -14,19 +14,27 @@ export default function NameScreen() {
   const theme = useTheme();
   const { fullName: storedFullName, setFullName } = useAppState();
   const [fullName, setFullNameLocal] = useState(storedFullName || "");
+  const [loading, setLoading] = useState(false);
 
   const handleContinue = async () => {
-    if (fullName.trim()) {
+    if (!fullName.trim() || loading) return;
+
+    setLoading(true);
+    try {
       await setFullName(fullName.trim());
       router.push("/onboarding/auth");
+    } catch (error: any) {
+      console.error("[NameScreen] Error saving name:", error);
+      Alert.alert("Error", error?.message || "Failed to save your name. Please try again.");
+      setLoading(false);
     }
+    // Don't set loading to false on success - let navigation happen
   };
 
   // Update local state when stored value changes (e.g., when navigating back)
+  // Also clear local state if storedFullName becomes empty
   useEffect(() => {
-    if (storedFullName) {
-      setFullNameLocal(storedFullName);
-    }
+    setFullNameLocal(storedFullName || "");
   }, [storedFullName]);
 
   const isFormValid = fullName.trim().length > 0;
@@ -46,10 +54,10 @@ export default function NameScreen() {
             <GlassCard
               intensity="medium"
               radius="lg"
-              style={[
-                styles.card,
-                { padding: theme.spacing(3) },
-              ]}
+              style={{
+                width: "100%",
+                padding: theme.spacing(3),
+              }}
             >
               <Text
                 style={[
@@ -72,6 +80,10 @@ export default function NameScreen() {
                   onChangeText={setFullNameLocal}
                   autoCapitalize="words"
                   autoComplete="name"
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={handleContinue}
+                  editable={!loading}
                   style={[
                     styles.input,
                     {
@@ -90,7 +102,8 @@ export default function NameScreen() {
                   label="Continue"
                   onPress={handleContinue}
                   variant="primary"
-                  disabled={!isFormValid}
+                  disabled={!isFormValid || loading}
+                  loading={loading}
                   fullWidth={true}
                 />
               </View>
@@ -119,9 +132,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 8,
     justifyContent: "flex-start",
-  },
-  card: {
-    width: "100%",
   },
   title: {
     textAlign: "left",
