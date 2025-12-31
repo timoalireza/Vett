@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MotiView } from "moti";
 
 import { useTheme } from "../hooks/use-theme";
+import type { ChatUsageInfo, VettAIChatResponse } from "../api/vettai";
 
 export interface ChatMessage {
   id: string;
@@ -35,7 +36,8 @@ interface VettAIChatProps {
     summary?: string;
     sources?: Array<{ title: string; url: string }>;
   };
-  onSendMessage: (message: string, analysisId?: string) => Promise<string>;
+  onSendMessage: (message: string, analysisId?: string) => Promise<VettAIChatResponse>;
+  initialChatUsage?: ChatUsageInfo | null;
 }
 
 export function VettAIChat({
@@ -43,31 +45,55 @@ export function VettAIChat({
   onClose,
   analysisId,
   analysisData,
-  onSendMessage
+  onSendMessage,
+  initialChatUsage
 }: VettAIChatProps) {
   const theme = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chatUsage, setChatUsage] = useState<ChatUsageInfo | null>(initialChatUsage ?? null);
   const flatListRef = useRef<FlatList>(null);
+
+  // Update chat usage when initial value changes
+  useEffect(() => {
+    if (initialChatUsage) {
+      setChatUsage(initialChatUsage);
+    }
+  }, [initialChatUsage]);
 
   useEffect(() => {
     if (visible && messages.length === 0) {
-      // Add welcome message
+      // Add welcome message with context-aware intro
+      const welcomeContent = analysisData?.claim
+        ? "I can help you understand this analysis. Ask me about the verdict, the sources used, or any specific aspect of the claim you'd like to explore."
+        : "I can help you understand fact-check analyses. If you have questions about a specific analysis, open the chat from that result page.";
+      
       setMessages([
         {
           id: "welcome",
           role: "assistant",
-          content:
-            "Hello! I'm VettAI, your fact-checking assistant. I can help you understand this analysis, explain the verdict, discuss sources, or answer questions about the claim. What would you like to know?",
+          content: welcomeContent,
           timestamp: new Date()
         }
       ]);
     }
-  }, [visible]);
+  }, [visible, analysisData?.claim]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
+
+    // Check if user has reached their daily limit
+    if (chatUsage && chatUsage.maxDaily !== null && chatUsage.remaining !== null && chatUsage.remaining <= 0) {
+      const limitMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "You've reached your daily message limit. Your limit resets at midnight, or you can upgrade to Pro for unlimited access.",
+        timestamp: new Date()
+      };
+      setMessages((prev) => [...prev, limitMessage]);
+      return;
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -81,22 +107,35 @@ export function VettAIChat({
     setLoading(true);
 
     try {
-      const response = await onSendMessage(userMessage.content, analysisId);
+      const result = await onSendMessage(userMessage.content, analysisId);
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: response,
+        content: result.response,
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Update chat usage from response
+      if (result.chatUsage) {
+        setChatUsage(result.chatUsage);
+      }
     } catch (error: any) {
-      console.error("[VettAI] Error sending message:", error);
+      console.error("[VettChat] Error sending message:", error);
+      
+      // Determine appropriate error message
+      let errorContent = "Unable to process your request at this time. Please try again.";
+      
+      if (error?.message?.includes("limit reached") || error?.message?.includes("daily limit")) {
+        errorContent = "You've reached your daily message limit. Your limit resets at midnight, or you can upgrade to Pro for unlimited access.";
+      } else if (error?.message?.includes("Plus and Pro") || error?.message?.includes("Upgrade")) {
+        errorContent = "Vett Chat is available for Plus and Pro members. Upgrade to access this feature.";
+      }
+      
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: error?.message?.includes("Pro members")
-          ? "VettAI is only available for Pro members. Please upgrade to access this feature."
-          : "I apologize, but I encountered an error. Please try again.",
+        content: errorContent,
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -161,8 +200,17 @@ export function VettAIChat({
                     <Ionicons name="sparkles" size={20} color="#2EFAC0" />
                   </View>
                   <View>
-                    <Text style={styles.headerTitle}>VettAI</Text>
-                    <Text style={styles.headerSubtitle}>Your fact-checking assistant</Text>
+                    <Text style={styles.headerTitle}>Vett Chat</Text>
+                    <Text style={styles.headerSubtitle}>
+                      {!chatUsage
+                        ? "Ask follow-up questions"
+                        : chatUsage.maxDaily === null
+                          ? "Unlimited access"
+                          : chatUsage.remaining !== null && chatUsage.remaining !== undefined
+                            ? `${chatUsage.remaining} message${chatUsage.remaining !== 1 ? "s" : ""} remaining today`
+                            : "Ask follow-up questions"
+                      }
+                    </Text>
                   </View>
                 </View>
                 <TouchableOpacity onPress={onClose} style={styles.closeButton} activeOpacity={0.7}>

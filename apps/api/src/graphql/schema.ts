@@ -190,6 +190,8 @@ export const schema = `
     hasCrossPlatformSync: Boolean!
     hasCustomAlerts: Boolean!
     maxSources: Int!
+    maxDailyChatMessages: Int
+    hasVettChat: Boolean!
   }
 
   type PlanPrices {
@@ -266,8 +268,15 @@ export const schema = `
     analysisId: ID
   }
 
+  type ChatUsageInfo {
+    dailyCount: Int!
+    maxDaily: Int
+    remaining: Int
+  }
+
   type VettAIChatPayload {
     response: String!
+    chatUsage: ChatUsageInfo!
   }
 
   type DeleteAnalysisPayload {
@@ -341,6 +350,7 @@ export const schema = `
     ): AnalysisConnection!
     subscription: SubscriptionInfo!
     usage: UsageInfo!
+    chatUsage: ChatUsageInfo!
     feedback(analysisId: ID!): Feedback
     instagramAccount: SocialAccount
     linkedSocialAccounts: [SocialAccount!]!

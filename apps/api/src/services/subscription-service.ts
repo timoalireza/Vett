@@ -20,13 +20,14 @@ export interface PlanLimits {
   maxSources: number;
   hasVettChat: boolean; // Full Vett Chat access (PRO only)
   hasLimitedVettChat: boolean; // Limited Vett Chat access (PLUS only, specifics TBD)
+  maxDailyChatMessages: number | null; // null = unlimited, 0 = no access
 }
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   FREE: {
     maxAnalysesPerMonth: 10, // 10 analyses per month via app
     maxDmAnalysesPerMonth: 3, // 3 analyses per month via DM
-    hasWatermark: true,
+    hasWatermark: false, // No watermark
     historyRetentionDays: 30, // 30 days history retention
     hasPriorityProcessing: false,
     hasAdvancedBiasAnalysis: false,
@@ -35,12 +36,13 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     hasCustomAlerts: false,
     maxSources: 10,
     hasVettChat: false,
-    hasLimitedVettChat: false
+    hasLimitedVettChat: false,
+    maxDailyChatMessages: 0 // No chat access
   },
   PLUS: {
     maxAnalysesPerMonth: null, // unlimited app analyses
     maxDmAnalysesPerMonth: 10, // 10 DM analyses per month
-    hasWatermark: false,
+    hasWatermark: false, // No watermark
     historyRetentionDays: null, // unlimited history
     hasPriorityProcessing: false, // standard processing
     hasAdvancedBiasAnalysis: false,
@@ -49,12 +51,13 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     hasCustomAlerts: false,
     maxSources: 10,
     hasVettChat: false,
-    hasLimitedVettChat: true // Limited Vett Chat (specifics TBD)
+    hasLimitedVettChat: true, // Limited Vett Chat (3 per day)
+    maxDailyChatMessages: 3 // 3 chat messages per day
   },
   PRO: {
     maxAnalysesPerMonth: null, // unlimited app analyses
     maxDmAnalysesPerMonth: null, // unlimited DM analyses
-    hasWatermark: false,
+    hasWatermark: false, // No watermark
     historyRetentionDays: null, // unlimited history
     hasPriorityProcessing: true, // priority processing
     hasAdvancedBiasAnalysis: true,
@@ -63,7 +66,8 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     hasCustomAlerts: true,
     maxSources: 20,
     hasVettChat: true, // Full Vett Chat access
-    hasLimitedVettChat: false
+    hasLimitedVettChat: false,
+    maxDailyChatMessages: null // Unlimited chat messages
   }
 };
 
@@ -203,9 +207,11 @@ class SubscriptionService {
         .update(userUsage)
         .set({
           analysesCount: 0,
+          dailyChatCount: 0,
           periodStart,
           periodEnd,
           lastResetAt: now,
+          lastChatResetAt: now,
           updatedAt: now
         })
         .where(eq(userUsage.userId, userId));
@@ -213,9 +219,11 @@ class SubscriptionService {
       return {
         ...usage,
         analysesCount: 0,
+        dailyChatCount: 0,
         periodStart,
         periodEnd,
-        lastResetAt: now
+        lastResetAt: now,
+        lastChatResetAt: now
       };
     }
 
@@ -340,11 +348,9 @@ class SubscriptionService {
   /**
    * Check if analysis should have watermark
    */
-  async shouldApplyWatermark(userId: string | null): Promise<boolean> {
-    if (!userId) return true; // Unauthenticated users get watermark
-    
-    const subscription = await this.getOrCreateSubscription(userId);
-    return PLAN_LIMITS[subscription.plan].hasWatermark;
+  async shouldApplyWatermark(_userId: string | null): Promise<boolean> {
+    // Watermarks are disabled for all users
+    return false;
   }
 
   /**
@@ -384,6 +390,134 @@ class SubscriptionService {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - limits.historyRetentionDays);
     return cutoff;
+  }
+
+  /**
+   * Check if user can send a chat message
+   */
+  async canSendChatMessage(userId: string): Promise<{ allowed: boolean; reason?: string; remaining?: number; limit?: number | null }> {
+    const subscription = await this.getOrCreateSubscription(userId);
+    const limits = PLAN_LIMITS[subscription.plan];
+
+    // No chat access for FREE tier
+    if (limits.maxDailyChatMessages === 0) {
+      return {
+        allowed: false,
+        reason: "Vett Chat is available for Plus and Pro members. Upgrade to access this feature!",
+        remaining: 0,
+        limit: 0
+      };
+    }
+
+    // Unlimited for PRO tier
+    if (limits.maxDailyChatMessages === null) {
+      return { allowed: true, limit: null };
+    }
+
+    // Check daily usage for PLUS tier
+    const usage = await this.getOrCreateUsage(
+      userId,
+      subscription.currentPeriodStart,
+      subscription.currentPeriodEnd
+    );
+
+    // Check if we need to reset daily count (new day)
+    const now = new Date();
+    const lastReset = usage.lastChatResetAt ? new Date(usage.lastChatResetAt) : new Date(0);
+    const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+    let currentDailyCount = usage.dailyChatCount ?? 0;
+    if (isNewDay) {
+      // Reset count in database for new day
+      await db
+        .update(userUsage)
+        .set({
+          dailyChatCount: 0,
+          lastChatResetAt: now,
+          updatedAt: now
+        })
+        .where(eq(userUsage.userId, userId));
+      currentDailyCount = 0;
+    }
+
+    const remaining = Math.max(0, limits.maxDailyChatMessages - currentDailyCount);
+
+    if (currentDailyCount >= limits.maxDailyChatMessages) {
+      return {
+        allowed: false,
+        reason: `You've reached your daily limit of ${limits.maxDailyChatMessages} chat messages. Your limit resets at midnight. Upgrade to Pro for unlimited chat!`,
+        remaining: 0,
+        limit: limits.maxDailyChatMessages
+      };
+    }
+
+    return { allowed: true, remaining, limit: limits.maxDailyChatMessages };
+  }
+
+  /**
+   * Increment daily chat count for user
+   */
+  async incrementChatUsage(userId: string): Promise<void> {
+    const subscription = await this.getOrCreateSubscription(userId);
+    const usage = await this.getOrCreateUsage(
+      userId,
+      subscription.currentPeriodStart,
+      subscription.currentPeriodEnd
+    );
+
+    const now = new Date();
+    const lastReset = usage.lastChatResetAt ? new Date(usage.lastChatResetAt) : new Date(0);
+    const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+    if (isNewDay) {
+      // Reset count for new day
+      await db
+        .update(userUsage)
+        .set({
+          dailyChatCount: 1,
+          lastChatResetAt: now,
+          updatedAt: now
+        })
+        .where(eq(userUsage.userId, userId));
+    } else {
+      // Increment existing count
+      await db
+        .update(userUsage)
+        .set({
+          dailyChatCount: (usage.dailyChatCount ?? 0) + 1,
+          updatedAt: now
+        })
+        .where(eq(userUsage.userId, userId));
+    }
+  }
+
+  /**
+   * Get chat usage info for user
+   */
+  async getChatUsage(userId: string): Promise<{ dailyCount: number; maxDaily: number | null; remaining: number | null }> {
+    const subscription = await this.getOrCreateSubscription(userId);
+    const limits = PLAN_LIMITS[subscription.plan];
+    const usage = await this.getOrCreateUsage(
+      userId,
+      subscription.currentPeriodStart,
+      subscription.currentPeriodEnd
+    );
+
+    // Check if we need to reset daily count (new day)
+    const now = new Date();
+    const lastReset = usage.lastChatResetAt ? new Date(usage.lastChatResetAt) : new Date(0);
+    const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+    const currentDailyCount = isNewDay ? 0 : (usage.dailyChatCount ?? 0);
+    const remaining = limits.maxDailyChatMessages === null 
+      ? null 
+      : Math.max(0, limits.maxDailyChatMessages - currentDailyCount);
+
+    return {
+      dailyCount: currentDailyCount,
+      maxDaily: limits.maxDailyChatMessages,
+      remaining
+    };
   }
 }
 

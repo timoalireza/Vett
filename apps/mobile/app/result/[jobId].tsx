@@ -25,6 +25,8 @@ import { getScoreColor } from "../../src/utils/scoreColors";
 import { VideoAnimation } from "../../src/components/Video/VideoAnimation";
 import { useVideoAnimationState } from "../../src/components/Video/VideoAnimationProvider";
 import { ResizeMode } from "expo-av";
+import { VettAIChat } from "../../src/components/VettAIChat";
+import { chatWithVettAI, getChatUsage, type ChatUsageInfo } from "../../src/api/vettai";
 
 // Define video assets
 const VIDEO_ASSETS = {
@@ -49,6 +51,8 @@ export default function ResultScreen() {
   const [videoError, setVideoError] = useState(false);
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const [contextExpanded, setContextExpanded] = useState(false);
+  const [chatVisible, setChatVisible] = useState(false);
+  const [chatUsage, setChatUsage] = useState<ChatUsageInfo | null>(null);
   const sourcesChevronRotation = useSharedValue(0);
   const insets = useSafeAreaInsets();
 
@@ -205,6 +209,25 @@ export default function ResultScreen() {
     const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
     return () => backHandler.remove();
   }, [router]);
+
+  // Fetch chat usage when analysis is completed (skip for demo)
+  useEffect(() => {
+    if (isDemo) return;
+    
+    const fetchUsage = async () => {
+      try {
+        const usage = await getChatUsage();
+        setChatUsage(usage);
+      } catch (error) {
+        // Silently fail - chat will still work, just won't show remaining count
+        console.debug("[VettChat] Could not fetch chat usage:", error);
+      }
+    };
+    
+    if (analysis?.status === "COMPLETED") {
+      fetchUsage();
+    }
+  }, [analysis?.status, isDemo]);
 
   const isCompleted = analysis?.status === "COMPLETED";
   const isFailed = analysis?.status === "FAILED";
@@ -738,6 +761,34 @@ export default function ResultScreen() {
       >
         <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
       </TouchableOpacity>
+
+      {/* Floating Chat Button - only show when analysis is completed and not in demo mode */}
+      {isCompleted && !isDemo && (
+        <TouchableOpacity
+          style={[styles.chatButton, { bottom: insets.bottom + 20 }]}
+          onPress={() => setChatVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="chatbubble-ellipses" size={24} color="#000000" />
+          <Text style={styles.chatButtonText}>Ask Vett</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Vett Chat Modal */}
+      <VettAIChat
+        visible={chatVisible}
+        onClose={() => setChatVisible(false)}
+        analysisId={jobId}
+        analysisData={{
+          claim: analysis?.rawInput || analysis?.claims?.[0]?.text,
+          verdict: analysis?.verdict || undefined,
+          score: analysis?.score ?? undefined,
+          summary: analysis?.summary || undefined,
+          sources: analysis?.sources?.map(s => ({ title: s.title, url: s.url }))
+        }}
+        onSendMessage={chatWithVettAI}
+        initialChatUsage={chatUsage}
+      />
     </View>
   );
 }
@@ -943,6 +994,28 @@ const styles = StyleSheet.create({
   },
   resetButtonText: {
     fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: '#000000',
+  },
+  chatButton: {
+    position: 'absolute',
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2EFAC0',
+    borderRadius: 28,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 8,
+    shadowColor: '#2EFAC0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 100,
+  },
+  chatButtonText: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
     color: '#000000',
   },

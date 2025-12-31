@@ -657,6 +657,12 @@ class AnalysisService {
     // Build where conditions
     const conditions = [eq(analyses.userId, userId)];
 
+    // Apply history retention limit
+    const retentionCutoff = await subscriptionService.getHistoryCutoffDate(userId);
+    if (retentionCutoff) {
+      conditions.push(gt(analyses.createdAt, retentionCutoff));
+    }
+
     // Add cursor condition for pagination
     // Ordering is DESC (newest first), so:
     // - Forward (after cursor): get items older than cursor (createdAt < cursor.createdAt)

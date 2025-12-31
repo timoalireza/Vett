@@ -277,6 +277,24 @@ export const resolvers: IResolvers<GraphQLContext> = {
         console.error("[GraphQL] Error fetching linked social accounts:", error);
         return [];
       }
+    },
+    chatUsage: async (_parent, _args, context) => {
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+      
+      const user = await ctx.loaders.userByExternalId.load(ctx.userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      const chatUsage = await subscriptionService.getChatUsage(user.id);
+      return {
+        dailyCount: chatUsage.dailyCount,
+        maxDaily: chatUsage.maxDaily,
+        remaining: chatUsage.remaining
+      };
     }
   },
   Mutation: {
@@ -396,15 +414,15 @@ export const resolvers: IResolvers<GraphQLContext> = {
       }
 
       try {
-        // Check if user has Pro subscription
         const user = await ctx.loaders.userByExternalId.load(ctx.userId);
         if (!user) {
           throw new Error("User not found");
         }
 
-        const subscription = await subscriptionService.getSubscriptionInfo(user.id);
-        if (subscription.plan !== "PRO") {
-          throw new Error("VettAI is only available for Pro members. Please upgrade to access this feature.");
+        // Check if user can send a chat message (tier-based limits)
+        const canChat = await subscriptionService.canSendChatMessage(user.id);
+        if (!canChat.allowed) {
+          throw new Error(canChat.reason || "Chat limit reached");
         }
 
         // Fetch analysis if analysisId is provided
@@ -418,8 +436,19 @@ export const resolvers: IResolvers<GraphQLContext> = {
 
         const response = await vettAIService.chat(args.input, analysis);
 
+        // Increment chat usage after successful response
+        await subscriptionService.incrementChatUsage(user.id);
+
+        // Get updated chat usage info
+        const chatUsage = await subscriptionService.getChatUsage(user.id);
+
         return {
-          response
+          response,
+          chatUsage: {
+            dailyCount: chatUsage.dailyCount,
+            maxDaily: chatUsage.maxDaily,
+            remaining: chatUsage.remaining
+          }
         };
       } catch (error: any) {
         console.error("[GraphQL] Error in VettAI chat:", {

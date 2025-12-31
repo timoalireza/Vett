@@ -36,6 +36,13 @@
       "when": 1764263899383,
       "tag": "0004_odd_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1767190465003,
+      "tag": "0005_productive_grandmaster",
+      "breakpoints": true
     }
   ]
 }

@@ -313,6 +313,8 @@ export const userUsage = pgTable("user_usage", {
   periodStart: timestamp("period_start", { withTimezone: true }).notNull(), // Start of current billing period
   periodEnd: timestamp("period_end", { withTimezone: true }).notNull(), // End of current billing period
   lastResetAt: timestamp("last_reset_at", { withTimezone: true }).defaultNow().notNull(),
+  dailyChatCount: integer("daily_chat_count").default(0).notNull(), // Daily chat message count
+  lastChatResetAt: timestamp("last_chat_reset_at", { withTimezone: true }).defaultNow().notNull(), // Last time daily chat count was reset
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 });

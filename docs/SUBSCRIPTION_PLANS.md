@@ -11,7 +11,6 @@ Vett implements a three-tier subscription model with usage tracking and plan-bas
 - **Limits**:
   - 10 analyses per month (in-app)
   - 3 analyses per month (via Instagram DM)
-  - Watermark on result cards
   - History retention: 30 days
   - Max sources: 10
 - **Features**:
@@ -23,7 +22,6 @@ Vett implements a three-tier subscription model with usage tracking and plan-bas
 - **Limits**:
   - Unlimited analyses (in-app)
   - 10 analyses per month (via Instagram DM)
-  - No watermark
   - Unlimited history
   - Max sources: 10
 - **Features**:
@@ -35,7 +33,6 @@ Vett implements a three-tier subscription model with usage tracking and plan-bas
 - **Limits**:
   - Unlimited analyses (in-app)
   - Unlimited analyses (via Instagram DM)
-  - No watermark
   - Unlimited history
   - Max sources: 20
 - **Features**:
@@ -48,7 +45,6 @@ Vett implements a three-tier subscription model with usage tracking and plan-bas
 |---------|------|------|-----|
 | App Analyses | 10/month | Unlimited | Unlimited |
 | DM Analyses | 3/month | 10/month | Unlimited |
-| Watermark | Yes | No | No |
 | History Retention | 30 days | Unlimited | Unlimited |
 | Max Sources | 10 | 10 | 20 |
 | Processing Speed | Standard | Standard | Priority |
@@ -171,12 +167,13 @@ Automatically checks limits before allowing submission:
 
 ## Watermark Logic
 
-Watermarks are applied based on plan:
-- **FREE**: Always watermarked
-- **PLUS/PRO**: No watermark
-- **Unauthenticated**: Always watermarked
+Watermarks have been removed from all tiers:
+- **FREE**: No watermark
+- **PLUS**: No watermark
+- **PRO**: No watermark
+- **Unauthenticated**: No watermark
 
-Watermark flag is included in `AnalysisSummary.hasWatermark` field.
+The `AnalysisSummary.hasWatermark` field always returns `false`.
 
 ## History Retention
 
