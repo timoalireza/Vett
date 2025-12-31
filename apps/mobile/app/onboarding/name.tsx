@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
 import { OnboardingCTA } from "../../src/components/Onboarding/OnboardingCTA";
@@ -36,6 +36,14 @@ export default function NameScreen() {
   useEffect(() => {
     setFullNameLocal(storedFullName || "");
   }, [storedFullName]);
+
+  // Reset loading state when screen comes back into focus
+  // This prevents the form from being disabled if user navigates back
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(false);
+    }, [])
+  );
 
   const isFormValid = fullName.trim().length > 0;
 
