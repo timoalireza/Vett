@@ -663,15 +663,15 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       messages: [
         {
           role: "system",
-          content: "You are a title generator. Generate a very short, punchy title (3-7 words, MAX 40 characters) that captures the essence of the claim being analyzed. The title should fit inside a circular display. Return only the title, no quotes or extra text."
+          content: "You are a text shortening assistant. Your task is to shorten the given claim text to fit within 40 characters while preserving the original meaning and wording as much as possible. Do not create a new title or add stylization. Simply truncate or compress the claim naturally. Return only the shortened text, no quotes or extra text."
         },
         {
           role: "user",
-          content: `Generate a short title (max 40 chars) for this claim:\n\n${claimsText.substring(0, 500)}`
+          content: `Shorten this claim to max 40 characters, preserving the original wording:\n\n${claimsText.substring(0, 500)}`
         }
       ],
       max_tokens: 15,
-      temperature: 0.7
+      temperature: 0.3
     });
     let rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";
     // Enforce 40 character limit

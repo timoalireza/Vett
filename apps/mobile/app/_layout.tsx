@@ -235,6 +235,30 @@ function NavigationGate() {
     fullScreenGestureEnabled: Platform.OS === "ios",
   };
 
+  // Options for result screens with backwards swipe animation
+  const resultScreenOptions = {
+    animation: "slide_from_right" as const,
+    gestureEnabled: true,
+    gestureDirection: "horizontal" as const,
+    transitionSpec: {
+      open: {
+        animation: "timing" as const,
+        config: {
+          duration: 300,
+          useNativeDriver: true,
+        },
+      },
+      close: {
+        animation: "timing" as const,
+        config: {
+          duration: 300,
+          useNativeDriver: true,
+        },
+      },
+    },
+    fullScreenGestureEnabled: Platform.OS === "ios",
+  };
+
   return (
     <Stack
       screenOptions={{
@@ -287,11 +311,26 @@ function NavigationGate() {
         options={onboardingScreenOptions}
       />
       <Stack.Screen name="signin" />
-      <Stack.Screen name="result/[jobId]" />
-      <Stack.Screen name="result/general" />
-      <Stack.Screen name="result/health" />
-      <Stack.Screen name="result/media" />
-      <Stack.Screen name="result/political" />
+      <Stack.Screen 
+        name="result/[jobId]" 
+        options={resultScreenOptions}
+      />
+      <Stack.Screen 
+        name="result/general" 
+        options={resultScreenOptions}
+      />
+      <Stack.Screen 
+        name="result/health" 
+        options={resultScreenOptions}
+      />
+      <Stack.Screen 
+        name="result/media" 
+        options={resultScreenOptions}
+      />
+      <Stack.Screen 
+        name="result/political" 
+        options={resultScreenOptions}
+      />
       <Stack.Screen name="settings/index" />
       <Stack.Screen name="settings/about" />
       <Stack.Screen name="settings/privacy" />

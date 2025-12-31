@@ -132,13 +132,14 @@ export default function AnalyzeScreen() {
         animationTargetRef.current = newSource;
         
         // Crossfade: fade out idle, fade in typing
+        // Using shorter duration for smoother transition to minimize jitter on animation reset
         idleOpacity.value = withTiming(0, {
-          duration: 400,
-          easing: Easing.out(Easing.ease),
+          duration: 250,
+          easing: Easing.inOut(Easing.ease),
         });
         typingOpacity.value = withTiming(1, {
-          duration: 400,
-          easing: Easing.out(Easing.ease),
+          duration: 250,
+          easing: Easing.inOut(Easing.ease),
         }, (finished) => {
           // Reset animation flag when animation completes
           if (finished) {
@@ -152,13 +153,14 @@ export default function AnalyzeScreen() {
         animationTargetRef.current = newSource;
         
         // Crossfade: fade out typing, fade in idle
+        // Using shorter duration for smoother transition
         typingOpacity.value = withTiming(0, {
-          duration: 400,
-          easing: Easing.out(Easing.ease),
+          duration: 250,
+          easing: Easing.inOut(Easing.ease),
         });
         idleOpacity.value = withTiming(1, {
-          duration: 400,
-          easing: Easing.out(Easing.ease),
+          duration: 250,
+          easing: Easing.inOut(Easing.ease),
         }, (finished) => {
           // Reset animation flag when animation completes
           if (finished) {
