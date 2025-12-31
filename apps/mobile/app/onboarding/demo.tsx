@@ -370,9 +370,8 @@ export default function DemoScreen() {
                   <Text
                     style={styles.claimText}
                     adjustsFontSizeToFit
-                    minimumFontScale={0.55}
+                    minimumFontScale={0.35}
                     maxFontSizeMultiplier={1.15}
-                    numberOfLines={6}
                   >
                     {DEMO_CLAIM_DISPLAY}
                   </Text>
@@ -455,9 +454,8 @@ export default function DemoScreen() {
                   <Text 
                     style={styles.resultsClaimText}
                     adjustsFontSizeToFit
-                    minimumFontScale={0.35}
+                    minimumFontScale={0.3}
                     maxFontSizeMultiplier={1.1}
-                    numberOfLines={6}
                   >
                     {DEMO_CLAIM_DISPLAY}
                   </Text>

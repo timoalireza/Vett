@@ -1,14 +1,22 @@
-import { eq, and, gte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { subscriptions, userUsage, users } from "../db/schema.js";
-import type { SubscriptionPlan, SubscriptionStatus, BillingCycle } from "../types/subscription.js";
+import { subscriptions, userUsage } from "../db/schema.js";
+import type { SubscriptionPlan, BillingCycle } from "../types/subscription.js";
 
 export interface PlanLimits {
-  maxAppAnalysesPerMonth: number | null; // null = unlimited (in-app analyses)
-  maxDmAnalysesPerMonth: number | null; // null = unlimited (Instagram DM analyses)
+  // NOTE: `maxAnalysesPerMonth` is the name exposed via GraphQL (`PlanLimits.maxAnalysesPerMonth`).
+  // null = unlimited (in-app analyses)
+  maxAnalysesPerMonth: number | null;
+  // null = unlimited (Instagram DM analyses)
+  maxDmAnalysesPerMonth: number | null;
   hasWatermark: boolean;
   historyRetentionDays: number | null; // null = unlimited
   hasPriorityProcessing: boolean;
+  // Feature flags (non-nullable in GraphQL schema)
+  hasAdvancedBiasAnalysis: boolean;
+  hasExtendedSummaries: boolean;
+  hasCrossPlatformSync: boolean;
+  hasCustomAlerts: boolean;
   maxSources: number;
   hasVettChat: boolean; // Full Vett Chat access (PRO only)
   hasLimitedVettChat: boolean; // Limited Vett Chat access (PLUS only, specifics TBD)
@@ -16,31 +24,43 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   FREE: {
-    maxAppAnalysesPerMonth: 10, // 10 analyses per month via app
+    maxAnalysesPerMonth: 10, // 10 analyses per month via app
     maxDmAnalysesPerMonth: 3, // 3 analyses per month via DM
     hasWatermark: true,
     historyRetentionDays: 30, // 30 days history retention
     hasPriorityProcessing: false,
+    hasAdvancedBiasAnalysis: false,
+    hasExtendedSummaries: false,
+    hasCrossPlatformSync: false,
+    hasCustomAlerts: false,
     maxSources: 10,
     hasVettChat: false,
     hasLimitedVettChat: false
   },
   PLUS: {
-    maxAppAnalysesPerMonth: null, // unlimited app analyses
+    maxAnalysesPerMonth: null, // unlimited app analyses
     maxDmAnalysesPerMonth: 10, // 10 DM analyses per month
     hasWatermark: false,
     historyRetentionDays: null, // unlimited history
     hasPriorityProcessing: false, // standard processing
+    hasAdvancedBiasAnalysis: false,
+    hasExtendedSummaries: false,
+    hasCrossPlatformSync: false,
+    hasCustomAlerts: false,
     maxSources: 10,
     hasVettChat: false,
     hasLimitedVettChat: true // Limited Vett Chat (specifics TBD)
   },
   PRO: {
-    maxAppAnalysesPerMonth: null, // unlimited app analyses
+    maxAnalysesPerMonth: null, // unlimited app analyses
     maxDmAnalysesPerMonth: null, // unlimited DM analyses
     hasWatermark: false,
     historyRetentionDays: null, // unlimited history
     hasPriorityProcessing: true, // priority processing
+    hasAdvancedBiasAnalysis: true,
+    hasExtendedSummaries: true,
+    hasCrossPlatformSync: true,
+    hasCustomAlerts: true,
     maxSources: 20,
     hasVettChat: true, // Full Vett Chat access
     hasLimitedVettChat: false
@@ -105,7 +125,7 @@ class SubscriptionService {
     const limits = PLAN_LIMITS[subscription.plan];
 
     // Unlimited for PLUS and PRO
-    if (limits.maxAppAnalysesPerMonth === null) {
+    if (limits.maxAnalysesPerMonth === null) {
       return { allowed: true };
     }
 
@@ -116,18 +136,18 @@ class SubscriptionService {
       subscription.currentPeriodEnd
     );
 
-    const remaining = Math.max(0, limits.maxAppAnalysesPerMonth - usage.analysesCount);
+    const remaining = Math.max(0, limits.maxAnalysesPerMonth - usage.analysesCount);
     
-    if (usage.analysesCount >= limits.maxAppAnalysesPerMonth) {
+    if (usage.analysesCount >= limits.maxAnalysesPerMonth) {
       return {
         allowed: false,
-        reason: `You've reached your monthly limit of ${limits.maxAppAnalysesPerMonth} analyses. Upgrade to Plus or Pro for unlimited analyses!`,
+        reason: `You've reached your monthly limit of ${limits.maxAnalysesPerMonth} analyses. Upgrade to Plus or Pro for unlimited analyses!`,
         remaining: 0,
-        limit: limits.maxAppAnalysesPerMonth
+        limit: limits.maxAnalysesPerMonth
       };
     }
 
-    return { allowed: true, remaining, limit: limits.maxAppAnalysesPerMonth };
+    return { allowed: true, remaining, limit: limits.maxAnalysesPerMonth };
   }
 
   /**
@@ -216,10 +236,10 @@ class SubscriptionService {
 
     return {
       analysesCount: usage.analysesCount,
-      maxAnalyses: limits.maxAppAnalysesPerMonth,
+      maxAnalyses: limits.maxAnalysesPerMonth,
       periodStart: usage.periodStart,
       periodEnd: usage.periodEnd,
-      hasUnlimited: limits.maxAppAnalysesPerMonth === null
+      hasUnlimited: limits.maxAnalysesPerMonth === null
     };
   }
 
@@ -346,7 +366,7 @@ class SubscriptionService {
   /**
    * Get history retention cutoff date
    */
-  async getHistoryCutoffDate(userId: string | null): Date | null {
+  async getHistoryCutoffDate(userId: string | null): Promise<Date | null> {
     if (!userId) {
       // Unauthenticated: 30 days
       const cutoff = new Date();
