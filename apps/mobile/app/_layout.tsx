@@ -81,7 +81,21 @@ function AuthTokenSync() {
       try {
         const template = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE;
         // Prefer a configured JWT template if provided; otherwise fall back to default token behavior.
-        const token = template ? await getToken?.({ template }) : await getToken?.();
+        let token: string | null | undefined;
+        if (template) {
+          try {
+            token = await getToken?.({ template });
+          } catch (e) {
+            // If a configured template is missing/misconfigured, fall back to default to avoid a signed-in-but-unauthenticated state.
+            console.warn("[AuthTokenSync] Failed to get token with template; falling back to default token:", {
+              template,
+              error: (e as any)?.message
+            });
+            token = await getToken?.();
+          }
+        } else {
+          token = await getToken?.();
+        }
         if (cancelled) return;
         tokenProvider.setToken(token ?? null);
       } catch (error) {

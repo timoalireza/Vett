@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ActivityIndicator, Alert, Linking, Platform, Text } from "react-native";
+import { ActivityIndicator, Alert, Text } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,34 +16,26 @@ export default function MembershipSettingsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const userId = user?.id;
   const { language } = useAppState();
   const strings = useMemo(() => getStrings(language), [language]);
 
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({
-    queryKey: ["subscription"],
+    queryKey: ["subscription", userId],
     queryFn: fetchSubscription,
-    enabled: !!user
+    enabled: !!userId
   });
 
   const { restore } = useRevenueCat();
 
   const currentPlan = subscription?.plan ?? "FREE";
-  const nextPlan: "PLUS" | "PRO" | null = currentPlan === "FREE" ? "PLUS" : currentPlan === "PLUS" ? "PRO" : null;
-
-  const openManageSubscriptions = async () => {
-    const url =
-      Platform.OS === "ios"
-        ? "https://apps.apple.com/account/subscriptions"
-        : "https://play.google.com/store/account/subscriptions";
-    const can = await Linking.canOpenURL(url);
-    if (can) await Linking.openURL(url);
-    else Alert.alert("Unable to open", "Please manage your subscription from your device settings.");
-  };
+  // We only sell/market PRO from settings for now.
+  const nextPlan: "PRO" | null = currentPlan === "PRO" ? null : "PRO";
 
   const onRestorePurchases = async () => {
     try {
       await restore();
-      await queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      if (userId) await queryClient.invalidateQueries({ queryKey: ["subscription", userId] });
       Alert.alert("Restored", "Purchases restored. If you still don’t see your plan, try again in a moment.");
     } catch (e: any) {
       Alert.alert("Error", e?.message || "Failed to restore purchases");
@@ -77,13 +69,12 @@ export default function MembershipSettingsScreen() {
       ) : (
         <Section title="You’re on Pro">
           <Text style={{ color: theme.colors.subtitle }}>
-            Manage your subscription or restore purchases if you changed devices.
+            Restore purchases if you changed devices.
           </Text>
         </Section>
       )}
 
-      <Section title="Subscription">
-        <PrimaryButton label={strings.membershipManage} onPress={openManageSubscriptions} />
+      <Section title="Restore">
         <PrimaryButton label={strings.membershipRestore} onPress={onRestorePurchases} variant="secondary" />
       </Section>
     </SettingsShell>

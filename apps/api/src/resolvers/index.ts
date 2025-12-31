@@ -582,16 +582,6 @@ export const resolvers: IResolvers<GraphQLContext> = {
 
       try {
         const dbUserId = await userService.getOrCreateUser(ctx.userId);
-        
-        // Check if user has PRO plan
-        const subscription = await subscriptionService.getSubscriptionInfo(dbUserId);
-        if (subscription.plan !== "PRO") {
-          return {
-            success: false,
-            verificationCode: "",
-            error: "Pro plan required to link Instagram account"
-          };
-        }
 
         // Generate verification code (without Instagram user ID - will be set when user sends code to bot)
         const code = await socialLinkingService.generateVerificationCode(dbUserId);

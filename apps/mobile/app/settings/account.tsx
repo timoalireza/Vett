@@ -18,6 +18,7 @@ export default function AccountSettingsScreen() {
   const queryClient = useQueryClient();
   const { signOut } = useAuth();
   const { user } = useUser();
+  const userId = user?.id;
   const { language } = useAppState();
 
   const strings = useMemo(() => getStrings(language), [language]);
@@ -39,9 +40,9 @@ export default function AccountSettingsScreen() {
   }, [user]);
 
   const { data: linkedAccounts } = useQuery({
-    queryKey: ["linkedSocialAccounts"],
+    queryKey: ["linkedSocialAccounts", userId],
     queryFn: getLinkedSocialAccounts,
-    enabled: !!user
+    enabled: !!userId
   });
 
   const updateNameMutation = useMutation({
@@ -162,8 +163,9 @@ export default function AccountSettingsScreen() {
 
   // If future flows need to refresh user-linked resources (best-effort)
   const refreshAccountData = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["linkedSocialAccounts"] });
-    await queryClient.invalidateQueries({ queryKey: ["subscription"] });
+    if (!userId) return;
+    await queryClient.invalidateQueries({ queryKey: ["linkedSocialAccounts", userId] });
+    await queryClient.invalidateQueries({ queryKey: ["subscription", userId] });
   };
 
   return (

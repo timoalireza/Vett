@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
+import { useAuth } from "@clerk/clerk-expo";
 
 import { GradientBackground } from "../../src/components/GradientBackground";
 import { GlassCard } from "../../src/components/GlassCard";
@@ -17,6 +18,7 @@ import { generateInstagramVerificationCode } from "../../src/api/social";
 export default function InstagramScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { isSignedIn } = useAuth();
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
 
   const generateCodeMutation = useMutation({
@@ -30,7 +32,16 @@ export default function InstagramScreen() {
       }
     },
     onError: (error: any) => {
-      Alert.alert("Error", error.message || "Failed to generate verification code");
+      const msg = error?.message || "Failed to generate verification code";
+      if (typeof msg === "string" && msg.toLowerCase().includes("authentication required")) {
+        Alert.alert(
+          "Sign in required",
+          "Please sign in to link Instagram.",
+          [{ text: "OK", onPress: () => router.push("/onboarding/auth") }]
+        );
+        return;
+      }
+      Alert.alert("Error", msg);
     }
   });
 
@@ -106,16 +117,25 @@ export default function InstagramScreen() {
                 },
               ]}
             >
-              Get unlimited fact-checking by sending posts directly to @vettapp on Instagram.
+              Get fact-checking by sending posts directly to @vettapp on Instagram. DM analysis limits depend on your plan.
             </Text>
 
             {!verificationCode ? (
               <View style={styles.actionContainer}>
                 <OnboardingCTA
                   label={generateCodeMutation.isPending ? "Generating..." : "Generate Link Code"}
-                  onPress={() => generateCodeMutation.mutate()}
+                  onPress={() => {
+                    if (!isSignedIn) {
+                      Alert.alert("Sign in required", "Please sign in to link Instagram.", [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Sign in", onPress: () => router.push("/onboarding/auth") }
+                      ]);
+                      return;
+                    }
+                    generateCodeMutation.mutate();
+                  }}
                   variant="primary"
-                  disabled={generateCodeMutation.isPending}
+                  disabled={!isSignedIn || generateCodeMutation.isPending}
                 />
               </View>
             ) : (

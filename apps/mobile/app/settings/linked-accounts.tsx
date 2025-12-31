@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/clerk-expo";
 
 import { useTheme } from "../../src/hooks/use-theme";
 import { GradientBackground } from "../../src/components/GradientBackground";
@@ -15,17 +16,26 @@ export default function LinkedAccountsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const [verificationCode, setVerificationCode] = useState("");
   const [showCodeInput, setShowCodeInput] = useState(false);
 
+  // Avoid leaking state between accounts on shared devices.
+  useEffect(() => {
+    setVerificationCode("");
+    setShowCodeInput(false);
+  }, [userId]);
+
   const { data: accounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ["linkedSocialAccounts"],
-    queryFn: getLinkedSocialAccounts
+    queryKey: ["linkedSocialAccounts", userId],
+    queryFn: getLinkedSocialAccounts,
+    enabled: isLoaded && !!userId
   });
 
   const { data: subscription } = useQuery({
-    queryKey: ["subscription"],
-    queryFn: fetchSubscription
+    queryKey: ["subscription", userId],
+    queryFn: fetchSubscription,
+    enabled: isLoaded && !!userId
   });
 
   const generateCodeMutation = useMutation({
@@ -45,7 +55,16 @@ export default function LinkedAccountsScreen() {
       }
     },
     onError: (error: any) => {
-      Alert.alert("Error", error.message || "Failed to generate verification code");
+      const msg = error?.message || "Failed to generate verification code";
+      if (typeof msg === "string" && msg.toLowerCase().includes("authentication required")) {
+        Alert.alert(
+          "Sign in required",
+          "Please sign in again, then try linking your Instagram account.",
+          [{ text: "OK", onPress: () => router.push("/signin") }]
+        );
+        return;
+      }
+      Alert.alert("Error", msg);
     }
   });
 
@@ -54,14 +73,23 @@ export default function LinkedAccountsScreen() {
     onSuccess: (result) => {
       if (result.success) {
         Alert.alert("Success", "Verification code accepted! Your Instagram account should be linked shortly. Make sure you've sent the code to @vettapp on Instagram.");
-        queryClient.invalidateQueries({ queryKey: ["linkedSocialAccounts"] });
+        if (userId) queryClient.invalidateQueries({ queryKey: ["linkedSocialAccounts", userId] });
         // Keep code input open so user can verify linking worked
       } else {
         Alert.alert("Error", result.error || "Failed to verify code");
       }
     },
     onError: (error: any) => {
-      Alert.alert("Error", error.message || "Failed to link Instagram account");
+      const msg = error?.message || "Failed to link Instagram account";
+      if (typeof msg === "string" && msg.toLowerCase().includes("authentication required")) {
+        Alert.alert(
+          "Sign in required",
+          "Please sign in again, then try linking your Instagram account.",
+          [{ text: "OK", onPress: () => router.push("/signin") }]
+        );
+        return;
+      }
+      Alert.alert("Error", msg);
     }
   });
 
@@ -70,27 +98,36 @@ export default function LinkedAccountsScreen() {
     onSuccess: (result) => {
       if (result.success) {
         Alert.alert("Success", "Instagram account unlinked successfully.");
-        queryClient.invalidateQueries({ queryKey: ["linkedSocialAccounts"] });
+        if (userId) queryClient.invalidateQueries({ queryKey: ["linkedSocialAccounts", userId] });
       } else {
         Alert.alert("Error", result.error || "Failed to unlink Instagram account");
       }
     },
     onError: (error: any) => {
-      Alert.alert("Error", error.message || "Failed to unlink Instagram account");
+      const msg = error?.message || "Failed to unlink Instagram account";
+      if (typeof msg === "string" && msg.toLowerCase().includes("authentication required")) {
+        Alert.alert(
+          "Sign in required",
+          "Please sign in again, then try unlinking your Instagram account.",
+          [{ text: "OK", onPress: () => router.push("/signin") }]
+        );
+        return;
+      }
+      Alert.alert("Error", msg);
     }
   });
 
   const instagramAccount = accounts?.find((acc) => acc.platform === "INSTAGRAM");
-  const isPro = subscription?.plan === "PRO";
+  const plan = subscription?.plan ?? "FREE";
 
   const handleLinkInstagram = () => {
-    if (!isPro) {
+    if (!isSignedIn) {
       Alert.alert(
-        "Pro Required",
-        "Linking Instagram accounts is only available for Pro members. Upgrade to Pro to unlock unlimited analyses via Instagram DM!",
+        "Sign in required",
+        "Please sign in to link your Instagram account.",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Upgrade", onPress: () => router.push("/modals/subscription") }
+          { text: "Sign in", onPress: () => router.push("/signin") }
         ]
       );
       return;
@@ -111,7 +148,7 @@ export default function LinkedAccountsScreen() {
   const handleUnlinkInstagram = () => {
     Alert.alert(
       "Unlink Instagram Account",
-      "Are you sure you want to unlink your Instagram account? You'll lose access to unlimited analyses via DM.",
+      "Are you sure you want to unlink your Instagram account? You'll lose access to DM-based analyses via Instagram.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -180,11 +217,11 @@ export default function LinkedAccountsScreen() {
                   </Text>
                   {instagramAccount ? (
                     <Text style={{ color: theme.colors.subtitle, fontSize: theme.typography.caption }}>
-                      Linked • Unlimited DM analyses
+                      {plan === "PRO" ? "Linked • Unlimited DM analyses" : "Linked • DM analyses subject to plan limits"}
                     </Text>
                   ) : (
                     <Text style={{ color: theme.colors.subtitle, fontSize: theme.typography.caption }}>
-                      {isPro ? "Link for unlimited DM analyses" : "Pro required"}
+                      Link to enable DM analyses
                     </Text>
                   )}
                 </View>
@@ -208,21 +245,21 @@ export default function LinkedAccountsScreen() {
               ) : (
                 <TouchableOpacity
                   onPress={handleLinkInstagram}
-                  disabled={linkMutation.isPending || generateCodeMutation.isPending || !isPro}
+                  disabled={!isSignedIn || linkMutation.isPending || generateCodeMutation.isPending}
                   style={{
                     padding: theme.spacing(1),
                     borderRadius: theme.radii.md,
-                    backgroundColor: isPro ? "rgba(59, 130, 246, 0.2)" : "rgba(128, 128, 128, 0.2)"
+                    backgroundColor: "rgba(59, 130, 246, 0.2)"
                   }}
                 >
                   <Text
                     style={{
-                      color: isPro ? "#3B82F6" : theme.colors.subtitle,
+                      color: "#3B82F6",
                       fontSize: theme.typography.caption,
                       fontWeight: "600"
                     }}
                   >
-                    Link
+                    {isSignedIn ? "Link" : "Sign in"}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -306,8 +343,8 @@ export default function LinkedAccountsScreen() {
                   About Instagram Linking
                 </Text>
                 <Text style={{ color: theme.colors.subtitle, fontSize: theme.typography.caption, lineHeight: 18 }}>
-                  Link your Instagram account to get unlimited fact-checking analyses via direct message. Send any post,
-                  link, or image to @vettapp on Instagram and receive instant analysis results!
+                  Link your Instagram account to get fact-checking analyses via direct message. Send any post, link, or image
+                  to @vettapp on Instagram and receive instant analysis results. DM analysis limits depend on your plan.
                 </Text>
               </View>
       </View>
