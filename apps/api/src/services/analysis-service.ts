@@ -590,7 +590,7 @@ class AnalysisService {
       .filter((entry) => entry.truncated !== undefined);
 
     // Check if watermark should be applied
-    let hasWatermark = true; // Default to watermark for unauthenticated
+    let hasWatermark = false; // Watermarks disabled globally
     if (clerkUserId) {
       const user = await userService.getUserByExternalId(clerkUserId);
       if (user) {

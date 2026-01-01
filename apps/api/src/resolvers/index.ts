@@ -419,10 +419,11 @@ export const resolvers: IResolvers<GraphQLContext> = {
           throw new Error("User not found");
         }
 
-        // Check if user can send a chat message (tier-based limits)
-        const canChat = await subscriptionService.canSendChatMessage(user.id);
-        if (!canChat.allowed) {
-          throw new Error(canChat.reason || "Chat limit reached");
+        // Atomically check limit and increment count to prevent race conditions
+        // This must happen BEFORE calling the AI service to ensure accurate limit enforcement
+        const usageCheck = await subscriptionService.checkAndIncrementChatUsage(user.id);
+        if (!usageCheck.allowed) {
+          throw new Error(usageCheck.reason || "Chat limit reached");
         }
 
         // Fetch analysis if analysisId is provided
@@ -434,12 +435,10 @@ export const resolvers: IResolvers<GraphQLContext> = {
           });
         }
 
+        // Process the chat message with AI
         const response = await vettAIService.chat(args.input, analysis);
 
-        // Increment chat usage after successful response
-        await subscriptionService.incrementChatUsage(user.id);
-
-        // Get updated chat usage info
+        // Get updated chat usage info (already incremented above)
         const chatUsage = await subscriptionService.getChatUsage(user.id);
 
         return {

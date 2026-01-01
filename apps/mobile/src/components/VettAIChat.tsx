@@ -17,6 +17,7 @@ import { MotiView } from "moti";
 
 import { useTheme } from "../hooks/use-theme";
 import type { ChatUsageInfo, VettAIChatResponse } from "../api/vettai";
+import { getChatUsage } from "../api/vettai";
 
 export interface ChatMessage {
   id: string;
@@ -62,6 +63,23 @@ export function VettAIChat({
     }
   }, [initialChatUsage]);
 
+  // Refresh chat usage when modal opens to ensure limits are current
+  // This handles cases where the day changed while the user had the result screen open
+  useEffect(() => {
+    if (visible) {
+      const refreshUsage = async () => {
+        try {
+          const usage = await getChatUsage();
+          setChatUsage(usage);
+        } catch (error) {
+          // Silently fail - we'll use cached usage or let server handle errors
+          console.debug("[VettChat] Could not refresh chat usage:", error);
+        }
+      };
+      refreshUsage();
+    }
+  }, [visible]);
+
   useEffect(() => {
     if (visible && messages.length === 0) {
       // Add welcome message with context-aware intro
@@ -83,17 +101,10 @@ export function VettAIChat({
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    // Check if user has reached their daily limit
-    if (chatUsage && chatUsage.maxDaily !== null && chatUsage.remaining !== null && chatUsage.remaining <= 0) {
-      const limitMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: "You've reached your daily message limit. Your limit resets at midnight, or you can upgrade to Pro for unlimited access.",
-        timestamp: new Date()
-      };
-      setMessages((prev) => [...prev, limitMessage]);
-      return;
-    }
+    // Note: We intentionally allow the message to be sent even if client thinks limit is reached.
+    // The server will handle day-change resets and return the updated usage info.
+    // This prevents UX issues where the client shows "limit reached" after midnight
+    // but the server has already reset the counter.
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -126,7 +137,7 @@ export function VettAIChat({
       // Determine appropriate error message
       let errorContent = "Unable to process your request at this time. Please try again.";
       
-      if (error?.message?.includes("limit reached") || error?.message?.includes("daily limit")) {
+      if (error?.message?.includes("limit reached") || error?.message?.includes("daily limit") || error?.message?.includes("Chat limit reached")) {
         errorContent = "You've reached your daily message limit. Your limit resets at midnight, or you can upgrade to Pro for unlimited access.";
       } else if (error?.message?.includes("Plus and Pro") || error?.message?.includes("Upgrade")) {
         errorContent = "Vett Chat is available for Plus and Pro members. Upgrade to access this feature.";

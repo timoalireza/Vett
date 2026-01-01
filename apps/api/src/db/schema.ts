@@ -70,6 +70,7 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   externalId: text("external_id").notNull().unique(), // Clerk/Firebase ID
   email: text("email"),
+  phoneNumber: text("phone_number"), // Phone number for phone-only users
   displayName: text("display_name"),
   avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()

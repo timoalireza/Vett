@@ -8,6 +8,20 @@ Your app supports both **PRODUCTION** and **SANDBOX/TEST** modes with RevenueCat
 
 When you log into [RevenueCat Dashboard](https://app.revenuecat.com) → **Project Settings** → **API Keys**, you'll see:
 
+## ✅ If your key starts with `test_` (RevenueCat Test Store)
+
+If you're using **RevenueCat's Test Store** (RevenueCat-managed sandbox/testing, not Apple/Google), your public SDK key will start with **`test_`**.
+
+- **Where it lives**: RevenueCat Dashboard → **Project Settings** → **API Keys** → **Public app-specific API keys** → **Test Store**
+- **Where to put it (this repo)**: `apps/mobile/.env` as:
+
+```bash
+EXPO_PUBLIC_REVENUECAT_API_KEY=test_your_test_store_key_here
+EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=true
+```
+
+You **do not upload** this `test_...` key to Apple.
+
 ### ✅ Use These Keys (Public SDK Keys)
 
 Under **"Public app-specific API keys"** section, you'll see keys for different environments:
@@ -23,6 +37,11 @@ Under **"Public app-specific API keys"** section, you'll see keys for different 
 |----------|-------------------|------------|---------------------|
 | **iOS Sandbox** | **Apple App Store** (Sandbox section) | `appl_xxxxxxxxxxxxx` | `EXPO_PUBLIC_REVENUECAT_IOS_SANDBOX_API_KEY` |
 | **Android Sandbox** | **Google Play Store** (Sandbox section) | `goog_xxxxxxxxxxxxx` | `EXPO_PUBLIC_REVENUECAT_ANDROID_SANDBOX_API_KEY` |
+
+#### Test Store Key (RevenueCat-only testing)
+| Platform | Label in Dashboard | Key Format | Environment Variable |
+|----------|-------------------|------------|---------------------|
+| **Test Store** | **Test Store** | `test_xxxxxxxxxxxxx` | `EXPO_PUBLIC_REVENUECAT_API_KEY` |
 
 **Note:** In RevenueCat, the **label is the same** ("Apple App Store"), but keys are in different **sections** or **tabs** (Production vs Sandbox). Look for section headers or tabs that say "Production" or "Sandbox"/"Test" to find the right key.
 
@@ -93,6 +112,17 @@ EXPO_PUBLIC_REVENUECAT_IOS_SANDBOX_API_KEY=appl_your_sandbox_ios_key_here
 EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=false
 ```
 
+**Using Test Store instead of Apple/Google (key starts with `test_`)**
+
+If you're not using Apple sandbox testers / Google Play testing yet and just want RevenueCat's Test Store:
+
+```bash
+EXPO_PUBLIC_REVENUECAT_API_KEY=test_your_test_store_key_here
+EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=true
+```
+
+In sandbox mode, this repo will fall back to `EXPO_PUBLIC_REVENUECAT_API_KEY` if platform-specific sandbox keys are not set.
+
 **Option B: Using app.json**
 
 Edit `apps/mobile/app.json`:
@@ -117,8 +147,9 @@ For webhook integration, edit `apps/api/.env`:
 
 ```bash
 # RevenueCat Secret API Key (from "Secret API keys" section)
-# This is DIFFERENT from mobile SDK keys - this one starts with sk_
-REVENUECAT_API_KEY=sk_your_secret_key_here
+# This is DIFFERENT from mobile SDK keys - do NOT use `test_...` here.
+# (RevenueCat secret keys are shown in the RevenueCat dashboard under "Secret API keys".)
+REVENUECAT_API_KEY=your_revenuecat_secret_api_key_here
 REVENUECAT_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 

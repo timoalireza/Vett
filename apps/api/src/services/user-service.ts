@@ -34,10 +34,17 @@ class UserService {
 
     // Create user in our database
     const email = clerkUser.emailAddresses[0]?.emailAddress ?? null;
+    const phoneNumber = clerkUser.phoneNumbers[0]?.phoneNumber ?? null;
+    
+    // Build display name with fallback chain: full name > username > email > phone > external ID
     const displayName =
       clerkUser.firstName && clerkUser.lastName
         ? `${clerkUser.firstName} ${clerkUser.lastName}`
-        : clerkUser.username ?? email ?? null;
+        : clerkUser.username ?? 
+          email ?? 
+          (phoneNumber ? `User ${phoneNumber.slice(-4)}` : null) ?? 
+          `User ${clerkUserId.slice(-8)}`;
+    
     const avatarUrl = clerkUser.imageUrl ?? null;
 
     const [newUser] = await db
@@ -45,6 +52,7 @@ class UserService {
       .values({
         externalId: clerkUserId,
         email,
+        phoneNumber,
         displayName,
         avatarUrl
       })
@@ -61,16 +69,24 @@ class UserService {
     try {
       const clerkUser = await clerk.users.getUser(clerkUserId);
       const email = clerkUser.emailAddresses[0]?.emailAddress ?? null;
+      const phoneNumber = clerkUser.phoneNumbers[0]?.phoneNumber ?? null;
+      
+      // Build display name with fallback chain: full name > username > email > phone > external ID
       const displayName =
         clerkUser.firstName && clerkUser.lastName
           ? `${clerkUser.firstName} ${clerkUser.lastName}`
-          : clerkUser.username ?? email ?? null;
+          : clerkUser.username ?? 
+            email ?? 
+            (phoneNumber ? `User ${phoneNumber.slice(-4)}` : null) ?? 
+            `User ${clerkUserId.slice(-8)}`;
+      
       const avatarUrl = clerkUser.imageUrl ?? null;
 
       await db
         .update(users)
         .set({
           email,
+          phoneNumber,
           displayName,
           avatarUrl
         })

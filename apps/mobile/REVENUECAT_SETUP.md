@@ -29,7 +29,11 @@ Add your RevenueCat API key to your app configuration.
 
 Add to `.env` file:
 ```bash
-EXPO_PUBLIC_REVENUECAT_API_KEY=your_api_key_here
+# RevenueCat Test Store (starts with `test_`) OR a shared public SDK key
+EXPO_PUBLIC_REVENUECAT_API_KEY=your_key_here
+
+# Toggle sandbox/test mode (uses sandbox keys when present, otherwise falls back to shared key above)
+EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=true
 ```
 
 **Option B: app.json**
@@ -39,7 +43,8 @@ Add to `app.json`:
 {
   "expo": {
     "extra": {
-      "revenueCatApiKey": "your_api_key_here"
+      "revenueCatApiKey": "your_key_here",
+      "revenueCatSandboxMode": true
     }
   }
 }

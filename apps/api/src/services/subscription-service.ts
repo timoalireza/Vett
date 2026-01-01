@@ -393,6 +393,171 @@ class SubscriptionService {
   }
 
   /**
+   * Atomically check if user can send a chat message and increment the count if allowed.
+   * Uses database transaction with row-level locking to prevent race conditions.
+   * 
+   * This replaces the separate canSendChatMessage + incrementChatUsage pattern which had a race condition.
+   * 
+   * @returns Object with allowed flag, reason if not allowed, and updated usage info
+   */
+  async checkAndIncrementChatUsage(userId: string): Promise<{ 
+    allowed: boolean; 
+    reason?: string; 
+    remaining?: number; 
+    limit?: number | null;
+    dailyCount?: number;
+  }> {
+    const subscription = await this.getOrCreateSubscription(userId);
+    const limits = PLAN_LIMITS[subscription.plan];
+
+    // No chat access for FREE tier
+    if (limits.maxDailyChatMessages === 0) {
+      return {
+        allowed: false,
+        reason: "Vett Chat is available for Plus and Pro members. Upgrade to access this feature!",
+        remaining: 0,
+        limit: 0,
+        dailyCount: 0
+      };
+    }
+
+    // Unlimited for PRO tier - still increment for analytics but don't enforce limit
+    if (limits.maxDailyChatMessages === null) {
+      // Ensure usage record exists
+      await this.getOrCreateUsage(
+        userId,
+        subscription.currentPeriodStart,
+        subscription.currentPeriodEnd
+      );
+      
+      // Increment without checking limit (atomic operation)
+      const result = await db.transaction(async (tx) => {
+        // Lock the row to prevent concurrent modifications
+        const [usage] = await tx
+          .select()
+          .from(userUsage)
+          .where(eq(userUsage.userId, userId))
+          .for('update');
+
+        if (!usage) {
+          throw new Error("Usage record not found");
+        }
+
+        const now = new Date();
+        const lastReset = usage.lastChatResetAt ? new Date(usage.lastChatResetAt) : new Date(0);
+        const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+        let newCount: number;
+        if (isNewDay) {
+          newCount = 1;
+          await tx
+            .update(userUsage)
+            .set({
+              dailyChatCount: 1,
+              lastChatResetAt: now,
+              updatedAt: now
+            })
+            .where(eq(userUsage.userId, userId));
+        } else {
+          newCount = (usage.dailyChatCount ?? 0) + 1;
+          await tx
+            .update(userUsage)
+            .set({
+              dailyChatCount: newCount,
+              updatedAt: now
+            })
+            .where(eq(userUsage.userId, userId));
+        }
+
+        return { dailyCount: newCount };
+      });
+
+      return { 
+        allowed: true, 
+        limit: null,
+        dailyCount: result.dailyCount
+      };
+    }
+
+    // PLUS tier - enforce daily limit with atomic check-and-increment
+    // Ensure usage record exists
+    await this.getOrCreateUsage(
+      userId,
+      subscription.currentPeriodStart,
+      subscription.currentPeriodEnd
+    );
+
+    // Use transaction with row-level lock to atomically check and increment
+    const result = await db.transaction(async (tx) => {
+      // Lock the row with SELECT ... FOR UPDATE to prevent concurrent modifications
+      const [usage] = await tx
+        .select()
+        .from(userUsage)
+        .where(eq(userUsage.userId, userId))
+        .for('update');
+
+      if (!usage) {
+        throw new Error("Usage record not found");
+      }
+
+      const now = new Date();
+      const lastReset = usage.lastChatResetAt ? new Date(usage.lastChatResetAt) : new Date(0);
+      const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+      let currentDailyCount = usage.dailyChatCount ?? 0;
+      
+      // Reset count if new day
+      if (isNewDay) {
+        currentDailyCount = 0;
+      }
+
+      // Check limit BEFORE incrementing
+      if (currentDailyCount >= limits.maxDailyChatMessages) {
+        return {
+          allowed: false,
+          reason: `You've reached your daily limit of ${limits.maxDailyChatMessages} chat messages. Your limit resets at midnight. Upgrade to Pro for unlimited chat!`,
+          remaining: 0,
+          limit: limits.maxDailyChatMessages,
+          dailyCount: currentDailyCount
+        };
+      }
+
+      // Increment the count atomically
+      const newCount = currentDailyCount + 1;
+      if (isNewDay) {
+        await tx
+          .update(userUsage)
+          .set({
+            dailyChatCount: 1,
+            lastChatResetAt: now,
+            updatedAt: now
+          })
+          .where(eq(userUsage.userId, userId));
+      } else {
+        await tx
+          .update(userUsage)
+          .set({
+            dailyChatCount: newCount,
+            updatedAt: now
+          })
+          .where(eq(userUsage.userId, userId));
+      }
+
+      const remaining = Math.max(0, limits.maxDailyChatMessages - newCount);
+
+      return {
+        allowed: true,
+        remaining,
+        limit: limits.maxDailyChatMessages,
+        dailyCount: newCount
+      };
+    });
+
+    return result;
+  }
+
+  /**
+   * @deprecated Use checkAndIncrementChatUsage instead to prevent race conditions
    * Check if user can send a chat message
    */
   async canSendChatMessage(userId: string): Promise<{ allowed: boolean; reason?: string; remaining?: number; limit?: number | null }> {
@@ -455,6 +620,7 @@ class SubscriptionService {
   }
 
   /**
+   * @deprecated Use checkAndIncrementChatUsage instead to prevent race conditions
    * Increment daily chat count for user
    */
   async incrementChatUsage(userId: string): Promise<void> {

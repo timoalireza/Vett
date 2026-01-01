@@ -22,6 +22,11 @@ pnpm exec expo run:ios
 4. Find **"Public app-specific API keys"** section (NOT "Secret API keys")
 5. You'll see keys organized by environment:
 
+**If your key starts with `test_` (RevenueCat Test Store):**
+- This is RevenueCat’s **Test Store** key (RevenueCat-only testing; not Apple/Google)
+- Copy the **Test Store** key (starts with `test_`)
+- You will use it as `EXPO_PUBLIC_REVENUECAT_API_KEY` (see below)
+
 **Production Keys** (for live app):
 - Look for **Production** section or tab
 - Copy **Apple App Store** key (starts with `appl_`)
@@ -42,6 +47,11 @@ pnpm exec expo run:ios
 
 Add to `.env` file:
 ```bash
+# RevenueCat Test Store (key starts with `test_`)
+# Use this if you're testing via RevenueCat (not Apple sandbox / not Google Play yet)
+EXPO_PUBLIC_REVENUECAT_API_KEY=test_your_test_store_key
+EXPO_PUBLIC_REVENUECAT_SANDBOX_MODE=true
+
 # Production Keys (from Production section in RevenueCat)
 EXPO_PUBLIC_REVENUECAT_IOS_API_KEY=appl_your_production_key
 
@@ -98,6 +108,8 @@ Make sure your product IDs in App Store Connect **exactly match**:
 - `com.timoalireza.vett.plus.annual`
 - `com.timoalireza.vett.pro.monthly`
 - `com.timoalireza.vett.pro.annual`
+
+> If you're using **RevenueCat Test Store**, you can defer App Store Connect setup until you're ready to test real App Store purchases.
 
 ### 6. Test the Integration
 

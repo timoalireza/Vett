@@ -99,6 +99,8 @@ export default fp(async (fastify: FastifyInstance) => {
         try {
           const user = await clerk.users.getUser(session.sub);
           const email = user.emailAddresses[0]?.emailAddress;
+          const phoneNumber = user.phoneNumbers[0]?.phoneNumber;
+          
           request.user = {
             id: session.sub,
             email,
@@ -106,10 +108,11 @@ export default fp(async (fastify: FastifyInstance) => {
           };
           
           // Set Sentry user context for error tracking
+          // Use email if available, otherwise use phone number, otherwise use username
           Sentry.setUser({
             id: session.sub,
             email,
-            username: user.username || email
+            username: user.username || email || phoneNumber
           });
         } catch (error) {
           // If user fetch fails, still set basic context

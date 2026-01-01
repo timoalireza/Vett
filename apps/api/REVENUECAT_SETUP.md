@@ -14,9 +14,13 @@ Add the following to your `.env` file or deployment environment:
 
 ```bash
 # RevenueCat Configuration
-REVENUECAT_API_KEY=your_api_key_here
+REVENUECAT_API_KEY=your_revenuecat_secret_api_key_here
 REVENUECAT_WEBHOOK_SECRET=your_webhook_secret_here
 ```
+
+**Important**:
+- `REVENUECAT_API_KEY` (backend) is a **RevenueCat Secret API key** from RevenueCat Dashboard → Project Settings → API Keys → **Secret API keys**
+- This is **NOT** the mobile SDK key and it will **not** start with `test_`
 
 **Note**: The webhook secret is optional but recommended for production. If not set, webhook verification will be skipped (useful for development).
 
