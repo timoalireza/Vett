@@ -436,7 +436,15 @@ export const resolvers: IResolvers<GraphQLContext> = {
         }
 
         // Process the chat message with AI
-        const response = await vettAIService.chat(args.input, analysis);
+        let response: string;
+        try {
+          response = await vettAIService.chat(args.input, analysis);
+        } catch (aiError: any) {
+          // Rollback the chat usage increment if AI service fails
+          // This ensures users don't lose quota when errors occur
+          await subscriptionService.rollbackChatUsage(user.id);
+          throw aiError;
+        }
 
         // Get updated chat usage info (already incremented above)
         const chatUsage = await subscriptionService.getChatUsage(user.id);

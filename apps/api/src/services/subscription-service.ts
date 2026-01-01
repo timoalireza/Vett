@@ -557,6 +557,49 @@ class SubscriptionService {
   }
 
   /**
+   * Rollback (decrement) chat usage count when a chat message fails
+   * This should be called if the AI service fails after incrementing the count
+   * 
+   * @param userId - The internal user ID
+   */
+  async rollbackChatUsage(userId: string): Promise<void> {
+    const subscription = await this.getOrCreateSubscription(userId);
+    
+    // Ensure usage record exists
+    await this.getOrCreateUsage(
+      userId,
+      subscription.currentPeriodStart,
+      subscription.currentPeriodEnd
+    );
+    
+    // Decrement the count atomically
+    await db.transaction(async (tx) => {
+      // Lock the row to prevent concurrent modifications
+      const [usage] = await tx
+        .select()
+        .from(userUsage)
+        .where(eq(userUsage.userId, userId))
+        .for('update');
+
+      if (!usage) {
+        throw new Error("Usage record not found");
+      }
+
+      // Only decrement if count is greater than 0
+      const currentCount = usage.dailyChatCount ?? 0;
+      if (currentCount > 0) {
+        await tx
+          .update(userUsage)
+          .set({
+            dailyChatCount: currentCount - 1,
+            updatedAt: new Date()
+          })
+          .where(eq(userUsage.userId, userId));
+      }
+    });
+  }
+
+  /**
    * @deprecated Use checkAndIncrementChatUsage instead to prevent race conditions
    * Check if user can send a chat message
    */
