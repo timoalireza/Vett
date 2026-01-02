@@ -1,109 +1,295 @@
 import { useMemo, useState } from "react";
-import { Text, TouchableOpacity, View, ScrollView, StyleSheet, ActivityIndicator, Alert, Platform } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import {
+  Text,
+  TouchableOpacity,
+  View,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Dimensions,
+} from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { MotiView } from "moti";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useTheme } from "../../src/hooks/use-theme";
-import { GlassCard } from "../../src/components/GlassCard";
 import { useRevenueCat } from "../../src/hooks/use-revenuecat";
 
 type BillingCycle = "monthly" | "annual";
-type Plan = "PLUS" | "PRO";
+type Plan = "FREE" | "PLUS" | "PRO";
 
-const PLAN_PRICES = {
-  PLUS: { monthly: 2.99, annual: 19.99 },
-  PRO: { monthly: 6.99, annual: 49.99 }
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// Colors - Deep charcoal palette
+const COLORS = {
+  void: "#000000",
+  background: "#0C0C0C",
+  surface: "#141414",
+  surfaceElevated: "#1A1A1A",
+  border: "#252525",
+  borderSubtle: "#1E1E1E",
+  text: "#F5F5F5",
+  textSecondary: "#A0A0A0",
+  textMuted: "#6B6B6B",
+  accent: "#FFFFFF",
+  accentMuted: "rgba(255, 255, 255, 0.08)",
+  popular: "#3B82F6",
+  pro: "#F5F5F5",
 };
 
-// Features comparison: Free vs PLUS vs PRO
-// Based on new tier structure:
-// FREE: 3 DM/10 app analyses, watermark, 30 days history, 10 sources, standard processing
-// PLUS: 10 DM/unlimited app, no watermark, unlimited history, 10 sources, standard processing, limited Vett Chat
-// PRO: unlimited all, no watermark, unlimited history, 20 sources, priority processing, unlimited Vett Chat
-const FEATURES = [
-  { name: "App analyses", free: "10/mo", plus: "Unlimited", pro: "Unlimited" },
-  { name: "DM analyses", free: "3/mo", plus: "10/mo", pro: "Unlimited" },
-  { name: "No watermark", free: false, plus: true, pro: true },
-  { name: "Unlimited history", free: false, plus: true, pro: true },
-  { name: "Priority processing", free: false, plus: false, pro: true },
-  { name: "Up to 20 sources", free: false, plus: false, pro: true },
-  { name: "Vett Chat", free: false, plus: "Limited", pro: "Unlimited" }
-];
+const PLAN_PRICES = {
+  FREE: { monthly: 0, annual: 0 },
+  PLUS: { monthly: 2.99, annual: 19.99 },
+  PRO: { monthly: 6.99, annual: 49.99 },
+};
+
+const PLAN_FEATURES: Record<Plan, string[]> = {
+  FREE: [
+    "10 in-app analyses / month",
+    "3 Instagram DM analyses / month",
+    "30-day history",
+    "Up to 10 sources",
+    "Standard processing",
+  ],
+  PLUS: [
+    "Unlimited in-app analyses",
+    "10 Instagram DM analyses / month",
+    "Unlimited history",
+    "Up to 10 sources",
+    "Limited Vett Chat access",
+  ],
+  PRO: [
+    "Unlimited in-app analyses",
+    "Unlimited Instagram DM analyses",
+    "Unlimited history",
+    "Up to 20 sources",
+    "Priority processing",
+    "Unlimited Vett Chat access",
+  ],
+};
+
+interface PlanCardProps {
+  plan: Plan;
+  billingCycle: BillingCycle;
+  isSelected: boolean;
+  onSelect: () => void;
+  onSubscribe: () => void;
+  purchasing: boolean;
+  loading: boolean;
+}
+
+function PlanCard({
+  plan,
+  billingCycle,
+  isSelected,
+  onSelect,
+  onSubscribe,
+  purchasing,
+  loading,
+}: PlanCardProps) {
+  const price = PLAN_PRICES[plan];
+  const features = PLAN_FEATURES[plan];
+  const isPopular = plan === "PLUS";
+  const isPro = plan === "PRO";
+  const isFree = plan === "FREE";
+
+  const monthlyPrice = billingCycle === "annual" && !isFree
+    ? (price.annual / 12).toFixed(2)
+    : price.monthly.toFixed(2);
+
+  const annualPrice = price.annual.toFixed(2);
+
+  const getButtonText = () => {
+    if (isFree) return "Continue with Free";
+    if (isPro) return "Go Pro";
+    return "Upgrade to Plus";
+  };
+
+  const getButtonStyle = () => {
+    if (isFree) {
+      return {
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderColor: COLORS.border,
+      };
+    }
+    if (isPro) {
+      return {
+        backgroundColor: COLORS.accent,
+      };
+    }
+    return {
+      backgroundColor: COLORS.surfaceElevated,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    };
+  };
+
+  const getButtonTextColor = () => {
+    if (isFree) return COLORS.textSecondary;
+    if (isPro) return COLORS.void;
+    return COLORS.text;
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={onSelect}
+      activeOpacity={0.8}
+      style={[
+        styles.planCard,
+        isSelected && styles.planCardSelected,
+        isPro && styles.planCardPro,
+      ]}
+    >
+      {/* Popular Badge */}
+      {isPopular && (
+        <View style={styles.popularBadge}>
+          <Text style={styles.popularBadgeText}>MOST POPULAR</Text>
+        </View>
+      )}
+
+      {/* Plan Header */}
+      <View style={styles.planHeader}>
+        <Text style={[styles.planName, isPro && styles.planNamePro]}>
+          {plan}
+        </Text>
+      </View>
+
+      {/* Price */}
+      <View style={styles.priceContainer}>
+        <Text style={styles.priceMain}>
+          €{monthlyPrice}
+          <Text style={styles.pricePeriod}> / month</Text>
+        </Text>
+        {!isFree && billingCycle === "annual" && (
+          <Text style={styles.priceSecondary}>
+            €{annualPrice} / year
+          </Text>
+        )}
+        {!isFree && billingCycle === "monthly" && (
+          <Text style={styles.priceSecondary}>
+            or €{annualPrice} / year
+          </Text>
+        )}
+      </View>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Features */}
+      <View style={styles.featuresContainer}>
+        {features.map((feature, index) => (
+          <Text key={index} style={styles.featureText}>
+            {feature}
+          </Text>
+        ))}
+      </View>
+
+      {/* CTA Button */}
+      <TouchableOpacity
+        onPress={onSubscribe}
+        disabled={purchasing || loading}
+        style={[styles.ctaButton, getButtonStyle()]}
+        activeOpacity={0.7}
+      >
+        {purchasing && isSelected ? (
+          <ActivityIndicator
+            size="small"
+            color={isPro ? COLORS.void : COLORS.text}
+          />
+        ) : loading ? (
+          <ActivityIndicator size="small" color={COLORS.textMuted} />
+        ) : (
+          <Text style={[styles.ctaButtonText, { color: getButtonTextColor() }]}>
+            {getButtonText()}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
 
 export default function SubscriptionModal() {
-  const theme = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ plan?: string }>();
-  const initialPlan = (params.plan === "PLUS" || params.plan === "PRO" ? params.plan : "PRO") as Plan;
-  const [activeTab, setActiveTab] = useState<Plan>(initialPlan);
+  const initialPlan = (params.plan === "FREE" || params.plan === "PLUS" || params.plan === "PRO" 
+    ? params.plan 
+    : "PLUS") as Plan;
+  const [selectedPlan, setSelectedPlan] = useState<Plan>(initialPlan);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual");
   const [purchasing, setPurchasing] = useState(false);
-  
-  const { offerings, loading, purchase, getMonthlyPackage, getAnnualPackage } = useRevenueCat();
 
-  const selectedPackage = useMemo(() => {
-    if (!offerings) return null;
+  const { offerings, loading, purchase, getMonthlyPackage, getAnnualPackage } =
+    useRevenueCat();
 
-    const planKey = activeTab.toLowerCase();
-    const cycleKey = billingCycle === "annual" ? "annual" : "monthly";
+  const getPackageForPlan = useMemo(() => {
+    return (plan: Plan) => {
+      if (!offerings || plan === "FREE") return null;
 
-    const haystack = (pkg: any) =>
-      `${pkg.identifier} ${pkg.product?.identifier ?? ""} ${pkg.product?.title ?? ""}`.toLowerCase();
+      const planKey = plan.toLowerCase();
+      const cycleKey = billingCycle === "annual" ? "annual" : "monthly";
 
-    const planMatches = offerings.availablePackages.filter((pkg) => haystack(pkg).includes(planKey));
-    const cycleMatches = planMatches.filter((pkg) => {
-      const h = haystack(pkg);
-      if (cycleKey === "annual") return h.includes("annual") || h.includes("year") || h.includes("yearly");
-      return h.includes("month") || h.includes("monthly");
-    });
+      const haystack = (pkg: any) =>
+        `${pkg.identifier} ${pkg.product?.identifier ?? ""} ${pkg.product?.title ?? ""}`.toLowerCase();
 
-    // Fallbacks:
-    // - If RevenueCat offering doesn't separate plan packages, fall back to default monthly/annual.
-    return (
-      cycleMatches[0] ||
-      planMatches[0] ||
-      (billingCycle === "monthly" ? offerings.monthly : offerings.annual) ||
-      (billingCycle === "monthly" ? getMonthlyPackage() : getAnnualPackage())
-    );
-  }, [offerings, activeTab, billingCycle, getMonthlyPackage, getAnnualPackage]);
+      const planMatches = offerings.availablePackages.filter((pkg) =>
+        haystack(pkg).includes(planKey)
+      );
+      const cycleMatches = planMatches.filter((pkg) => {
+        const h = haystack(pkg);
+        if (cycleKey === "annual")
+          return h.includes("annual") || h.includes("year") || h.includes("yearly");
+        return h.includes("month") || h.includes("monthly");
+      });
 
-  const handleSubscribe = async () => {
+      return (
+        cycleMatches[0] ||
+        planMatches[0] ||
+        (billingCycle === "monthly" ? offerings.monthly : offerings.annual) ||
+        (billingCycle === "monthly" ? getMonthlyPackage() : getAnnualPackage())
+      );
+    };
+  }, [offerings, billingCycle, getMonthlyPackage, getAnnualPackage]);
+
+  const handleSubscribe = async (plan: Plan) => {
+    if (plan === "FREE") {
+      router.back();
+      return;
+    }
+
     if (purchasing) return;
 
     try {
+      // Update selected plan to show loading indicator on the correct card
+      setSelectedPlan(plan);
       setPurchasing(true);
+      const selectedPackage = getPackageForPlan(plan);
 
       if (!selectedPackage) {
         Alert.alert("Error", "Package not available. Please try again later.");
         return;
       }
 
-      // Purchase the package
       const customerInfo = await purchase(selectedPackage);
 
-      // Check if purchase was successful
-      // entitlements.active is an object (dictionary), not an array
       if (Object.keys(customerInfo.entitlements.active).length > 0) {
-        Alert.alert("Success", `Vett ${activeTab} subscription activated successfully!`, [
-          {
-            text: "OK",
-            onPress: () => router.back()
-          }
+        Alert.alert("Success", `Vett ${plan} subscription activated!`, [
+          { text: "OK", onPress: () => router.back() },
         ]);
       } else {
-        Alert.alert("Error", "Purchase completed but subscription not activated. Please contact support.");
+        Alert.alert(
+          "Error",
+          "Purchase completed but subscription not activated. Please contact support."
+        );
       }
     } catch (error: any) {
       console.error("Purchase failed:", error);
-      
+
       if (error.message?.includes("cancelled") || error.userCancelled) {
         return;
       }
-      
+
       Alert.alert(
         "Purchase Failed",
         error.message || "An error occurred during purchase. Please try again."
@@ -113,82 +299,18 @@ export default function SubscriptionModal() {
     }
   };
 
-  // Get features for the active tab
-  const getFeaturesForPlan = (plan: Plan) => {
-    return FEATURES.map(feature => {
-      const planValue = plan === "PLUS" ? feature.plus : feature.pro;
-      return {
-        ...feature,
-        planValue,
-        // For boolean values, use them directly. For strings, consider them "available"
-        available: typeof planValue === "boolean" ? planValue : true
-      };
-    });
-  };
-
-  // Helper to render feature value (checkmark, X, or text)
-  const renderFeatureValue = (value: boolean | string, isAvailable: boolean) => {
-    if (typeof value === "string") {
-      return (
-        <Text
-          style={{
-            color: theme.colors.text,
-            fontSize: theme.typography.caption,
-            fontFamily: "Inter_500Medium",
-            textAlign: "center"
-          }}
-        >
-          {value}
-        </Text>
-      );
-    }
-    
-    if (value) {
-      return (
-        <View
-          style={{
-            backgroundColor: theme.colors.success + "20",
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <Ionicons name="checkmark" size={16} color={theme.colors.success} />
-        </View>
-      );
-    }
-    
-    return (
-      <View
-        style={{
-          backgroundColor: theme.colors.card,
-          width: 24,
-          height: 24,
-          borderRadius: 12,
-          alignItems: "center",
-          justifyContent: "center"
-        }}
-      >
-        <Ionicons name="close" size={14} color={theme.colors.textTertiary} />
-      </View>
-    );
-  };
-
   return (
     <View style={styles.container}>
-      <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-      
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        {/* Close Button */}
-        <View style={styles.closeButtonContainer}>
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+        {/* Header */}
+        <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.closeButton}
             activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={24} color={theme.colors.text} />
+            <Ionicons name="close" size={22} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -196,451 +318,94 @@ export default function SubscriptionModal() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <MotiView
-            from={{ opacity: 0, translateY: 20 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: "spring", damping: 20 }}
-          >
-            {/* Header */}
-            <View style={styles.header}>
-              <Text
-                style={[
-                  styles.headerTitle,
-                  {
-                    color: theme.colors.text,
-                    fontSize: theme.typography.heading + 4,
-                    fontFamily: "Inter_700Bold",
-                    textAlign: "center",
-                    marginBottom: theme.spacing(1)
-                  }
-                ]}
-              >
-                Unlock the full{"\n"}Vett experience
-              </Text>
-              <View style={{ marginTop: -4 }}>
-                <LinearGradient
-                  colors={[theme.colors.primary, theme.colors.secondary, theme.colors.highlight]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{
-                    borderRadius: 4,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4
-                  }}
-                >
-                  <Text
-                    style={{
-                    fontSize: theme.typography.heading + 4,
-                    fontFamily: "Inter_700Bold",
-                    color: "#FFFFFF",
-                    textAlign: "center"
-                    }}
-                  >
-                    with Pro
-                  </Text>
-                </LinearGradient>
-              </View>
-            </View>
+          {/* Value Statement */}
+          <View style={styles.valueStatement}>
+            <Text style={styles.valueText}>Go beyond basic verification.</Text>
+          </View>
 
-            {/* Plan Tabs */}
-            <View
-              style={[
-                styles.planTabs,
-                {
-                  backgroundColor: theme.colors.card,
-                  borderRadius: theme.radii.md,
-                  padding: 4,
-                  gap: 4,
-                  marginTop: theme.spacing(2)
-                }
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => setActiveTab("PLUS")}
-                style={{
-                  flex: 1,
-                  paddingVertical: theme.spacing(1.5),
-                  borderRadius: theme.radii.sm,
-                  backgroundColor: activeTab === "PLUS" ? theme.colors.primary : "transparent",
-                  alignItems: "center"
-                }}
-              >
-                <Text
-                  style={{
-                    color: activeTab === "PLUS" ? "#FFFFFF" : theme.colors.text,
-                    fontSize: theme.typography.body,
-                    fontFamily: activeTab === "PLUS" ? "Inter_500Medium" : "Inter_400Regular"
-                  }}
-                >
-                  Vett Plus
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setActiveTab("PRO")}
-                style={{
-                  flex: 1,
-                  paddingVertical: theme.spacing(1.5),
-                  borderRadius: theme.radii.sm,
-                  backgroundColor: activeTab === "PRO" ? theme.colors.primary : "transparent",
-                  alignItems: "center",
-                  position: "relative"
-                }}
-              >
-                <Text
-                  style={{
-                    color: activeTab === "PRO" ? "#FFFFFF" : theme.colors.text,
-                    fontSize: theme.typography.body,
-                    fontFamily: activeTab === "PRO" ? "Inter_500Medium" : "Inter_400Regular"
-                  }}
-                >
-                  Vett Pro
-                </Text>
-                {activeTab === "PRO" && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -8,
-                      right: 8,
-                      backgroundColor: theme.colors.success,
-                      borderRadius: 8,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#FFFFFF",
-                        fontSize: 10,
-                        fontFamily: "Inter_500Medium"
-                      }}
-                    >
-                      POPULAR
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Feature Comparison Table */}
-            <GlassCard
-              intensity="medium"
-              radius="lg"
-              style={styles.comparisonCard}
-            >
-              {/* Table Header */}
-              <View style={styles.tableHeader}>
-                <Text
-                  style={[
-                    styles.tableHeaderText,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.body,
-                      fontFamily: "Inter_700Bold",
-                      flex: 2.5
-                    }
-                  ]}
-                >
-                  Benefits
-                </Text>
-                <Text
-                  style={[
-                    styles.tableHeaderText,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.caption,
-                      fontFamily: "Inter_700Bold",
-                      textAlign: "center",
-                      flex: 1
-                    }
-                  ]}
-                >
-                  Free
-                </Text>
-                <Text
-                  style={[
-                    styles.tableHeaderText,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.caption,
-                      fontFamily: "Inter_700Bold",
-                      textAlign: "center",
-                      flex: 1
-                    }
-                  ]}
-                >
-                  {activeTab === "PLUS" ? "Plus" : "Pro"}
-                </Text>
-              </View>
-
-              {/* Feature Rows */}
-              <View style={styles.featureRows}>
-                {getFeaturesForPlan(activeTab).map((feature, index) => (
-                  <View
-                    key={feature.name}
-                    style={[
-                      styles.featureRow,
-                      {
-                        borderBottomWidth: index < FEATURES.length - 1 ? 1 : 0,
-                        borderBottomColor: theme.colors.borderLight,
-                        paddingVertical: theme.spacing(2)
-                      }
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.featureName,
-                        {
-                          color: theme.colors.text,
-                          fontSize: theme.typography.body,
-                          flex: 2.5
-                        }
-                      ]}
-                    >
-                      {feature.name}
-                    </Text>
-                    {/* Free Column */}
-                    <View style={{ flex: 1, alignItems: "center" }}>
-                      {renderFeatureValue(feature.free, typeof feature.free === "string" || feature.free === true)}
-                    </View>
-                    {/* Plan Column */}
-                    <View style={{ flex: 1, alignItems: "center" }}>
-                      {renderFeatureValue(feature.planValue, feature.available)}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </GlassCard>
-
-            {/* Billing Cycle Toggle - Nudge to Annual */}
-            <View
-              style={[
-                styles.billingToggle,
-                {
-                  backgroundColor: theme.colors.card,
-                  borderRadius: theme.radii.md,
-                  padding: 4,
-                  gap: 4
-                }
-              ]}
-            >
+          {/* Billing Toggle */}
+          <View style={styles.billingToggleContainer}>
+            <View style={styles.billingToggle}>
               <TouchableOpacity
                 onPress={() => setBillingCycle("monthly")}
-                style={{
-                  flex: 1,
-                  paddingVertical: theme.spacing(1.5),
-                  borderRadius: theme.radii.sm,
-                  backgroundColor: billingCycle === "monthly" ? theme.colors.primary : "transparent",
-                  alignItems: "center"
-                }}
+                style={[
+                  styles.billingOption,
+                  billingCycle === "monthly" && styles.billingOptionActive,
+                ]}
+                activeOpacity={0.7}
               >
                 <Text
-                  style={{
-                    color: billingCycle === "monthly" ? "#FFFFFF" : theme.colors.text,
-                    fontSize: theme.typography.body,
-                    fontFamily: billingCycle === "monthly" ? "Inter_500Medium" : "Inter_400Regular"
-                  }}
+                  style={[
+                    styles.billingOptionText,
+                    billingCycle === "monthly" && styles.billingOptionTextActive,
+                  ]}
                 >
                   Monthly
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setBillingCycle("annual")}
-                style={{
-                  flex: 1,
-                  paddingVertical: theme.spacing(1.5),
-                  borderRadius: theme.radii.sm,
-                  backgroundColor: billingCycle === "annual" ? theme.colors.primary : "transparent",
-                  alignItems: "center",
-                  position: "relative"
-                }}
+                style={[
+                  styles.billingOption,
+                  billingCycle === "annual" && styles.billingOptionActive,
+                ]}
+                activeOpacity={0.7}
               >
                 <Text
-                  style={{
-                    color: billingCycle === "annual" ? "#FFFFFF" : theme.colors.text,
-                    fontSize: theme.typography.body,
-                    fontFamily: billingCycle === "annual" ? "Inter_500Medium" : "Inter_400Regular"
-                  }}
+                  style={[
+                    styles.billingOptionText,
+                    billingCycle === "annual" && styles.billingOptionTextActive,
+                  ]}
                 >
                   Annual
                 </Text>
                 {billingCycle === "annual" && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -8,
-                      right: 8,
-                      backgroundColor: theme.colors.success,
-                      borderRadius: 8,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#FFFFFF",
-                        fontSize: 10,
-                        fontFamily: "Inter_500Medium"
-                      }}
-                    >
-                      Save
-                    </Text>
+                  <View style={styles.saveBadge}>
+                    <Text style={styles.saveBadgeText}>Save ~40%</Text>
                   </View>
                 )}
               </TouchableOpacity>
             </View>
+          </View>
 
-            {/* Plan Card */}
-            <GlassCard
-              intensity="medium"
-              radius="lg"
-              style={{
-                ...styles.planCard,
-                padding: theme.spacing(3),
-                marginTop: theme.spacing(2)
-              }}
-            >
-              <View style={{ alignItems: "center" }}>
-                <Text
-                  style={[
-                    styles.planName,
-                    {
-                      color: theme.colors.text,
-                      fontSize: theme.typography.subheading + 4,
-                      fontFamily: "Inter_700Bold",
-                      marginBottom: theme.spacing(1.5)
-                    }
-                  ]}
-                >
-                  Vett {activeTab}
-                </Text>
-                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4, marginBottom: theme.spacing(0.5) }}>
-                  <Text
-                    style={[
-                      styles.planPrice,
-                      {
-                        color: theme.colors.text,
-                        fontSize: theme.typography.heading + 8,
-                        fontFamily: "Inter_700Bold"
-                      }
-                    ]}
-                  >
-                    ${billingCycle === "annual" ? (PLAN_PRICES[activeTab].annual / 12).toFixed(2) : PLAN_PRICES[activeTab].monthly.toFixed(2)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.planPeriod,
-                      {
-                        color: theme.colors.textSecondary,
-                        fontSize: theme.typography.body
-                      }
-                    ]}
-                  >
-                    /mo
-                  </Text>
-                </View>
-                {billingCycle === "annual" && (
-                  <Text
-                    style={[
-                      styles.planSavings,
-                      {
-                        color: theme.colors.success,
-                        fontSize: theme.typography.body,
-                        marginTop: theme.spacing(0.5),
-                        fontFamily: "Inter_700Bold"
-                      }
-                    ]}
-                  >
-                    Save ${(PLAN_PRICES[activeTab].monthly * 12 - PLAN_PRICES[activeTab].annual).toFixed(2)}/year
-                  </Text>
-                )}
-                <Text
-                  style={[
-                    styles.planAnnualPrice,
-                    {
-                      color: theme.colors.textSecondary,
-                      fontSize: theme.typography.caption,
-                      marginTop: theme.spacing(1.5)
-                    }
-                  ]}
-                >
-                  {billingCycle === "annual" ? `$${PLAN_PRICES[activeTab].annual.toFixed(2)}/year` : `$${PLAN_PRICES[activeTab].monthly.toFixed(2)}/month`}
-                </Text>
-              </View>
-            </GlassCard>
+          {/* Plan Cards */}
+          <View style={styles.plansContainer}>
+            <PlanCard
+              plan="FREE"
+              billingCycle={billingCycle}
+              isSelected={selectedPlan === "FREE"}
+              onSelect={() => setSelectedPlan("FREE")}
+              onSubscribe={() => handleSubscribe("FREE")}
+              purchasing={purchasing}
+              loading={loading}
+            />
+            <PlanCard
+              plan="PLUS"
+              billingCycle={billingCycle}
+              isSelected={selectedPlan === "PLUS"}
+              onSelect={() => setSelectedPlan("PLUS")}
+              onSubscribe={() => handleSubscribe("PLUS")}
+              purchasing={purchasing}
+              loading={loading}
+            />
+            <PlanCard
+              plan="PRO"
+              billingCycle={billingCycle}
+              isSelected={selectedPlan === "PRO"}
+              onSelect={() => setSelectedPlan("PRO")}
+              onSubscribe={() => handleSubscribe("PRO")}
+              purchasing={purchasing}
+              loading={loading}
+            />
+          </View>
 
-            {/* Terms */}
-            <View style={styles.termsContainer}>
-              <Text
-                style={[
-                  styles.termsText,
-                  {
-                    color: theme.colors.textSecondary,
-                    fontSize: theme.typography.caption,
-                    lineHeight: theme.typography.caption * theme.typography.lineHeight.relaxed,
-                    textAlign: "center"
-                  }
-                ]}
-              >
-                {activeTab === "PRO" ? (
-                  <>
-                    Start with a 7-day free trial.{"\n"}
-                    You won't be charged until after your free trial ends.{"\n"}
-                  </>
-                ) : (
-                  <>
-                    You won't be charged until after your subscription starts.{"\n"}
-                  </>
-                )}
-                Your subscription automatically renews unless cancelled at least 24 hours before the end of your current period. Cancel anytime in the App Store.
-              </Text>
-            </View>
-
-            {/* CTA Button */}
-            {loading ? (
-              <View
-                style={[
-                  styles.ctaButton,
-                  {
-                    backgroundColor: theme.colors.card,
-                    borderRadius: theme.radii.pill,
-                    paddingVertical: theme.spacing(3)
-                  }
-                ]}
-              >
-                <ActivityIndicator color={theme.colors.primary} />
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={handleSubscribe}
-                disabled={purchasing}
-                style={[
-                  styles.ctaButton,
-                  {
-                    backgroundColor: theme.colors.primary,
-                    borderRadius: theme.radii.pill,
-                    paddingVertical: theme.spacing(3),
-                    opacity: purchasing ? 0.5 : 1
-                  }
-                ]}
-                activeOpacity={0.8}
-              >
-                {purchasing ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text
-                    style={{
-                      color: "#FFFFFF",
-                      fontSize: theme.typography.body,
-                      fontFamily: "Inter_500Medium",
-                      letterSpacing: 0.3
-                    }}
-                  >
-                    {activeTab === "PRO" ? "Start my free week" : `Subscribe to Vett ${activeTab}`}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </MotiView>
+          {/* Terms */}
+          <View style={styles.termsContainer}>
+            <Text style={styles.termsText}>
+              Subscriptions auto-renew unless cancelled at least 24 hours before
+              the current period ends. Manage subscriptions in Settings.
+            </Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -649,100 +414,185 @@ export default function SubscriptionModal() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
+    backgroundColor: COLORS.background,
   },
   safeArea: {
-    flex: 1
+    flex: 1,
   },
-  closeButtonContainer: {
+  header: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
     paddingHorizontal: 20,
     paddingTop: Platform.OS === "ios" ? 8 : 16,
     paddingBottom: 8,
-    alignItems: "flex-end"
   },
   closeButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    backgroundColor: COLORS.accentMuted,
+    borderRadius: 18,
   },
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 40,
-    gap: 24
   },
-  header: {
+  valueStatement: {
+    marginTop: 24,
+    marginBottom: 32,
     alignItems: "center",
-    marginTop: 8,
-    marginBottom: 8
   },
-  headerTitle: {
+  valueText: {
+    fontSize: 24,
+    fontFamily: "Inter_500Medium",
+    color: COLORS.text,
+    textAlign: "center",
     letterSpacing: -0.5,
-    lineHeight: 40
   },
-  planTabs: {
-    marginBottom: 8
-  },
-  comparisonCard: {
-    padding: 20,
-    marginTop: 8
-  },
-  tableHeader: {
-    flexDirection: "row",
+  billingToggleContainer: {
     alignItems: "center",
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)"
-  },
-  tableHeaderText: {
-    letterSpacing: -0.1
-  },
-  featureRows: {
-    gap: 0
-  },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-  featureName: {
-    letterSpacing: 0.1
-  },
-  checkmarkCircle: {
-    // Styled inline
+    marginBottom: 28,
   },
   billingToggle: {
-    marginTop: 8
+    flexDirection: "row",
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    padding: 4,
+  },
+  billingOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  billingOptionActive: {
+    backgroundColor: COLORS.surfaceElevated,
+  },
+  billingOptionText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: COLORS.textMuted,
+  },
+  billingOptionTextActive: {
+    color: COLORS.text,
+    fontFamily: "Inter_500Medium",
+  },
+  saveBadge: {
+    backgroundColor: COLORS.accentMuted,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  saveBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
+  },
+  plansContainer: {
+    gap: 16,
   },
   planCard: {
-    minHeight: 140
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  planCardSelected: {
+    borderColor: COLORS.border,
+  },
+  planCardPro: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderColor: COLORS.border,
+  },
+  popularBadge: {
+    position: "absolute",
+    top: -10,
+    left: 24,
+    backgroundColor: COLORS.popular,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  popularBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: COLORS.accent,
+    letterSpacing: 0.8,
+  },
+  planHeader: {
+    marginBottom: 16,
   },
   planName: {
-    letterSpacing: -0.3
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
   },
-  planPrice: {
-    letterSpacing: -0.5
+  planNamePro: {
+    color: COLORS.text,
   },
-  planPeriod: {
-    letterSpacing: 0.1
+  priceContainer: {
+    marginBottom: 20,
   },
-  planSavings: {
-    letterSpacing: 0.1
+  priceMain: {
+    fontSize: 28,
+    fontFamily: "Inter_600SemiBold",
+    color: COLORS.text,
+    letterSpacing: -0.5,
   },
-  planAnnualPrice: {
-    letterSpacing: 0.1
+  pricePeriod: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: COLORS.textSecondary,
   },
-  termsContainer: {
-    paddingHorizontal: 8,
-    marginTop: 4
+  priceSecondary: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: COLORS.textMuted,
+    marginTop: 4,
   },
-  termsText: {
-    letterSpacing: 0.1
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.borderSubtle,
+    marginBottom: 20,
+  },
+  featuresContainer: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  featureText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: COLORS.textSecondary,
+    lineHeight: 20,
   },
   ctaButton: {
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 16,
-    minHeight: 56
-  }
+    minHeight: 48,
+  },
+  ctaButtonText: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.1,
+  },
+  termsContainer: {
+    marginTop: 32,
+    paddingHorizontal: 8,
+  },
+  termsText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: COLORS.textMuted,
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });
