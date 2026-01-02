@@ -10,11 +10,13 @@ import {
   Alert,
   Pressable,
   Dimensions,
-  Image
+  Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useShareIntent } from "expo-share-intent";
 import * as Clipboard from "expo-clipboard";
@@ -30,6 +32,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { submitAnalysis } from "../../src/api/analysis";
+import { fetchSubscription } from "../../src/api/subscription";
 import { useTheme } from "../../src/hooks/use-theme";
 import { LensMotif } from "../../src/components/Lens/LensMotif";
 import { AnimatedLens } from "../../src/components/Lens/AnimatedLens";
@@ -57,6 +60,14 @@ export default function AnalyzeScreen() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const inputRef = useRef<ClaimInputRef>(null);
+
+  // Fetch subscription info to show upgrade pill for free users
+  const { data: subscriptionData } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: fetchSubscription,
+  });
+
+  const isFreePlan = subscriptionData?.plan === "FREE";
   
   const { state: lensState, toInput, toLoading, reset } = useLensState();
   
@@ -461,6 +472,27 @@ export default function AnalyzeScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Upgrade Pill - Top Right */}
+      {isFreePlan && (
+        <SafeAreaView style={styles.upgradeContainer} edges={["top"]} pointerEvents="box-none">
+          <TouchableOpacity
+            onPress={() => router.push("/modals/subscription?plan=PRO")}
+            activeOpacity={0.8}
+            style={styles.upgradePill}
+          >
+            <LinearGradient
+              colors={["#9D7FEF", "#E89CDA", "#FFC58F"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.upgradePillGradient}
+            >
+              <Text style={styles.upgradePillText}>Upgrade</Text>
+              <Ionicons name="arrow-up-circle" size={16} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
+
       {/* Video Background - Full Screen */}
       {!videoError && (
         <View style={[StyleSheet.absoluteFill, { zIndex: 0, top: 0, left: 0, right: 0, bottom: 0, width: screenWidth, height: screenHeight, overflow: 'hidden' }]}>
@@ -726,6 +758,36 @@ const styles = StyleSheet.create({
   pillButtonText: {
     color: '#000000',
     fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+  },
+  upgradeContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    left: 0,
+    zIndex: 100,
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+  },
+  upgradePill: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#9D7FEF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  upgradePillGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  upgradePillText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
   },
 });

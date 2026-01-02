@@ -4,7 +4,9 @@ import { useRouter } from "expo-router";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAnalyses } from "../../src/api/analysis";
+import { fetchSubscription } from "../../src/api/subscription";
 import { SettingsRow } from "../../src/components/Common/SettingsRow";
+import { UpgradeCard } from "../../src/components/Subscription/UpgradeCard";
 import { useAppState } from "../../src/state/app-state";
 import { getStrings } from "../../src/i18n/strings";
 
@@ -36,6 +38,15 @@ export default function ProfileScreen() {
   const { user } = useUser();
   const { language } = useAppState();
   const strings = useMemo(() => getStrings(language), [language]);
+
+  // Fetch subscription info
+  const { data: subscriptionData } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: fetchSubscription,
+    enabled: !!user,
+  });
+
+  const isFreePlan = subscriptionData?.plan === "FREE";
 
   // Fetch all analyses for statistics
   const { data: analysesData } = useQuery({
@@ -132,6 +143,13 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Upgrade Card - Only for free users */}
+        {isFreePlan && (
+          <View style={styles.upgradeCardContainer}>
+            <UpgradeCard onPress={() => router.push("/modals/subscription?plan=PRO")} />
+          </View>
+        )}
+
         {/* Divider */}
         <View style={styles.divider} />
 
@@ -215,6 +233,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#8A8A8A",
     textAlign: "center",
+  },
+  upgradeCardContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   divider: {
     height: 1,
