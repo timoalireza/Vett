@@ -339,6 +339,12 @@ export const schema = `
     error: String
   }
 
+  type SyncSubscriptionPayload {
+    success: Boolean!
+    subscription: SubscriptionInfo
+    error: String
+  }
+
   type Query {
     health: HealthCheck!
     analysis(id: ID!): AnalysisSummary
@@ -367,6 +373,7 @@ export const schema = `
     generateInstagramVerificationCode: GenerateInstagramVerificationCodePayload!
     linkInstagramAccount(verificationCode: String!): LinkInstagramAccountPayload!
     unlinkInstagramAccount: UnlinkInstagramAccountPayload!
+    syncSubscription: SyncSubscriptionPayload!
   }
 `;
 

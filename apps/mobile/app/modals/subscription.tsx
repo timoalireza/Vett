@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/clerk-expo";
 
-import { fetchSubscription } from "../../src/api/subscription";
+import { fetchSubscription, syncSubscription } from "../../src/api/subscription";
 import { useRevenueCat } from "../../src/hooks/use-revenuecat";
 
 type BillingCycle = "monthly" | "annual";
@@ -331,30 +331,44 @@ export default function SubscriptionModal() {
       const customerInfo = await purchase(selectedPackage);
 
       if (Object.keys(customerInfo.entitlements.active).length > 0) {
-        // Invalidate subscription queries to update UI immediately
-        // We invalidate multiple times with delays to ensure the backend webhook has time to process
-        // Invalidate both query key patterns: ["subscription"] and ["subscription", userId]
-        const invalidateSubscriptionQueries = async () => {
+        // Explicitly sync subscription from RevenueCat to ensure backend is updated
+        try {
+          await syncSubscription();
+          
+          // Invalidate subscription queries to update UI with synced data
           await queryClient.invalidateQueries({ 
             predicate: (query) => 
               query.queryKey[0] === "subscription"
           });
-        };
-        
-        // Immediate invalidation
-        await invalidateSubscriptionQueries();
-        
-        // Add delays to allow webhook processing, then invalidate again
-        setTimeout(async () => {
+          
+          Alert.alert("Success", `Vett ${plan} subscription activated!`, [
+            { text: "OK", onPress: () => router.back() },
+          ]);
+        } catch (syncError: any) {
+          console.error("Subscription sync failed:", syncError);
+          
+          // Fallback: invalidate with delays like before
+          const invalidateSubscriptionQueries = async () => {
+            await queryClient.invalidateQueries({ 
+              predicate: (query) => 
+                query.queryKey[0] === "subscription"
+            });
+          };
+          
           await invalidateSubscriptionQueries();
-        }, 1000);
-        setTimeout(async () => {
-          await invalidateSubscriptionQueries();
-        }, 2500);
-        
-        Alert.alert("Success", `Vett ${plan} subscription activated!`, [
-          { text: "OK", onPress: () => router.back() },
-        ]);
+          setTimeout(async () => {
+            await invalidateSubscriptionQueries();
+          }, 1000);
+          setTimeout(async () => {
+            await invalidateSubscriptionQueries();
+          }, 2500);
+          
+          Alert.alert(
+            "Success",
+            `Vett ${plan} subscription activated! It may take a moment to reflect in your account.`,
+            [{ text: "OK", onPress: () => router.back() }]
+          );
+        }
       } else {
         Alert.alert(
           "Error",

@@ -71,3 +71,58 @@ export async function fetchSubscription(): Promise<SubscriptionInfo> {
   return result.subscription;
 }
 
+const SYNC_SUBSCRIPTION_MUTATION = `
+  mutation SyncSubscription {
+    syncSubscription {
+      success
+      subscription {
+        plan
+        status
+        billingCycle
+        currentPeriodStart
+        currentPeriodEnd
+        cancelAtPeriodEnd
+        limits {
+          maxAnalysesPerMonth
+          hasWatermark
+          historyRetentionDays
+          hasPriorityProcessing
+          hasAdvancedBiasAnalysis
+          hasExtendedSummaries
+          hasCrossPlatformSync
+          hasCustomAlerts
+          maxSources
+        }
+        prices {
+          monthly
+          annual
+        }
+        usage {
+          analysesCount
+          maxAnalyses
+          periodStart
+          periodEnd
+          hasUnlimited
+        }
+      }
+      error
+    }
+  }
+`;
+
+export async function syncSubscription(): Promise<SubscriptionInfo | null> {
+  const result = await graphqlRequest<{
+    syncSubscription: {
+      success: boolean;
+      subscription: SubscriptionInfo | null;
+      error: string | null;
+    };
+  }>(SYNC_SUBSCRIPTION_MUTATION);
+
+  if (!result.syncSubscription.success || !result.syncSubscription.subscription) {
+    throw new Error(result.syncSubscription.error || "Failed to sync subscription");
+  }
+
+  return result.syncSubscription.subscription;
+}
+

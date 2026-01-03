@@ -751,6 +751,59 @@ export const resolvers: IResolvers<GraphQLContext> = {
           error: error.message || "Failed to unlink account"
         };
       }
+    },
+    syncSubscription: async (_parent, _args, context) => {
+      trackGraphQLMutation("syncSubscription");
+      const ctx = context as GraphQLContext;
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const dbUserId = await userService.getOrCreateUser(ctx.userId);
+
+        // Sync subscription from RevenueCat (this waits for completion)
+        if (!process.env.REVENUECAT_API_KEY) {
+          return {
+            success: false,
+            subscription: null,
+            error: "RevenueCat sync not configured"
+          };
+        }
+
+        const { syncUserSubscriptionFromRevenueCat } = await import("../services/revenuecat-sync.js");
+        await syncUserSubscriptionFromRevenueCat(ctx.userId);
+
+        // Get updated subscription info
+        const info = await subscriptionService.getSubscriptionInfo(dbUserId);
+
+        return {
+          success: true,
+          subscription: {
+            plan: info.plan,
+            status: info.status,
+            billingCycle: info.billingCycle,
+            currentPeriodStart: info.currentPeriodStart.toISOString(),
+            currentPeriodEnd: info.currentPeriodEnd.toISOString(),
+            cancelAtPeriodEnd: info.cancelAtPeriodEnd,
+            limits: info.limits,
+            prices: info.prices,
+            usage: info.usage
+          },
+          error: null
+        };
+      } catch (error: any) {
+        trackGraphQLError();
+        console.error("[GraphQL] Error syncing subscription:", {
+          userId: ctx.userId,
+          error: error.message
+        });
+        return {
+          success: false,
+          subscription: null,
+          error: error.message || "Failed to sync subscription"
+        };
+      }
     }
   },
   IngestionQuality: {
