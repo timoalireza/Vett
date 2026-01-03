@@ -52,6 +52,9 @@ const VIDEO_LOADING = require("../../assets/animations/loading.mp4");
 // Still image for home-idle (frame hold to prevent flicker)
 const HOME_IDLE_STILL = require("../../assets/animations/home-idle-still.png");
 
+// Vett logo
+const VETT_LOGO = require("../../assets/vett-logo.png");
+
 export default function AnalyzeScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -476,6 +479,15 @@ export default function AnalyzeScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Logo - Top Left */}
+      <SafeAreaView style={styles.logoContainer} edges={["top"]} pointerEvents="none">
+        <Image 
+          source={VETT_LOGO} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </SafeAreaView>
+
       {/* Upgrade Pill - Top Right */}
       {isFreePlan && (
         <SafeAreaView style={styles.upgradeContainer} edges={["top"]} pointerEvents="box-none">
@@ -763,6 +775,18 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
+  },
+  logoContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 100,
+    paddingHorizontal: 16,
+  },
+  logo: {
+    width: 80,
+    height: 32,
+    tintColor: '#FFFFFF',
   },
   upgradeContainer: {
     position: 'absolute',

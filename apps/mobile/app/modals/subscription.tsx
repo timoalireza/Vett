@@ -13,6 +13,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useRevenueCat } from "../../src/hooks/use-revenuecat";
 
@@ -212,6 +213,7 @@ function PlanCard({
 
 export default function SubscriptionModal() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ plan?: string }>();
   const initialPlan = (params.plan === "FREE" || params.plan === "PLUS" || params.plan === "PRO" 
     ? params.plan 
@@ -274,6 +276,23 @@ export default function SubscriptionModal() {
       const customerInfo = await purchase(selectedPackage);
 
       if (Object.keys(customerInfo.entitlements.active).length > 0) {
+        // Invalidate subscription queries to update UI immediately
+        // We invalidate multiple times with delays to ensure the backend webhook has time to process
+        // Invalidate both query key patterns: ["subscription"] and ["subscription", userId]
+        const invalidateSubscriptionQueries = () => {
+          queryClient.invalidateQueries({ 
+            predicate: (query) => 
+              query.queryKey[0] === "subscription"
+          });
+        };
+        
+        // Immediate invalidation
+        invalidateSubscriptionQueries();
+        
+        // Add delays to allow webhook processing, then invalidate again
+        setTimeout(invalidateSubscriptionQueries, 1000);
+        setTimeout(invalidateSubscriptionQueries, 2500);
+        
         Alert.alert("Success", `Vett ${plan} subscription activated!`, [
           { text: "OK", onPress: () => router.back() },
         ]);

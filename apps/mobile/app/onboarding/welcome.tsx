@@ -34,6 +34,9 @@ const SLIDE_IMAGE_2 = require("../../assets/onboarding/slide-2-verification.png"
 const SLIDE_IMAGE_3 = require("../../assets/onboarding/slide-3-frictionless.png");
 const SLIDE_IMAGE_4 = require("../../assets/onboarding/slide-4-truth-layer.png");
 
+// Vett logo
+const VETT_LOGO = require("../../assets/vett-logo.png");
+
 const SLIDE_BACKGROUNDS: { [key: number]: ImageSourcePropType | null } = {
   0: SLIDE_IMAGE_1,
   1: SLIDE_IMAGE_2,
@@ -291,7 +294,11 @@ export default function WelcomeScreen() {
         style={styles.header}
       >
         <Text style={styles.logoPrefix}>Welcome to</Text>
-        <Text style={[styles.logo, { fontFamily: "Inter_700Bold" }]}>Vett</Text>
+        <Image 
+          source={VETT_LOGO} 
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
       </Animated.View>
 
       {/* Headline at Top */}
@@ -473,18 +480,14 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.6)",
     fontSize: 14,
     letterSpacing: 0.5,
-    marginBottom: 4,
+    marginBottom: 8,
     textShadowColor: "rgba(0, 0, 0, 0.8)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
-  logo: {
-    color: "#FFFFFF",
-    fontSize: 28,
-    letterSpacing: -0.5,
-    textShadowColor: "rgba(0, 0, 0, 0.8)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+  logoImage: {
+    width: 120,
+    height: 40,
   },
   headlineSection: {
     paddingTop: 32,
