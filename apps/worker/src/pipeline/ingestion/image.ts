@@ -2,7 +2,7 @@ import { AnalysisAttachmentInput } from "@vett/shared";
 
 import { openai } from "../../clients/openai.js";
 
-const MODEL = "gpt-4o-mini";
+const MODEL = "gpt-5.2";
 const MAX_WORDS = 120;
 
 export interface ImageIngestionSuccess {

@@ -2,12 +2,23 @@ import { openai } from "../../clients/openai.js";
 import type { PipelineClaim, PipelineSource } from "../types.js";
 import { parseJsonContent } from "../utils/openai.js";
 
-export const VERDICT_MODEL = "gpt-4o-mini";
+export const VERDICT_MODEL = "gpt-5.2";
 
 const VERDICT_PROMPT = `
 You are a fact-checking adjudicator. Given claims and evaluated evidence, produce a grounded verdict.
 Respond in English JSON ONLY, matching the schema. Cite evidence using the provided \`key\` values.
 If evidence contradicts a claim, LOWER the numeric score. If evidence strongly supports it, raise the score.
+
+GROUNDING RULES (CRITICAL):
+- You MUST base the verdict, score, summary, and rationale ONLY on the provided evidence payload.
+- Do NOT use outside knowledge, training data, or assumptions. If a detail is not present in evidence summaries, treat it as unknown.
+- If evidence is mainly about a different topic (stance=irrelevant or very low relevance), you MUST use "Unverified" (score=null).
+- Prefer conclusions corroborated by MULTIPLE independent sources (different hostnames/providers). If only one source supports a claim, be conservative (often "Unverified" unless it is an official/primary source and highly relevant).
+- Be aware of potential source bias: if evidence comes from a narrow set of aligned outlets, reflect that uncertainty in the verdict/score (do not overstate certainty).
+
+RECENCY RULES:
+- Consider \`publishedAt\` when present. For breaking-news claims (today/this morning/last night), prioritize the most recent high-reliability, high-relevance evidence.
+- Do not let older sources outweigh multiple newer credible sources for time-sensitive claims.
 
 SCORING GUIDELINES:
 - For claims that are ACCURATE and well-supported by evidence, assign scores in the 76-100 range ("Verified")
@@ -148,6 +159,9 @@ export async function reasonVerdict(
       key: source.key,
       provider: source.provider,
       reliability: source.reliability,
+      publishedAt: source.publishedAt ?? null,
+      relevance: source.evaluation?.relevance ?? null,
+      stance: source.evaluation?.stance ?? null,
       summary: source.summary ?? "",
       url: source.url
     }))

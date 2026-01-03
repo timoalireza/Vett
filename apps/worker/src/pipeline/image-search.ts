@@ -82,7 +82,7 @@ Return ONLY the search query, nothing else.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5.2",
       messages: [
         {
           role: "system",
@@ -113,7 +113,7 @@ Return ONLY the search query, nothing else.`;
 async function scoreImageAesthetics(imageUrl: string): Promise<number> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.2",
       messages: [
         {
           role: "system",
@@ -183,7 +183,7 @@ The image should be suitable for a fact-checking application with a neutral, new
 Return ONLY the DALL-E prompt, nothing else.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5.2",
       messages: [
         {
           role: "system",

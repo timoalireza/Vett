@@ -9,6 +9,7 @@ export type EvidenceResult = {
   evaluation?: {
     reliability: number;
     relevance: number;
+    stance?: "supports" | "refutes" | "mixed" | "unclear" | "irrelevant";
     assessment: string;
   };
 };

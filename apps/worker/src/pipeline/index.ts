@@ -14,11 +14,79 @@ import { retrieveEvidence } from "./retrievers/index.js";
 import type { EvidenceResult } from "./retrievers/types.js";
 import { evaluateEvidenceForClaim } from "./evidence/evaluator.js";
 import { reasonVerdict, VERDICT_MODEL, type ReasonerVerdictOutput } from "./reasoners/verdict.js";
-import { adjustReliability } from "./retrievers/trust.js";
+import { adjustReliability, extractHostname } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
 import { openai } from "../clients/openai.js";
 
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
+
+function stanceToSignedValue(
+  stance?: "supports" | "refutes" | "mixed" | "unclear" | "irrelevant" | null
+): number {
+  switch (stance) {
+    case "supports":
+      return 1;
+    case "refutes":
+      return -1;
+    case "mixed":
+      return 0;
+    case "irrelevant":
+      return 0;
+    case "unclear":
+    default:
+      return 0;
+  }
+}
+
+function parsePublishedAt(publishedAt: string | undefined): number | null {
+  if (!publishedAt) return null;
+  const trimmed = publishedAt.trim();
+  if (!trimmed) return null;
+
+  const asDate = Date.parse(trimmed);
+  if (!Number.isNaN(asDate)) {
+    return asDate;
+  }
+
+  // Handle common "X hours/days ago" style strings.
+  const m = trimmed.match(/(\d+)\s*(minute|hour|day|week|month|year)s?\s*ago/i);
+  if (m) {
+    const n = Number(m[1]);
+    const unit = m[2].toLowerCase();
+    const mult =
+      unit === "minute"
+        ? 60_000
+        : unit === "hour"
+          ? 3_600_000
+          : unit === "day"
+            ? 86_400_000
+            : unit === "week"
+              ? 7 * 86_400_000
+              : unit === "month"
+                ? 30 * 86_400_000
+                : 365 * 86_400_000;
+    return Date.now() - n * mult;
+  }
+
+  return null;
+}
+
+function recencyBonus(publishedAt?: string): number {
+  const ts = parsePublishedAt(publishedAt);
+  if (!ts) return 0;
+  const ageMs = Date.now() - ts;
+  if (ageMs < 0) return 0; // future/clock skew
+  if (ageMs <= 24 * 3_600_000) return 0.08;
+  if (ageMs <= 72 * 3_600_000) return 0.05;
+  if (ageMs <= 7 * 86_400_000) return 0.02;
+  return 0;
+}
+
+function isCorroboratingSource(source: PipelineSource): boolean {
+  const rel = typeof source.evaluation?.relevance === "number" ? source.evaluation.relevance : 0;
+  const stance = source.evaluation?.stance ?? "unclear";
+  return (source.reliability ?? 0) >= 0.75 && rel >= 0.55 && stance !== "irrelevant";
+}
 
 function normalizeInput(payload: AnalysisJobPayload): PipelineContext {
   const text =
@@ -125,7 +193,10 @@ function rankEvidenceByTrust(sources: PipelineSource[]): PipelineSource[] {
         ? source.evaluation.relevance * 0.15
         : 0;
     const adjustedReliability = adjustReliability(source.url, source.reliability);
-    let trust = adjustedReliability + evaluationBonus;
+    const stancePenalty =
+      source.evaluation?.stance === "irrelevant" ? -0.2 : 0;
+    const freshnessBonus = recencyBonus(source.publishedAt);
+    let trust = adjustedReliability + evaluationBonus + freshnessBonus + stancePenalty;
     return { source, trust };
   });
 
@@ -177,11 +248,30 @@ function synthesizeVerdict(claims: PipelineClaim[], sources: PipelineSource[]): 
   const avgReliability =
     sources.reduce((total, source) => total + source.reliability, 0) / sources.length || 0.5;
 
-  const highTrustSources = sources.filter((source) => (source.reliability ?? 0) >= 0.75);
-  const corroborationBonus = Math.min(15, highTrustSources.length * 4);
+  // Keep scoring corroboration criteria consistent with the corroboration guardrail below.
+  // Otherwise the score can get a corroboration bonus that later gets invalidated and downgraded.
+  const corroboratingSources = sources.filter(isCorroboratingSource);
+  const uniqueCorroboratingHosts = new Set(
+    corroboratingSources
+      .map((s) => extractHostname(s.url) ?? s.provider)
+      .filter(Boolean)
+  );
+  const corroborationBonus = Math.min(15, uniqueCorroboratingHosts.size * 5);
+
+  const weightedStance =
+    sources.reduce((sum, s) => {
+      // Keep defensive defaults consistent with corroboration checks:
+      // if relevance is missing/invalid, treat it as 0 (do not let it influence stance adjustment).
+      const rel = typeof s.evaluation?.relevance === "number" ? s.evaluation.relevance : 0;
+      const stance = stanceToSignedValue(s.evaluation?.stance);
+      return sum + stance * (s.reliability ?? 0.6) * rel;
+    }, 0) / Math.max(1, sources.length);
+  const stanceAdjustment = Math.round(weightedStance * 30); // [-30, +30]
 
   const baseScore = ((avgClaimConfidence + avgReliability) / 2) * 100;
-  const calculatedScore = Math.round(Math.min(100, Math.max(0, baseScore + corroborationBonus)));
+  const calculatedScore = Math.round(
+    Math.min(100, Math.max(0, baseScore + corroborationBonus + stanceAdjustment))
+  );
   const verdict = validateVerdict(verdictFromScore(calculatedScore));
   
   // Ensure Verified verdicts (facts) always have a score of 100
@@ -343,7 +433,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       const evidence = await retrieveEvidence({
         topic: classification.topic,
         claimText: claim.text,
-        maxResults: 2 // Reduced from 3 to speed up retrieval
+        maxResults: 5 // More headroom improves corroboration for breaking news
       });
       const retrieveTime = Date.now() - retrieveStart;
       
@@ -372,6 +462,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
           url: item.url,
           reliability: item.evaluation ? (item.evaluation.reliability + item.reliability) / 2 : item.reliability,
           summary: item.summary,
+          publishedAt: item.publishedAt,
           evaluation: item.evaluation
         }))
       : fabricateSources(classification.topic, processedClaims);
@@ -529,6 +620,25 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
             : verdictData.score
   };
 
+  // Guardrail: require corroboration across multiple independent sources for high-certainty verdicts.
+  // This prevents "looks plausible" conclusions when only one outlet is retrieved, and encourages multi-perspective grounding.
+  if (adjustedVerdictData.verdict === "Verified" || adjustedVerdictData.verdict === "Mostly Accurate") {
+    const corroborating = rankedSources.filter(isCorroboratingSource);
+    const uniqueHosts = new Set(
+      corroborating.map((s) => extractHostname(s.url) ?? s.provider).filter(Boolean)
+    );
+
+    if (uniqueHosts.size < 2) {
+      adjustedVerdictData.verdict = validateVerdict("Unverified");
+      adjustedVerdictData.score = null;
+      adjustedVerdictData.confidence = Math.min(adjustedVerdictData.confidence, 0.55);
+      adjustedVerdictData.summary =
+        `The retrieved sources discuss this, but corroboration is limited (${uniqueHosts.size} independent source${uniqueHosts.size === 1 ? "" : "s"}).`;
+      adjustedVerdictData.recommendation =
+        "Reporting exists, but the current evidence set is too narrow to confidently label this as verified.";
+    }
+  }
+
   // Image generation removed - no longer using DALL-E 3 or Unsplash
 
   const reasonerMeta: ReasonerMetadata = reasoned
@@ -659,7 +769,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   try {
     const claimsText = claims.map(c => c.text).join(" ");
     const titleResponse = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5.2",
       messages: [
         {
           role: "system",
@@ -732,6 +842,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         title: source.title,
         url: source.url,
         reliability: source.reliability,
+        publishedAt: source.publishedAt,
         summary: (source as PipelineSource & { summary?: string }).summary,
         evaluation: source.evaluation ?? null
       })),

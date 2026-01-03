@@ -421,7 +421,8 @@ function createWorker(): Worker {
 
       await db.transaction(async (tx) => {
         // Validate verdict before database insertion
-        const validVerdicts = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion"];
+        // IMPORTANT: DB enum includes "Unverified" — do NOT coerce it to "False".
+        const validVerdicts = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion", "Unverified"];
         const validatedVerdict = validVerdicts.includes(pipelineResult.verdict) 
           ? pipelineResult.verdict 
           : "False";

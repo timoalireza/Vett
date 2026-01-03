@@ -7,9 +7,11 @@ export type PipelineSource = {
   url: string;
   reliability: number;
   summary?: string;
+  publishedAt?: string;
   evaluation?: {
     reliability: number;
     relevance: number;
+    stance?: "supports" | "refutes" | "mixed" | "unclear" | "irrelevant";
     assessment: string;
   };
 };

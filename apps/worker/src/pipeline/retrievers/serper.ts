@@ -31,7 +31,7 @@ async function serperSearch(options: RetrieverOptions): Promise<EvidenceResult[]
     }
 
     const data = (await response.json()) as {
-      organic?: Array<{ title?: string; link?: string; snippet?: string }>;
+      organic?: Array<{ title?: string; link?: string; snippet?: string; date?: string }>;
     };
 
     const results = data.organic ?? [];
@@ -42,7 +42,8 @@ async function serperSearch(options: RetrieverOptions): Promise<EvidenceResult[]
       title: result.title ?? `Serper result ${index + 1}`,
       url: result.link ?? "",
       summary: result.snippet ?? "No summary available.",
-      reliability: 0.65
+      reliability: 0.65,
+      publishedAt: result.date
     }));
   } catch (error) {
     // eslint-disable-next-line no-console

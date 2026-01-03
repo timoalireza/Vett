@@ -10,7 +10,9 @@ async function braveSearch(options: RetrieverOptions): Promise<EvidenceResult[]>
     return [];
   }
 
-  const query = `${options.claimText} site:news -site:pinterest -site:facebook`;
+  // NOTE: Avoid overly-restrictive filters like `site:news` (can drop legitimate results).
+  // Bias toward timely reporting while still allowing broad coverage.
+  const query = `${options.claimText} news -site:pinterest -site:facebook`;
 
   try {
     const response = await fetch(`${BRAVE_ENDPOINT}?q=${encodeURIComponent(query)}&count=${options.maxResults}`, {
@@ -27,7 +29,17 @@ async function braveSearch(options: RetrieverOptions): Promise<EvidenceResult[]>
     }
 
     const data = (await response.json()) as {
-      web?: { results?: Array<{ title?: string; url?: string; description?: string; metaUrl?: { favicon?: string } }> };
+      web?: {
+        results?: Array<{
+          title?: string;
+          url?: string;
+          description?: string;
+          age?: string;
+          page_age?: string;
+          published?: string;
+          metaUrl?: { favicon?: string };
+        }>;
+      };
     };
 
     const results = data.web?.results ?? [];
@@ -38,7 +50,8 @@ async function braveSearch(options: RetrieverOptions): Promise<EvidenceResult[]>
       title: result.title ?? `Evidence ${index + 1}`,
       url: result.url ?? "",
       summary: result.description ?? "No summary available.",
-      reliability: 0.7
+      reliability: 0.7,
+      publishedAt: result.published ?? result.page_age ?? result.age
     }));
   } catch (error) {
     // eslint-disable-next-line no-console

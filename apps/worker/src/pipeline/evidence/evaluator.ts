@@ -3,7 +3,7 @@ import type { EvidenceResult } from "../retrievers/types.js";
 import { parseJsonContent } from "../utils/openai.js";
 import { recordEvidenceReliability } from "../retrievers/trust.js";
 
-const MODEL_NAME = "gpt-4o-mini";
+const MODEL_NAME = "gpt-5.2";
 const MAX_EVIDENCE_PER_REQUEST = 3;
 
 const EVIDENCE_PROMPT = `
@@ -12,15 +12,13 @@ For every evidence entry respond in English JSON matching the schema. Score reli
 Reliability considers the trustworthiness of the source itself; relevance reflects how directly it supports or refutes the claim.
 Return concise assessments (<=140 chars).
 If the evidence is in another language, translate the assessment to English.
+Also provide a stance label:
+- supports: clearly supports the claim
+- refutes: clearly contradicts the claim
+- mixed: includes both supporting and refuting info
+- unclear: related but not definitive
+- irrelevant: not about the claim
 `;
-
-// Type for evaluation output (used in type assertions)
-// This type is used for runtime type checking, not directly referenced
-type _EvaluationOutput = {
-  reliability: number;
-  relevance: number;
-  assessment: string;
-};
 
 const JSON_SCHEMA = {
   type: "object",
@@ -35,9 +33,10 @@ const JSON_SCHEMA = {
           index: { type: "integer", minimum: 0 },
           reliability: { type: "number", minimum: 0, maximum: 1 },
           relevance: { type: "number", minimum: 0, maximum: 1 },
+          stance: { type: "string", enum: ["supports", "refutes", "mixed", "unclear", "irrelevant"] },
           assessment: { type: "string", maxLength: 140 }
         },
-        required: ["index", "reliability", "relevance", "assessment"],
+        required: ["index", "reliability", "relevance", "stance", "assessment"],
         additionalProperties: false
       }
     }
@@ -109,7 +108,13 @@ export async function evaluateEvidenceForClaim(
       }
 
       const parsed = await parseJsonContent<{
-        evaluations?: Array<{ index?: number; reliability?: number; relevance?: number; assessment?: string }>;
+        evaluations?: Array<{
+          index?: number;
+          reliability?: number;
+          relevance?: number;
+          stance?: "supports" | "refutes" | "mixed" | "unclear" | "irrelevant";
+          assessment?: string;
+        }>;
       }>(firstContent, "evidence_evaluation");
       if (!parsed) {
         return batch;
@@ -123,6 +128,14 @@ export async function evaluateEvidenceForClaim(
           item.evaluation = {
             reliability: clampScore(evaluation.reliability, item.reliability),
             relevance: clampScore(evaluation.relevance, 0.6),
+            stance:
+              evaluation.stance === "supports" ||
+              evaluation.stance === "refutes" ||
+              evaluation.stance === "mixed" ||
+              evaluation.stance === "unclear" ||
+              evaluation.stance === "irrelevant"
+                ? evaluation.stance
+                : "unclear",
             assessment:
               typeof evaluation.assessment === "string" && evaluation.assessment.length > 0
                 ? evaluation.assessment
