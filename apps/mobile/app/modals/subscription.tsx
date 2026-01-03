@@ -643,6 +643,7 @@ const styles = StyleSheet.create({
   gradientBorder: {
     borderRadius: 16,
     padding: 1.5,
+    overflow: 'hidden',
   },
   currentBadge: {
     position: "absolute",
