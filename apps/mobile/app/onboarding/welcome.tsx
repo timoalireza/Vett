@@ -33,6 +33,7 @@ const SLIDE_IMAGE_1 = require("../../assets/onboarding/slide-1-info-moves-fast.p
 const SLIDE_IMAGE_2 = require("../../assets/onboarding/slide-2-verification.png");
 const SLIDE_IMAGE_3 = require("../../assets/onboarding/slide-3-frictionless.png");
 const SLIDE_IMAGE_4 = require("../../assets/onboarding/slide-4-truth-layer.png");
+const SLIDE_IMAGE_5 = require("../../assets/onboarding/slide-5-vett-it.png");
 
 // Vett logo
 const VETT_LOGO = require("../../assets/vett-logo.png");
@@ -42,8 +43,7 @@ const SLIDE_BACKGROUNDS: { [key: number]: ImageSourcePropType | null } = {
   1: SLIDE_IMAGE_2,
   2: SLIDE_IMAGE_3,
   3: SLIDE_IMAGE_4,
-  // TODO: add `slide-5-vett-it.png`
-  4: null,
+  4: SLIDE_IMAGE_5,
 };
 
 // Value propositions for the carousel - 5 cards
