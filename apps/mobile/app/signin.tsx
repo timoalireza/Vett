@@ -909,7 +909,7 @@ export default function SignInScreen() {
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <View style={{ paddingHorizontal: theme.spacing(2.5), paddingTop: theme.spacing(2), paddingBottom: theme.spacing(1) }}>
-          <OnboardingBackButton onPress={() => router.back()} />
+          <OnboardingBackButton goTo="/onboarding/welcome" />
         </View>
         <View
           style={{

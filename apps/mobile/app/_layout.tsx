@@ -131,19 +131,8 @@ function NavigationGate() {
     const navigationTimer = setTimeout(() => {
       console.log("[NavigationGate] State:", { isReady, authMode, hasOnboarded, pathname });
       
-      // Check if user needs onboarding
-      // Allow visiting /result/* during onboarding so the onboarding demo can show the real results screen UI.
-      if (
-        !hasOnboarded &&
-        !pathname.startsWith("/onboarding") &&
-        !pathname.startsWith("/signin") &&
-        !pathname.startsWith("/result")
-      ) {
-        router.replace("/onboarding");
-        return;
-      }
-
       // Force authentication - no guest mode
+      // If user is not signed in, always route to onboarding/welcome which presents login/signup options
       const needsAuth = authMode !== "signedIn";
       // Allow /result/* even when signed out so onboarding demo can show the real results UI.
       if (
@@ -152,7 +141,20 @@ function NavigationGate() {
         !pathname.startsWith("/onboarding") &&
         !pathname.startsWith("/result")
       ) {
-        router.replace("/signin");
+        router.replace("/onboarding/welcome");
+        return;
+      }
+      
+      // Check if user needs onboarding (only after auth is verified)
+      // Allow visiting /result/* during onboarding so the onboarding demo can show the real results screen UI.
+      if (
+        authMode === "signedIn" &&
+        !hasOnboarded &&
+        !pathname.startsWith("/onboarding") &&
+        !pathname.startsWith("/signin") &&
+        !pathname.startsWith("/result")
+      ) {
+        router.replace("/onboarding");
         return;
       }
 
