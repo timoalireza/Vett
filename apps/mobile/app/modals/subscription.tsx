@@ -14,10 +14,12 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/clerk-expo";
+import { useUser, useAuth } from "@clerk/clerk-expo";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { fetchSubscription, syncSubscription } from "../../src/api/subscription";
 import { useRevenueCat } from "../../src/hooks/use-revenuecat";
+import { tokenProvider } from "../../src/api/token-provider";
 
 type BillingCycle = "monthly" | "annual";
 type Plan = "FREE" | "PLUS" | "PRO";
@@ -157,7 +159,7 @@ function PlanCard({
     return COLORS.text;
   };
 
-  return (
+  const cardContent = (
     <TouchableOpacity
       onPress={onSelect}
       activeOpacity={0.8}
@@ -238,6 +240,22 @@ function PlanCard({
       </TouchableOpacity>
     </TouchableOpacity>
   );
+
+  // Wrap Pro plan with gradient border
+  if (isPro) {
+    return (
+      <LinearGradient
+        colors={["#9D7FEF", "#E89CDA", "#FFC58F"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.gradientBorder}
+      >
+        {cardContent}
+      </LinearGradient>
+    );
+  }
+
+  return cardContent;
 }
 
 export default function SubscriptionModal() {
@@ -245,6 +263,7 @@ export default function SubscriptionModal() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ plan?: string }>();
   const { user } = useUser();
+  const { getToken } = useAuth();
   const userId = user?.id;
   const initialPlan = (params.plan === "FREE" || params.plan === "PLUS" || params.plan === "PRO" 
     ? params.plan 
@@ -333,6 +352,24 @@ export default function SubscriptionModal() {
       if (Object.keys(customerInfo.entitlements.active).length > 0) {
         // Explicitly sync subscription from RevenueCat to ensure backend is updated
         try {
+          // Refresh authentication token before syncing to ensure it's valid
+          const template = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE;
+          let token: string | null | undefined;
+          
+          try {
+            token = template 
+              ? await getToken?.({ template })
+              : await getToken?.();
+          } catch (tokenError) {
+            console.warn("[Subscription] Failed to get token with template, falling back:", tokenError);
+            token = await getToken?.();
+          }
+          
+          // Update token provider with fresh token
+          if (token) {
+            tokenProvider.setToken(token);
+          }
+          
           await syncSubscription();
           
           // Invalidate subscription queries to update UI with synced data
@@ -466,12 +503,12 @@ export default function SubscriptionModal() {
           {/* Plan Cards */}
           <View style={styles.plansContainer}>
             <PlanCard
-              plan="FREE"
+              plan="PRO"
               billingCycle={billingCycle}
-              isSelected={selectedPlan === "FREE"}
+              isSelected={selectedPlan === "PRO"}
               currentPlan={currentPlan}
-              onSelect={() => setSelectedPlan("FREE")}
-              onSubscribe={() => handleSubscribe("FREE")}
+              onSelect={() => setSelectedPlan("PRO")}
+              onSubscribe={() => handleSubscribe("PRO")}
               purchasing={purchasing}
               loading={loading}
               subscriptionLoading={subscriptionLoading}
@@ -488,12 +525,12 @@ export default function SubscriptionModal() {
               subscriptionLoading={subscriptionLoading}
             />
             <PlanCard
-              plan="PRO"
+              plan="FREE"
               billingCycle={billingCycle}
-              isSelected={selectedPlan === "PRO"}
+              isSelected={selectedPlan === "FREE"}
               currentPlan={currentPlan}
-              onSelect={() => setSelectedPlan("PRO")}
-              onSubscribe={() => handleSubscribe("PRO")}
+              onSelect={() => setSelectedPlan("FREE")}
+              onSubscribe={() => handleSubscribe("FREE")}
               purchasing={purchasing}
               loading={loading}
               subscriptionLoading={subscriptionLoading}
@@ -603,6 +640,10 @@ const styles = StyleSheet.create({
   plansContainer: {
     gap: 16,
   },
+  gradientBorder: {
+    borderRadius: 16,
+    padding: 1.5,
+  },
   currentBadge: {
     position: "absolute",
     top: -10,
@@ -632,7 +673,7 @@ const styles = StyleSheet.create({
   },
   planCardPro: {
     backgroundColor: COLORS.surfaceElevated,
-    borderColor: COLORS.border,
+    borderWidth: 0,
   },
   popularBadge: {
     position: "absolute",
