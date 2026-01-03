@@ -11,11 +11,9 @@ import Animated, {
   withTiming,
   withSpring,
   withDelay,
-  withSequence,
   Easing,
   runOnJS,
-  interpolate,
-  useAnimatedProps,
+  useDerivedValue,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -39,10 +37,6 @@ function AnimatedCounter({ targetValue, duration = 1500 }: { targetValue: number
     animatedValue.value = 0;
     setDisplayValue(0);
 
-    const updateDisplay = (val: number) => {
-      setDisplayValue(Math.round(val));
-    };
-
     animatedValue.value = withDelay(
       600,
       withTiming(targetValue, { 
@@ -54,23 +48,13 @@ function AnimatedCounter({ targetValue, duration = 1500 }: { targetValue: number
         }
       })
     );
-
-    // Update display value
-    const interval = setInterval(() => {
-      const progress = animatedValue.value;
-      setDisplayValue(Math.round(progress));
-    }, 16);
-
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      setDisplayValue(targetValue);
-    }, duration + 700);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-    };
   }, [targetValue, duration]);
+
+  // Use useDerivedValue to bridge UI thread animation to JS thread React state
+  useDerivedValue(() => {
+    const rounded = Math.round(animatedValue.value);
+    runOnJS(setDisplayValue)(rounded);
+  });
 
   return (
     <Text style={styles.statNumber}>{displayValue}%</Text>
