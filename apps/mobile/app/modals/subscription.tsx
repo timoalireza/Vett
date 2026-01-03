@@ -279,19 +279,23 @@ export default function SubscriptionModal() {
         // Invalidate subscription queries to update UI immediately
         // We invalidate multiple times with delays to ensure the backend webhook has time to process
         // Invalidate both query key patterns: ["subscription"] and ["subscription", userId]
-        const invalidateSubscriptionQueries = () => {
-          queryClient.invalidateQueries({ 
+        const invalidateSubscriptionQueries = async () => {
+          await queryClient.invalidateQueries({ 
             predicate: (query) => 
               query.queryKey[0] === "subscription"
           });
         };
         
         // Immediate invalidation
-        invalidateSubscriptionQueries();
+        await invalidateSubscriptionQueries();
         
         // Add delays to allow webhook processing, then invalidate again
-        setTimeout(invalidateSubscriptionQueries, 1000);
-        setTimeout(invalidateSubscriptionQueries, 2500);
+        setTimeout(async () => {
+          await invalidateSubscriptionQueries();
+        }, 1000);
+        setTimeout(async () => {
+          await invalidateSubscriptionQueries();
+        }, 2500);
         
         Alert.alert("Success", `Vett ${plan} subscription activated!`, [
           { text: "OK", onPress: () => router.back() },
