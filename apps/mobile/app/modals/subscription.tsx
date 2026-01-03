@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Text,
   TouchableOpacity,
@@ -13,8 +13,10 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useUser } from "@clerk/clerk-expo";
 
+import { fetchSubscription } from "../../src/api/subscription";
 import { useRevenueCat } from "../../src/hooks/use-revenuecat";
 
 type BillingCycle = "monthly" | "annual";
@@ -74,26 +76,35 @@ interface PlanCardProps {
   plan: Plan;
   billingCycle: BillingCycle;
   isSelected: boolean;
+  currentPlan: Plan | null;
   onSelect: () => void;
   onSubscribe: () => void;
   purchasing: boolean;
   loading: boolean;
+  subscriptionLoading: boolean;
 }
 
 function PlanCard({
   plan,
   billingCycle,
   isSelected,
+  currentPlan,
   onSelect,
   onSubscribe,
   purchasing,
   loading,
+  subscriptionLoading,
 }: PlanCardProps) {
   const price = PLAN_PRICES[plan];
   const features = PLAN_FEATURES[plan];
   const isPopular = plan === "PLUS";
   const isPro = plan === "PRO";
   const isFree = plan === "FREE";
+  const isCurrent = currentPlan ? plan === currentPlan : false;
+
+  const planRank = (p: Plan) => (p === "FREE" ? 0 : p === "PLUS" ? 1 : 2);
+  const isDowngrade = currentPlan ? planRank(plan) < planRank(currentPlan) : false;
+  const isUpgrade = currentPlan ? planRank(plan) > planRank(currentPlan) : false;
 
   const monthlyPrice = billingCycle === "annual" && !isFree
     ? (price.annual / 12).toFixed(2)
@@ -102,12 +113,24 @@ function PlanCard({
   const annualPrice = price.annual.toFixed(2);
 
   const getButtonText = () => {
+    if (subscriptionLoading) return "Loading…";
+    if (isCurrent) return "Current plan";
+    if (isDowngrade) return "Downgrade in Settings";
+    if (isUpgrade) return plan === "PRO" ? "Upgrade to Pro" : "Upgrade to Plus";
+    // Fallback (no current plan available): keep previous marketing copy.
     if (isFree) return "Continue with Free";
     if (isPro) return "Go Pro";
     return "Upgrade to Plus";
   };
 
   const getButtonStyle = () => {
+    if (subscriptionLoading || isCurrent || isDowngrade) {
+      return {
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderColor: COLORS.border,
+      };
+    }
     if (isFree) {
       return {
         backgroundColor: "transparent",
@@ -128,6 +151,7 @@ function PlanCard({
   };
 
   const getButtonTextColor = () => {
+    if (subscriptionLoading || isCurrent || isDowngrade) return COLORS.textSecondary;
     if (isFree) return COLORS.textSecondary;
     if (isPro) return COLORS.void;
     return COLORS.text;
@@ -143,8 +167,13 @@ function PlanCard({
         isPro && styles.planCardPro,
       ]}
     >
-      {/* Popular Badge */}
-      {isPopular && (
+      {/* Badges */}
+      {isCurrent && (
+        <View style={styles.currentBadge}>
+          <Text style={styles.currentBadgeText}>CURRENT</Text>
+        </View>
+      )}
+      {!isCurrent && isPopular && (
         <View style={styles.popularBadge}>
           <Text style={styles.popularBadgeText}>MOST POPULAR</Text>
         </View>
@@ -190,7 +219,7 @@ function PlanCard({
       {/* CTA Button */}
       <TouchableOpacity
         onPress={onSubscribe}
-        disabled={purchasing || loading}
+        disabled={purchasing || loading || subscriptionLoading || isCurrent || isDowngrade}
         style={[styles.ctaButton, getButtonStyle()]}
         activeOpacity={0.7}
       >
@@ -215,6 +244,8 @@ export default function SubscriptionModal() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ plan?: string }>();
+  const { user } = useUser();
+  const userId = user?.id;
   const initialPlan = (params.plan === "FREE" || params.plan === "PLUS" || params.plan === "PRO" 
     ? params.plan 
     : "PLUS") as Plan;
@@ -224,6 +255,24 @@ export default function SubscriptionModal() {
 
   const { offerings, loading, purchase, getMonthlyPackage, getAnnualPackage } =
     useRevenueCat();
+
+  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ["subscription", userId],
+    queryFn: fetchSubscription,
+    enabled: !!userId,
+  });
+
+  const currentPlan: Plan | null = subscription?.plan ?? null;
+
+  useEffect(() => {
+    if (!currentPlan) return;
+    // If the modal opens without a plan param, bias selection toward the best available upgrade.
+    if (!params.plan) {
+      if (currentPlan === "FREE") setSelectedPlan("PLUS");
+      else if (currentPlan === "PLUS") setSelectedPlan("PRO");
+      else setSelectedPlan("PRO");
+    }
+  }, [currentPlan, params.plan]);
 
   const getPackageForPlan = useMemo(() => {
     return (plan: Plan) => {
@@ -255,6 +304,12 @@ export default function SubscriptionModal() {
   }, [offerings, billingCycle, getMonthlyPackage, getAnnualPackage]);
 
   const handleSubscribe = async (plan: Plan) => {
+    const planRank = (p: Plan) => (p === "FREE" ? 0 : p === "PLUS" ? 1 : 2);
+    if (currentPlan && planRank(plan) <= planRank(currentPlan)) {
+      if (plan === currentPlan) return;
+      Alert.alert("Not available", "Downgrades are managed in your device subscription settings.");
+      return;
+    }
     if (plan === "FREE") {
       router.back();
       return;
@@ -344,6 +399,9 @@ export default function SubscriptionModal() {
           {/* Value Statement */}
           <View style={styles.valueStatement}>
             <Text style={styles.valueText}>Go beyond basic verification.</Text>
+            {!!currentPlan && (
+              <Text style={styles.currentPlanText}>Current plan: {currentPlan}</Text>
+            )}
           </View>
 
           {/* Billing Toggle */}
@@ -397,28 +455,34 @@ export default function SubscriptionModal() {
               plan="FREE"
               billingCycle={billingCycle}
               isSelected={selectedPlan === "FREE"}
+              currentPlan={currentPlan}
               onSelect={() => setSelectedPlan("FREE")}
               onSubscribe={() => handleSubscribe("FREE")}
               purchasing={purchasing}
               loading={loading}
+              subscriptionLoading={subscriptionLoading}
             />
             <PlanCard
               plan="PLUS"
               billingCycle={billingCycle}
               isSelected={selectedPlan === "PLUS"}
+              currentPlan={currentPlan}
               onSelect={() => setSelectedPlan("PLUS")}
               onSubscribe={() => handleSubscribe("PLUS")}
               purchasing={purchasing}
               loading={loading}
+              subscriptionLoading={subscriptionLoading}
             />
             <PlanCard
               plan="PRO"
               billingCycle={billingCycle}
               isSelected={selectedPlan === "PRO"}
+              currentPlan={currentPlan}
               onSelect={() => setSelectedPlan("PRO")}
               onSubscribe={() => handleSubscribe("PRO")}
               purchasing={purchasing}
               loading={loading}
+              subscriptionLoading={subscriptionLoading}
             />
           </View>
 
@@ -474,6 +538,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: -0.5,
   },
+  currentPlanText: {
+    marginTop: 10,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: COLORS.textSecondary,
+  },
   billingToggleContainer: {
     alignItems: "center",
     marginBottom: 28,
@@ -518,6 +588,23 @@ const styles = StyleSheet.create({
   },
   plansContainer: {
     gap: 16,
+  },
+  currentBadge: {
+    position: "absolute",
+    top: -10,
+    right: 24,
+    backgroundColor: COLORS.accentMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  currentBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: COLORS.textSecondary,
+    letterSpacing: 0.8,
   },
   planCard: {
     backgroundColor: COLORS.surface,

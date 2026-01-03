@@ -6,9 +6,16 @@ import { Ionicons } from "@expo/vector-icons";
 interface UpgradeCardProps {
   onPress: () => void;
   style?: ViewStyle;
+  fromPlan?: "FREE" | "PLUS";
 }
 
-export function UpgradeCard({ onPress, style }: UpgradeCardProps) {
+export function UpgradeCard({ onPress, style, fromPlan = "FREE" }: UpgradeCardProps) {
+  const ctaText = fromPlan === "PLUS" ? "Go Pro" : "Try Pro";
+  const subtitle =
+    fromPlan === "PLUS"
+      ? "Upgrade to unlock priority processing, unlimited Vett Chat, and more"
+      : "Get unlimited fact-checks, advanced bias analysis, and priority processing";
+
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={[styles.container, style]}>
       <LinearGradient
@@ -18,17 +25,17 @@ export function UpgradeCard({ onPress, style }: UpgradeCardProps) {
         style={styles.gradient}
       >
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>Pro Tier</Text>
+          <Text style={styles.badgeText}>Vett Pro</Text>
         </View>
 
         <View style={styles.content}>
           <Text style={styles.title}>Unlimited Analyses</Text>
           <Text style={styles.description}>
-            Get unlimited fact-checks, advanced bias analysis, and priority processing
+            {subtitle}
           </Text>
 
           <View style={styles.ctaRow}>
-            <Text style={styles.ctaText}>Try Pro for €6.99/month</Text>
+            <Text style={styles.ctaText}>{ctaText} for €6.99/month</Text>
             <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
           </View>
         </View>

@@ -46,7 +46,8 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
-  const isFreePlan = subscriptionData?.plan === "FREE";
+  const plan = subscriptionData?.plan;
+  const showUpgradeCard = plan === "FREE" || plan === "PLUS";
 
   // Fetch all analyses for statistics
   const { data: analysesData } = useQuery({
@@ -144,9 +145,12 @@ export default function ProfileScreen() {
         </View>
 
         {/* Upgrade Card - Only for free users */}
-        {isFreePlan && (
+        {showUpgradeCard && (
           <View style={styles.upgradeCardContainer}>
-            <UpgradeCard onPress={() => router.push("/modals/subscription?plan=PRO")} />
+            <UpgradeCard
+              fromPlan={plan === "PLUS" ? "PLUS" : "FREE"}
+              onPress={() => router.push("/modals/subscription?plan=PRO")}
+            />
           </View>
         )}
 

@@ -74,7 +74,9 @@ export default function AnalyzeScreen() {
     enabled: !!user,
   });
 
-  const isFreePlan = subscriptionData?.plan === "FREE";
+  const plan = subscriptionData?.plan;
+  const showUpgradePill = plan === "FREE" || plan === "PLUS";
+  const upgradePillText = plan === "PLUS" ? "Go Pro" : "Upgrade";
   
   const { state: lensState, toInput, toLoading, reset } = useLensState();
   
@@ -489,7 +491,7 @@ export default function AnalyzeScreen() {
       </SafeAreaView>
 
       {/* Upgrade Pill - Top Right */}
-      {isFreePlan && (
+      {showUpgradePill && (
         <SafeAreaView style={styles.upgradeContainer} edges={["top"]} pointerEvents="box-none">
           <TouchableOpacity
             onPress={() => router.push("/modals/subscription?plan=PRO")}
@@ -502,7 +504,7 @@ export default function AnalyzeScreen() {
               end={{ x: 1, y: 0 }}
               style={styles.upgradePillGradient}
             >
-              <Text style={styles.upgradePillText}>Upgrade</Text>
+              <Text style={styles.upgradePillText}>{upgradePillText}</Text>
               <Ionicons name="arrow-up-circle" size={16} color="#FFFFFF" />
             </LinearGradient>
           </TouchableOpacity>
