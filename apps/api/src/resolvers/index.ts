@@ -332,7 +332,11 @@ export const resolvers: IResolvers<GraphQLContext> = {
         if (userId) {
           await subscriptionService.incrementUsage(userId);
           // Invalidate user's cache since usage changed
-          await cacheService.invalidateUserCache(userId);
+          // IMPORTANT: GraphQL cache is keyed by Clerk/external user id (request.userId),
+          // not the internal DB UUID. Invalidate using ctx.userId so usage/history refresh immediately.
+          if (ctx.userId) {
+            await cacheService.invalidateUserCache(ctx.userId);
+          }
         }
         
         return {
@@ -482,7 +486,9 @@ export const resolvers: IResolvers<GraphQLContext> = {
         await analysisService.deleteAnalysis(args.id, dbUserId);
 
         // Invalidate cache after deletion
-        await cacheService.invalidateUserCache(dbUserId);
+        // IMPORTANT: GraphQL cache is keyed by Clerk/external user id (request.userId),
+        // not the internal DB UUID.
+        await cacheService.invalidateUserCache(ctx.userId);
 
         return {
           success: true
