@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -55,6 +56,7 @@ export default function AnalyzeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useUser();
   
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -62,9 +64,11 @@ export default function AnalyzeScreen() {
   const inputRef = useRef<ClaimInputRef>(null);
 
   // Fetch subscription info to show upgrade pill for free users
+  // Only fetch when user is authenticated to prevent "Authentication required" errors
   const { data: subscriptionData } = useQuery({
     queryKey: ["subscription"],
     queryFn: fetchSubscription,
+    enabled: !!user,
   });
 
   const isFreePlan = subscriptionData?.plan === "FREE";
