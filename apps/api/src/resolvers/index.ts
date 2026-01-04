@@ -457,24 +457,26 @@ export const resolvers: IResolvers<GraphQLContext> = {
           throw new Error(usageCheck.reason || "Chat limit reached");
         }
 
-        // Fetch analysis if analysisId is provided
-        let analysis = null;
-        if (args.input.analysisId) {
-          analysis = await context.loaders.analysisById.load({
-            id: args.input.analysisId,
-            userId: ctx.userId
-          });
-        }
-
-        // Process the chat message with AI
+        // Fetch analysis and process chat message
+        // Both operations are wrapped in try-catch to ensure rollback on ANY error after usage increment
         let chatResponse: { message: string; citations?: string[] };
         try {
+          // Fetch analysis if analysisId is provided
+          let analysis = null;
+          if (args.input.analysisId) {
+            analysis = await context.loaders.analysisById.load({
+              id: args.input.analysisId,
+              userId: ctx.userId
+            });
+          }
+
+          // Process the chat message with AI
           chatResponse = await vettAIService.chat(args.input, analysis);
-        } catch (aiError: any) {
-          // Rollback the chat usage increment if AI service fails
-          // This ensures users don't lose quota when errors occur
+        } catch (error: any) {
+          // Rollback the chat usage increment if analysis loading or AI service fails
+          // This ensures users don't lose quota when errors occur at any step
           await subscriptionService.rollbackChatUsage(user.id);
-          throw aiError;
+          throw error;
         }
 
         // Get updated chat usage info (already incremented above)
