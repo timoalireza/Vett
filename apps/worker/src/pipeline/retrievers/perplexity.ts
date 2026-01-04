@@ -49,9 +49,8 @@ async function perplexitySearch(options: RetrieverOptions): Promise<EvidenceResu
 
     // Parse citations and create evidence results
     const evidenceResults: EvidenceResult[] = [];
+    const sentences = summary.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
     
-    // Track the actual citation number separately from loop index
-    // since some URLs may be skipped
     for (let i = 0; i < Math.min(citations.length, options.maxResults); i++) {
       const url = citations[i];
       
@@ -72,11 +71,8 @@ async function perplexitySearch(options: RetrieverOptions): Promise<EvidenceResu
       }
 
       // Extract a snippet from the summary that references this source
-      // (Perplexity typically includes inline citations like [1], [2], etc.)
-      // IMPORTANT: Use (i + 1) for the citation number since Perplexity uses 1-based indexing
-      // and this matches the position in the original citations array
+      // Perplexity uses 1-based indexing where citations[i] corresponds to marker [i+1]
       const citationMarker = `[${i + 1}]`;
-      const sentences = summary.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
       let snippet = "";
       
       for (const sentence of sentences) {

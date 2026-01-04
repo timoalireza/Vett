@@ -282,13 +282,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
     chatUsage: async (_parent, _args, context) => {
       const ctx = context as GraphQLContext;
       
-      console.log("[GraphQL] chatUsage context:", {
-        hasUserId: !!ctx.userId,
-        userId: ctx.userId?.substring(0, 10) + "..."
-      });
-      
       if (!ctx.userId) {
-        console.error("[GraphQL] chatUsage: Authentication required - userId is missing from context");
         throw new Error("Authentication required");
       }
       
@@ -446,16 +440,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
       trackGraphQLMutation("chatWithVettAI");
       const ctx = context as GraphQLContext;
       
-      // Enhanced logging for debugging authentication issues
-      console.log("[GraphQL] chatWithVettAI context:", {
-        hasUserId: !!ctx.userId,
-        userId: ctx.userId?.substring(0, 10) + "...", // Log partial ID
-        hasUser: !!ctx.user,
-        hasLoaders: !!ctx.loaders
-      });
-      
       if (!ctx.userId) {
-        console.error("[GraphQL] chatWithVettAI: Authentication required - userId is missing from context");
         throw new Error("Authentication required");
       }
 
