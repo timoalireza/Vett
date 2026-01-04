@@ -73,16 +73,20 @@ function AuthTokenSync() {
       tokenProvider.setAuthState(isSignedIn ? "signedIn" : "signedOut");
 
       if (!isSignedIn) {
+        console.log("[AuthTokenSync] User signed out, clearing token");
         tokenProvider.setToken(null);
         clearClerkTokenCache();
         return;
       }
 
+      console.log("[AuthTokenSync] User signed in, fetching token...");
+      
       try {
         const template = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE;
         // Prefer a configured JWT template if provided; otherwise fall back to default token behavior.
         let token: string | null | undefined;
         if (template) {
+          console.log("[AuthTokenSync] Using JWT template:", template);
           try {
             token = await getToken?.({ template });
           } catch (e) {
@@ -94,13 +98,30 @@ function AuthTokenSync() {
             token = await getToken?.();
           }
         } else {
+          console.log("[AuthTokenSync] No JWT template configured, using default token");
           token = await getToken?.();
         }
+        
         if (cancelled) return;
+        
+        // Log token status (preserving nullish coalescing semantics from original code)
+        if (token != null) {
+          console.log("[AuthTokenSync] Token retrieved successfully:", {
+            length: token.length,
+            prefix: token.substring(0, 20),
+            isJwtLike: token.split(".").length === 3
+          });
+        } else {
+          console.warn("[AuthTokenSync] Token is null/undefined despite being signed in");
+        }
+        
         tokenProvider.setToken(token ?? null);
       } catch (error) {
         if (cancelled) return;
-        console.warn("[AuthTokenSync] Failed to get token:", error);
+        console.error("[AuthTokenSync] Failed to get token:", {
+          error: (error as any)?.message,
+          stack: (error as any)?.stack
+        });
         tokenProvider.setToken(null);
       }
     };

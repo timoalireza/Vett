@@ -64,7 +64,15 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
 ): Promise<TData> {
   // Get auth token if available
   const token = await getAuthToken();
-  console.log("[GraphQL] Request:", { hasToken: !!token, queryName: query.split("query")[1]?.split("(")[0]?.trim(), variables });
+  const queryName = query.split("query")[1]?.split("(")[0]?.trim() || query.split("mutation")[1]?.split("(")[0]?.trim();
+  console.log("[GraphQL] Request:", { 
+    hasToken: !!token, 
+    tokenLength: token?.length,
+    tokenPrefix: token?.substring(0, 20),
+    isJwtLike: token ? isJwtLike(token) : false,
+    queryName, 
+    variables 
+  });
   
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -73,6 +81,8 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
   // Add Authorization header if token is available
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+  } else {
+    console.warn("[GraphQL] No authentication token available - request may fail if auth is required");
   }
 
   let response: Response;
@@ -117,10 +127,24 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
   
   if (json.errors?.length) {
     const isAuthError = json.errors.some((e: any) =>
-      typeof e?.message === "string" && e.message.toLowerCase().includes("authentication required")
+      typeof e?.message === "string" && (
+        e.message.toLowerCase().includes("authentication required") ||
+        e.message.toLowerCase().includes("unauthorized")
+      )
     );
     const log = isAuthError ? console.warn : console.error;
     log("[GraphQL] Errors:", JSON.stringify(json.errors, null, 2));
+    
+    // If it's an auth error, log additional debugging info
+    if (isAuthError) {
+      console.warn("[GraphQL] Authentication error detected. Token status:", {
+        hadToken: !!token,
+        tokenLength: token?.length,
+        authState: tokenProvider.getAuthState(),
+        queryName
+      });
+    }
+    
     const errorMessages = json.errors.map((error: any) => {
       // Log full error details
       log("[GraphQL] Error details:", {
