@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -61,6 +61,7 @@ const TRUST_OPTIONS = [
 ];
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface TrustOptionProps {
   option: typeof TRUST_OPTIONS[0];
@@ -121,7 +122,7 @@ function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) 
           },
         ]}
       >
-        <Animated.Pressable
+        <AnimatedPressable
           onPress={handlePress}
           style={styles.optionPressable}
         >
@@ -160,7 +161,7 @@ function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) 
           >
             {option.label}
           </Text>
-        </Animated.Pressable>
+        </AnimatedPressable>
       </Animated.View>
     </Animated.View>
   );
@@ -256,7 +257,7 @@ export default function TrustScreen() {
             buttonStyle,
           ]}
         >
-          <Animated.Pressable
+          <AnimatedPressable
             onPress={handleContinue}
             disabled={!isButtonEnabled}
             style={[
@@ -276,7 +277,7 @@ export default function TrustScreen() {
             >
               Continue
             </Text>
-          </Animated.Pressable>
+          </AnimatedPressable>
           
           {/* Subtle hint */}
           {!isButtonEnabled && (
