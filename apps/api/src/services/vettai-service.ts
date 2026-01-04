@@ -199,79 +199,20 @@ async function chatWithOpenAI(
 
 export const vettAIService = {
   async chat(input: VettAIChatInput, analysis?: AnalysisSummary | null): Promise<VettAIChatResponse> {
-    // Prefer Perplexity for research-heavy questions (provides real-time citations)
-    const usePerplexity = perplexity !== null && shouldUsePerplexity(input.message, analysis);
-    
-    if (usePerplexity && perplexity) {
+    // Always use Perplexity for all chat queries (provides real-time citations and web search)
+    // Falls back to OpenAI only if Perplexity is unavailable or fails
+    if (perplexity) {
       return await chatWithPerplexity(input, analysis);
     }
     
-    // Use OpenAI as default/fallback
+    // Use OpenAI as fallback when Perplexity is not configured
     return await chatWithOpenAI(input, analysis);
   }
 };
 
 /**
- * Determine if we should use Perplexity for this query
- * Use Perplexity for research questions, current events, or when asking about new information
- */
-function shouldUsePerplexity(message: string, analysis?: AnalysisSummary | null): boolean {
-  const lowerMessage = message.toLowerCase();
-  
-  // Research-oriented keywords
-  const researchKeywords = [
-    "what is",
-    "who is",
-    "when did",
-    "where",
-    "why",
-    "how",
-    "tell me about",
-    "explain",
-    "recent",
-    "latest",
-    "current",
-    "today",
-    "now",
-    "update",
-    "more information",
-    "sources",
-    "evidence",
-    "research",
-    "studies",
-    "find"
-  ];
-
-  // If no analysis context, use Perplexity for research
-  if (!analysis && researchKeywords.some((kw) => lowerMessage.includes(kw))) {
-    return true;
-  }
-
-  // Use Perplexity for questions about recent/current events or updates (always, even with analysis)
-  // These time-sensitive queries benefit from Perplexity's real-time web search
-  if (
-    lowerMessage.includes("recent") ||
-    lowerMessage.includes("latest") ||
-    lowerMessage.includes("current") ||
-    lowerMessage.includes("today") ||
-    lowerMessage.includes("now") ||
-    lowerMessage.includes("update")
-  ) {
-    return true;
-  }
-
-  // IMPORTANT: When user asks about "sources", "evidence", or "citations" WITH an analysis context,
-  // they're likely asking about the existing analysis sources, not requesting new research.
-  // Only route to Perplexity for these keywords when there's NO analysis context.
-  if (!analysis && (lowerMessage.includes("source") || lowerMessage.includes("evidence") || lowerMessage.includes("citation"))) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
  * Chat using Perplexity API with real-time web search and citations
+ * This is the primary AI backend for all Vett Chat queries
  */
 async function chatWithPerplexity(
   input: VettAIChatInput,
@@ -319,7 +260,7 @@ When answering:
       ? `${contextParts.join("\n")}\n${input.message}`
       : input.message;
 
-    console.log("[VettChat] Using Perplexity for research query");
+    console.log("[VettChat] Using Perplexity for chat query");
 
     const response = await perplexity.chat({
       model: "llama-3.1-sonar-large-128k-online",
@@ -353,8 +294,6 @@ When answering:
     console.error("[VettChat] Perplexity error:", error.message);
     
     // Fallback to OpenAI if Perplexity fails
-    // IMPORTANT: Call chatWithOpenAI directly to avoid infinite recursion
-    // (calling vettAIService.chat would re-evaluate shouldUsePerplexity and route back here)
     if (openai) {
       console.log("[VettChat] Falling back to OpenAI");
       return await chatWithOpenAI(input, analysis);
