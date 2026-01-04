@@ -61,7 +61,6 @@ const TRUST_OPTIONS = [
 ];
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface TrustOptionProps {
   option: typeof TRUST_OPTIONS[0];
@@ -122,7 +121,7 @@ function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) 
           },
         ]}
       >
-        <AnimatedPressable
+        <Pressable
           onPress={handlePress}
           style={styles.optionPressable}
         >
@@ -161,7 +160,7 @@ function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) 
           >
             {option.label}
           </Text>
-        </AnimatedPressable>
+        </Pressable>
       </Animated.View>
     </Animated.View>
   );
@@ -257,7 +256,7 @@ export default function TrustScreen() {
             buttonStyle,
           ]}
         >
-          <AnimatedPressable
+          <Pressable
             onPress={handleContinue}
             disabled={!isButtonEnabled}
             style={[
@@ -277,7 +276,7 @@ export default function TrustScreen() {
             >
               Continue
             </Text>
-          </AnimatedPressable>
+          </Pressable>
           
           {/* Subtle hint */}
           {!isButtonEnabled && (
