@@ -209,6 +209,18 @@ export async function registerGraphql(app: FastifyInstance) {
       
       const errors = execution.errors.map((error) => {
         const authError = isAuthErrorMessage(error.message);
+        
+        // Log the actual error for debugging (even in production) BEFORE any early returns
+        // Auth errors are expected when a client calls authenticated fields without a valid token,
+        // so keep them low-noise to avoid spamming production logs.
+        const log = authError ? console.warn : console.error;
+        log("[GraphQL] Error:", {
+          message: error.message,
+          ...(authError ? {} : { stack: error.stack }),
+          path: error.path,
+          locations: error.locations
+        });
+        
         if (authError) {
           return {
             message: "Authentication required",
@@ -237,17 +249,6 @@ export async function registerGraphql(app: FastifyInstance) {
             }
           };
         }
-        
-        // Log the actual error for debugging (even in production)
-        // Auth errors are expected when a client calls authenticated fields without a valid token,
-        // so keep them low-noise to avoid spamming production logs.
-        const log = authError ? console.warn : console.error;
-        log("[GraphQL] Error:", {
-          message: error.message,
-          ...(authError ? {} : { stack: error.stack }),
-          path: error.path,
-          locations: error.locations
-        });
         
         // Don't expose internal errors in production, but provide more helpful messages
         if (env.NODE_ENV === "production") {

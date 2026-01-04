@@ -347,6 +347,10 @@ function NavigationGate() {
         options={onboardingScreenOptions}
       />
       <Stack.Screen 
+        name="onboarding/instagram" 
+        options={onboardingScreenOptions}
+      />
+      <Stack.Screen 
         name="onboarding/wrap-up" 
         options={onboardingScreenOptions}
       />
