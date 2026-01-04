@@ -183,6 +183,12 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
     const finalAuthErr = isAuthError(json.errors as any);
     const finalLog = finalAuthErr ? console.warn : console.error;
     
+    // Safety check: after retry, json.errors could be null/undefined
+    // (we're inside the original if block from line 146, but json was replaced at line 170)
+    if (!json.errors || json.errors.length === 0) {
+      throw new Error("GraphQL request failed with no error details");
+    }
+    
     const errorMessages = json.errors.map((error: any) => {
       // Log full error details (use finalLog to get correct severity)
       finalLog("[GraphQL] Error details:", {
