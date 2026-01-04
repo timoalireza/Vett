@@ -173,13 +173,19 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
             console.log("[GraphQL] Success (retry):", Object.keys(json.data));
             return json.data;
           }
+          // Retry failed with errors - re-evaluate error type for correct log level
+          // (don't reuse original `log` variable which was based on the first request)
         }
       }
     }
     
+    // Re-evaluate error type after potential retry to use correct log level
+    const finalAuthErr = isAuthError(json.errors as any);
+    const finalLog = finalAuthErr ? console.warn : console.error;
+    
     const errorMessages = json.errors.map((error: any) => {
-      // Log full error details
-      log("[GraphQL] Error details:", {
+      // Log full error details (use finalLog to get correct severity)
+      finalLog("[GraphQL] Error details:", {
         message: error.message,
         extensions: error.extensions,
         path: error.path,
