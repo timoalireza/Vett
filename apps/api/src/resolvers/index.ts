@@ -10,6 +10,7 @@ import { vettAIService } from "../services/vettai-service.js";
 import { socialLinkingService } from "../services/social-linking-service.js";
 import { privacyRequestService } from "../services/privacy-request-service.js";
 import { accountService } from "../services/account-service.js";
+import { verifyClaimRealtime } from "../services/realtime-verification-service.js";
 import type { DataLoaderContext } from "../loaders/index.js";
 import type { PaginationArgs } from "../utils/pagination.js";
 import { trackGraphQLMutation, trackGraphQLError } from "../plugins/metrics.js";
@@ -280,7 +281,14 @@ export const resolvers: IResolvers<GraphQLContext> = {
     },
     chatUsage: async (_parent, _args, context) => {
       const ctx = context as GraphQLContext;
+      
+      console.log("[GraphQL] chatUsage context:", {
+        hasUserId: !!ctx.userId,
+        userId: ctx.userId?.substring(0, 10) + "..."
+      });
+      
       if (!ctx.userId) {
+        console.error("[GraphQL] chatUsage: Authentication required - userId is missing from context");
         throw new Error("Authentication required");
       }
       
@@ -410,10 +418,44 @@ export const resolvers: IResolvers<GraphQLContext> = {
         throw error;
       }
     },
+    verifyClaimRealtime: async (_parent, args, context) => {
+      trackGraphQLMutation("verifyClaimRealtime");
+      const ctx = context as GraphQLContext;
+      
+      if (!ctx.userId) {
+        throw new Error("Authentication required");
+      }
+
+      try {
+        const result = await verifyClaimRealtime({
+          claim: args.input.claim,
+          context: args.input.context
+        });
+
+        return result;
+      } catch (error: any) {
+        console.error("[GraphQL] Error in realtime verification:", {
+          userId: ctx.userId,
+          claim: args.input.claim.substring(0, 50),
+          error: error.message
+        });
+        throw error;
+      }
+    },
     chatWithVettAI: async (_parent, args, context) => {
       trackGraphQLMutation("chatWithVettAI");
       const ctx = context as GraphQLContext;
+      
+      // Enhanced logging for debugging authentication issues
+      console.log("[GraphQL] chatWithVettAI context:", {
+        hasUserId: !!ctx.userId,
+        userId: ctx.userId?.substring(0, 10) + "...", // Log partial ID
+        hasUser: !!ctx.user,
+        hasLoaders: !!ctx.loaders
+      });
+      
       if (!ctx.userId) {
+        console.error("[GraphQL] chatWithVettAI: Authentication required - userId is missing from context");
         throw new Error("Authentication required");
       }
 
@@ -440,9 +482,9 @@ export const resolvers: IResolvers<GraphQLContext> = {
         }
 
         // Process the chat message with AI
-        let response: string;
+        let chatResponse: { message: string; citations?: string[] };
         try {
-          response = await vettAIService.chat(args.input, analysis);
+          chatResponse = await vettAIService.chat(args.input, analysis);
         } catch (aiError: any) {
           // Rollback the chat usage increment if AI service fails
           // This ensures users don't lose quota when errors occur
@@ -454,7 +496,8 @@ export const resolvers: IResolvers<GraphQLContext> = {
         const chatUsage = await subscriptionService.getChatUsage(user.id);
 
         return {
-          response,
+          response: chatResponse.message,
+          citations: chatResponse.citations || [],
           chatUsage: {
             dailyCount: chatUsage.dailyCount,
             maxDaily: chatUsage.maxDaily,

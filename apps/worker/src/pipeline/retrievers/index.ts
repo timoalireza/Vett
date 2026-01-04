@@ -1,11 +1,13 @@
 import { braveRetriever } from "./brave.js";
 import { serperRetriever } from "./serper.js";
 import { googleFactCheckRetriever } from "./googleFactCheck.js";
+import { perplexityRetriever } from "./perplexity.js";
 import type { EvidenceResult, Retriever, RetrieverOptions } from "./types.js";
 import { getCachedEvidence, setCachedEvidence, pruneCache } from "./cache.js";
 import { adjustReliability, extractHostname, isBlacklisted, isLowTrust } from "./trust.js";
 
-const RETRIEVERS: Retriever[] = [braveRetriever, serperRetriever, googleFactCheckRetriever];
+// Prioritize Perplexity for better citation quality and real-time information
+const RETRIEVERS: Retriever[] = [perplexityRetriever, braveRetriever, serperRetriever, googleFactCheckRetriever];
 
 const EVIDENCE_RETRIEVAL_TIMEOUT_MS = 5_000; // 5 second timeout per retriever
 

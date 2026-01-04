@@ -8,7 +8,8 @@ import {
   Modal,
   FlatList,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Linking
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -23,6 +24,7 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  citations?: string[];
   timestamp: Date;
 }
 
@@ -123,6 +125,7 @@ export function VettAIChat({
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: result.response,
+        citations: result.citations || [],
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -155,8 +158,23 @@ export function VettAIChat({
     }
   };
 
+  const handleCitationPress = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        console.warn(`Cannot open URL: ${url}`);
+      }
+    } catch (error) {
+      console.error(`Error opening URL: ${url}`, error);
+    }
+  };
+
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
+    const hasCitations = !isUser && item.citations && item.citations.length > 0;
+    
     return (
       <MotiView
         from={{ opacity: 0, translateY: 10 }}
@@ -169,15 +187,51 @@ export function VettAIChat({
             <Ionicons name="sparkles" size={16} color="#2EFAC0" />
           </View>
         )}
-        <View
-          style={[
-            styles.messageBubble,
-            isUser ? styles.userBubble : styles.assistantBubble
-          ]}
-        >
-          <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
-            {item.content}
-          </Text>
+        <View style={{ maxWidth: "75%" }}>
+          <View
+            style={[
+              styles.messageBubble,
+              isUser ? styles.userBubble : styles.assistantBubble
+            ]}
+          >
+            <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
+              {item.content}
+            </Text>
+          </View>
+          
+          {/* Citations Section */}
+          {hasCitations && (
+            <View style={styles.citationsContainer}>
+              <Text style={styles.citationsHeader}>
+                <Ionicons name="link" size={12} color="rgba(255, 255, 255, 0.5)" /> Sources:
+              </Text>
+              {item.citations!.map((citation, index) => {
+                // Extract domain name from URL for display
+                let displayText = citation;
+                try {
+                  const url = new URL(citation);
+                  displayText = url.hostname.replace('www.', '');
+                } catch {
+                  // If URL parsing fails, use the citation as-is
+                }
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => handleCitationPress(citation)}
+                    style={styles.citationButton}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.citationNumber}>[{index + 1}]</Text>
+                    <Text style={styles.citationText} numberOfLines={1}>
+                      {displayText}
+                    </Text>
+                    <Ionicons name="open-outline" size={12} color="#2EFAC0" />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
       </MotiView>
     );
@@ -367,7 +421,6 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   messageBubble: {
-    maxWidth: "75%",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 16
@@ -422,6 +475,41 @@ const styles = StyleSheet.create({
     backgroundColor: "#2EFAC0",
     alignItems: "center",
     justifyContent: "center"
+  },
+  citationsContainer: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    gap: 6
+  },
+  citationsHeader: {
+    color: "rgba(255, 255, 255, 0.5)",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4
+  },
+  citationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(46, 250, 192, 0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(46, 250, 192, 0.2)",
+    gap: 8
+  },
+  citationNumber: {
+    color: "#2EFAC0",
+    fontSize: 11,
+    fontFamily: "Inter_700Bold"
+  },
+  citationText: {
+    flex: 1,
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular"
   }
 });
 

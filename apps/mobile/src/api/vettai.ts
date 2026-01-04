@@ -4,6 +4,7 @@ const VETTAI_CHAT_MUTATION = `
   mutation ChatWithVettAI($input: VettAIChatInput!) {
     chatWithVettAI(input: $input) {
       response
+      citations
       chatUsage {
         dailyCount
         maxDaily
@@ -36,6 +37,7 @@ export interface ChatUsageInfo {
 
 export interface VettAIChatResponse {
   response: string;
+  citations?: string[];
   chatUsage: ChatUsageInfo;
 }
 

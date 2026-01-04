@@ -131,12 +131,17 @@ export default fp(async (fastify: FastifyInstance) => {
       }
     } catch (error: any) {
       // Auth verification failed
-      // Log error details for debugging
-      if (error?.status === 401 || error?.message?.includes("Unauthorized")) {
-        fastify.log.debug({ url: request.url }, "Invalid or expired token");
-      } else {
-        fastify.log.debug({ error: error?.message, url: request.url }, "Auth check failed");
-      }
+      // Log error details for debugging with more context
+      fastify.log.warn({ 
+        error: error?.message,
+        errorName: error?.name,
+        errorStatus: error?.status,
+        errorCode: error?.code,
+        url: request.url,
+        method: request.method,
+        hasAuthHeader: !!authHeader,
+        tokenPrefix: authHeader?.substring(0, 27) // "Bearer eyJ..."
+      }, "Auth verification failed");
       // Allow request to continue without auth (for development)
       // In production, you may want to require auth for mutations:
       // return reply.code(401).send({ error: "Unauthorized" });

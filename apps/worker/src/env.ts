@@ -71,6 +71,7 @@ const envSchema = z.object({
     ),
   DATABASE_URL: z.string().url(),
   OPENAI_API_KEY: z.string().min(1),
+  PERPLEXITY_API_KEY: z.string().optional(),
   BRAVE_SEARCH_API_KEY: z.string().optional(),
   SERPER_API_KEY: z.string().optional(),
   GOOGLE_FACT_CHECK_API_KEY: z.string().optional(),

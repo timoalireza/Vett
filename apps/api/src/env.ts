@@ -92,6 +92,7 @@ const envSchema = z.object({
   }),
   PINECONE_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  PERPLEXITY_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   UPLOADS_DIR: z.string().optional(),
   PUBLIC_UPLOAD_BASE_URL: z.string().url().optional(),

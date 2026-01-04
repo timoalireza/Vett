@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { env } from "../env.js";
+import { perplexity } from "../clients/perplexity.js";
 import type { AnalysisSummary } from "./analysis-service.js";
 
 const openai = env.OPENAI_API_KEY
@@ -11,6 +12,11 @@ const openai = env.OPENAI_API_KEY
 export interface VettAIChatInput {
   message: string;
   analysisId?: string;
+}
+
+export interface VettAIChatResponse {
+  message: string;
+  citations?: string[];
 }
 
 export interface VettAIChatContext {
@@ -105,78 +111,246 @@ RESPONSE GUIDELINES:
 - Keep responses focused and under 300 words unless the user requests more detail`;
 };
 
+/**
+ * Chat using OpenAI with existing analysis context
+ * This is the fallback when Perplexity is unavailable or fails
+ */
+async function chatWithOpenAI(
+  input: VettAIChatInput,
+  analysis?: AnalysisSummary | null
+): Promise<VettAIChatResponse> {
+  if (!openai) {
+    throw new Error("AI chat is unavailable. Please try again later.");
+  }
+
+  // Build context from analysis with full source details
+  const context: VettAIChatContext | undefined = analysis
+    ? {
+        claim: analysis.rawInput || analysis.claims?.[0]?.text || undefined,
+        verdict: analysis.verdict || undefined,
+        score: analysis.score ?? null,
+        summary: analysis.summary || undefined,
+        sources: (analysis.sources || []).map((s) => ({
+          title: s.title || "Untitled",
+          url: s.url || "N/A",
+          provider: s.provider || "Unknown",
+          reliability: s.reliability ?? null,
+          summary: s.summary || null
+        }))
+      }
+    : undefined;
+
+  const systemPrompt = buildSystemPrompt(context);
+
+  try {
+    // Validate input message length
+    if (input.message.length > 1000) {
+      throw new Error("Message too long. Please keep questions under 1000 characters.");
+    }
+
+    const response = await openai.chat.completions.create(
+      {
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: input.message.substring(0, 1000) }
+        ],
+        temperature: 0.5, // Lower temperature for more consistent, analytical responses
+        max_tokens: 600
+      },
+      {
+        timeout: 30000 // 30 second timeout
+      }
+    );
+
+    const content = response.choices[0]?.message?.content;
+    if (!content || content.trim().length === 0) {
+      return {
+        message: "Unable to generate a response at this time. Please rephrase your question.",
+        citations: []
+      };
+    }
+
+    return {
+      message: content,
+      citations: []
+    };
+  } catch (error: any) {
+    console.error("[VettChat] Error generating response:", {
+      error: error.message,
+      type: error.constructor.name,
+      analysisId: input.analysisId
+    });
+
+    // Provide more specific error messages
+    if (error.message?.includes("timeout") || error.code === "ETIMEDOUT") {
+      throw new Error("Request timed out. Please try again.");
+    }
+    if (error.status === 429 || error.message?.includes("rate limit")) {
+      throw new Error("Too many requests. Please wait a moment and try again.");
+    }
+    if (error.status === 401 || error.message?.includes("API key")) {
+      throw new Error("Vett Chat is temporarily unavailable. Please try again later.");
+    }
+
+    throw new Error("Failed to generate response. Please try again.");
+  }
+}
+
 export const vettAIService = {
-  async chat(input: VettAIChatInput, analysis?: AnalysisSummary | null): Promise<string> {
-    if (!openai) {
-      throw new Error("OpenAI API key not configured. Vett Chat is unavailable.");
+  async chat(input: VettAIChatInput, analysis?: AnalysisSummary | null): Promise<VettAIChatResponse> {
+    // Prefer Perplexity for research-heavy questions (provides real-time citations)
+    const usePerplexity = perplexity !== null && shouldUsePerplexity(input.message, analysis);
+    
+    if (usePerplexity && perplexity) {
+      return await chatWithPerplexity(input, analysis);
     }
-
-    // Build context from analysis with full source details
-    const context: VettAIChatContext | undefined = analysis
-      ? {
-          claim: analysis.rawInput || analysis.claims?.[0]?.text || undefined,
-          verdict: analysis.verdict || undefined,
-          score: analysis.score ?? null,
-          summary: analysis.summary || undefined,
-          sources: (analysis.sources || []).map((s) => ({
-            title: s.title || "Untitled",
-            url: s.url || "N/A",
-            provider: s.provider || "Unknown",
-            reliability: s.reliability ?? null,
-            summary: s.summary || null
-          }))
-        }
-      : undefined;
-
-    const systemPrompt = buildSystemPrompt(context);
-
-    try {
-      // Validate input message length
-      if (input.message.length > 1000) {
-        throw new Error("Message too long. Please keep questions under 1000 characters.");
-      }
-
-      const response = await openai.chat.completions.create(
-        {
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: input.message.substring(0, 1000) }
-          ],
-          temperature: 0.5, // Lower temperature for more consistent, analytical responses
-          max_tokens: 600
-        },
-        {
-          timeout: 30000 // 30 second timeout
-        }
-      );
-
-      const content = response.choices[0]?.message?.content;
-      if (!content || content.trim().length === 0) {
-        return "Unable to generate a response at this time. Please rephrase your question.";
-      }
-
-      return content;
-    } catch (error: any) {
-      console.error("[VettChat] Error generating response:", {
-        error: error.message,
-        type: error.constructor.name,
-        analysisId: input.analysisId
-      });
-
-      // Provide more specific error messages
-      if (error.message?.includes("timeout") || error.code === "ETIMEDOUT") {
-        throw new Error("Request timed out. Please try again.");
-      }
-      if (error.status === 429 || error.message?.includes("rate limit")) {
-        throw new Error("Too many requests. Please wait a moment and try again.");
-      }
-      if (error.status === 401 || error.message?.includes("API key")) {
-        throw new Error("Vett Chat is temporarily unavailable. Please try again later.");
-      }
-
-      throw new Error("Failed to generate response. Please try again.");
-    }
+    
+    // Use OpenAI as default/fallback
+    return await chatWithOpenAI(input, analysis);
   }
 };
+
+/**
+ * Determine if we should use Perplexity for this query
+ * Use Perplexity for research questions, current events, or when asking about new information
+ */
+function shouldUsePerplexity(message: string, analysis?: AnalysisSummary | null): boolean {
+  const lowerMessage = message.toLowerCase();
+  
+  // Research-oriented keywords
+  const researchKeywords = [
+    "what is",
+    "who is",
+    "when did",
+    "where",
+    "why",
+    "how",
+    "tell me about",
+    "explain",
+    "recent",
+    "latest",
+    "current",
+    "today",
+    "now",
+    "update",
+    "more information",
+    "sources",
+    "evidence",
+    "research",
+    "studies",
+    "find"
+  ];
+
+  // If no analysis context, use Perplexity for research
+  if (!analysis && researchKeywords.some((kw) => lowerMessage.includes(kw))) {
+    return true;
+  }
+
+  // Use Perplexity for questions about recent events or updates
+  if (lowerMessage.includes("recent") || lowerMessage.includes("latest") || lowerMessage.includes("update")) {
+    return true;
+  }
+
+  // Use Perplexity when user explicitly asks for sources or evidence
+  if (lowerMessage.includes("source") || lowerMessage.includes("evidence") || lowerMessage.includes("citation")) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Chat using Perplexity API with real-time web search and citations
+ */
+async function chatWithPerplexity(
+  input: VettAIChatInput,
+  analysis?: AnalysisSummary | null
+): Promise<VettAIChatResponse> {
+  if (!perplexity) {
+    throw new Error("Perplexity is not configured");
+  }
+
+  try {
+    // Build context from analysis if available
+    const contextParts: string[] = [];
+    
+    if (analysis) {
+      contextParts.push("ANALYSIS CONTEXT:");
+      if (analysis.rawInput || analysis.claims?.[0]?.text) {
+        contextParts.push(`Claim: ${analysis.rawInput || analysis.claims?.[0]?.text}`);
+      }
+      if (analysis.verdict) {
+        contextParts.push(`Verdict: ${analysis.verdict}`);
+      }
+      if (analysis.summary) {
+        contextParts.push(`Summary: ${analysis.summary}`);
+      }
+      contextParts.push("\nUser's question:");
+    }
+
+    const systemPrompt = `You are Vett Chat, a calm and neutral fact-checking analyst. Provide precise, evidence-based responses.
+
+PERSONA:
+- Calm, neutral analyst
+- Precise and evidence-based
+- No emojis, slang, or hype
+- State uncertainty clearly
+- Focus on what evidence supports or contradicts
+- Cite specific sources with [1], [2], etc.
+
+When answering:
+- Reference specific sources by number
+- Explain what each source contributes
+- Distinguish between established, disputed, or unknown information
+- Keep responses under 300 words unless more detail is requested`;
+
+    const userPrompt = contextParts.length > 0 
+      ? `${contextParts.join("\n")}\n${input.message}`
+      : input.message;
+
+    console.log("[VettChat] Using Perplexity for research query");
+
+    const response = await perplexity.chat({
+      model: "llama-3.1-sonar-large-128k-online",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 800,
+      temperature: 0.5,
+      return_citations: true,
+      search_recency_filter: "month"
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content || content.trim().length === 0) {
+      return {
+        message: "Unable to generate a response at this time. Please rephrase your question.",
+        citations: []
+      };
+    }
+
+    const citations = response.citations || [];
+
+    console.log(`[VettChat] Perplexity response generated with ${citations.length} citations`);
+
+    return {
+      message: content,
+      citations
+    };
+  } catch (error: any) {
+    console.error("[VettChat] Perplexity error:", error.message);
+    
+    // Fallback to OpenAI if Perplexity fails
+    // IMPORTANT: Call chatWithOpenAI directly to avoid infinite recursion
+    // (calling vettAIService.chat would re-evaluate shouldUsePerplexity and route back here)
+    if (openai) {
+      console.log("[VettChat] Falling back to OpenAI");
+      return await chatWithOpenAI(input, analysis);
+    }
+    
+    throw error;
+  }
+}
 

@@ -276,6 +276,7 @@ export const schema = `
 
   type VettAIChatPayload {
     response: String!
+    citations: [String!]!
     chatUsage: ChatUsageInfo!
   }
 
@@ -345,6 +346,27 @@ export const schema = `
     error: String
   }
 
+  input RealtimeVerificationInput {
+    claim: String!
+    context: String
+  }
+
+  enum VerificationVerdict {
+    VERIFIED
+    PARTIALLY_VERIFIED
+    UNVERIFIED
+    FALSE
+    NEEDS_CONTEXT
+  }
+
+  type RealtimeVerificationPayload {
+    summary: String!
+    verdict: VerificationVerdict!
+    confidence: Int!
+    citations: [String!]!
+    reasoning: String!
+  }
+
   type Query {
     health: HealthCheck!
     analysis(id: ID!): AnalysisSummary
@@ -366,6 +388,7 @@ export const schema = `
     submitAnalysis(input: SubmitAnalysisInput!): SubmitAnalysisPayload!
     submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
     chatWithVettAI(input: VettAIChatInput!): VettAIChatPayload!
+    verifyClaimRealtime(input: RealtimeVerificationInput!): RealtimeVerificationPayload!
     deleteAnalysis(id: ID!): DeleteAnalysisPayload!
     requestDataExport(note: String): PrivacyRequestPayload!
     requestDataDeletion(note: String): PrivacyRequestPayload!
