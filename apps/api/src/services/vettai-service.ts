@@ -247,13 +247,15 @@ function shouldUsePerplexity(message: string, analysis?: AnalysisSummary | null)
     return true;
   }
 
-  // Use Perplexity for questions about recent events or updates
+  // Use Perplexity for questions about recent events or updates (always, even with analysis)
   if (lowerMessage.includes("recent") || lowerMessage.includes("latest") || lowerMessage.includes("update")) {
     return true;
   }
 
-  // Use Perplexity when user explicitly asks for sources or evidence
-  if (lowerMessage.includes("source") || lowerMessage.includes("evidence") || lowerMessage.includes("citation")) {
+  // IMPORTANT: When user asks about "sources", "evidence", or "citations" WITH an analysis context,
+  // they're likely asking about the existing analysis sources, not requesting new research.
+  // Only route to Perplexity for these keywords when there's NO analysis context.
+  if (!analysis && (lowerMessage.includes("source") || lowerMessage.includes("evidence") || lowerMessage.includes("citation"))) {
     return true;
   }
 

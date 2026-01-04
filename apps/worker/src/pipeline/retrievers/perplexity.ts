@@ -59,7 +59,15 @@ async function perplexitySearch(options: RetrieverOptions): Promise<EvidenceResu
       }
 
       // Extract domain for reliability scoring
-      const hostname = new URL(url).hostname.toLowerCase();
+      // Wrap URL parsing in try-catch to skip malformed URLs without failing entire retrieval
+      let hostname: string;
+      try {
+        hostname = new URL(url).hostname.toLowerCase();
+      } catch (error) {
+        console.warn(`[perplexity] Skipping malformed URL at index ${i}: ${url}`);
+        continue;
+      }
+
       const isTrustedDomain = TRUSTED_DOMAINS.some((domain) => hostname.includes(domain));
       
       // Base reliability on domain trust
