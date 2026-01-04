@@ -247,8 +247,16 @@ function shouldUsePerplexity(message: string, analysis?: AnalysisSummary | null)
     return true;
   }
 
-  // Use Perplexity for questions about recent events or updates (always, even with analysis)
-  if (lowerMessage.includes("recent") || lowerMessage.includes("latest") || lowerMessage.includes("update")) {
+  // Use Perplexity for questions about recent/current events or updates (always, even with analysis)
+  // These time-sensitive queries benefit from Perplexity's real-time web search
+  if (
+    lowerMessage.includes("recent") ||
+    lowerMessage.includes("latest") ||
+    lowerMessage.includes("current") ||
+    lowerMessage.includes("today") ||
+    lowerMessage.includes("now") ||
+    lowerMessage.includes("update")
+  ) {
     return true;
   }
 
