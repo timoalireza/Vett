@@ -131,7 +131,7 @@ export default fp(async (fastify: FastifyInstance) => {
       }
     } catch (error: any) {
       // Auth verification failed
-      // Log error details for debugging with more context
+      // Log error details for debugging (never log tokens or sensitive data)
       fastify.log.warn({ 
         error: error?.message,
         errorName: error?.name,
@@ -139,8 +139,7 @@ export default fp(async (fastify: FastifyInstance) => {
         errorCode: error?.code,
         url: request.url,
         method: request.method,
-        hasAuthHeader: !!authHeader,
-        tokenPrefix: authHeader?.substring(0, 27) // "Bearer eyJ..."
+        hasAuthHeader: !!authHeader
       }, "Auth verification failed");
       // Allow request to continue without auth (for development)
       // In production, you may want to require auth for mutations:

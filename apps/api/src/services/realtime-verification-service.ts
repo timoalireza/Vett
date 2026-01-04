@@ -68,7 +68,8 @@ Guidelines:
     const citations = response.citations || [];
 
     // Parse the structured response
-    const verdictMatch = content.match(/VERDICT:\s*([A-Z_]+)/i);
+    // Use [A-Za-z_]+ to capture both uppercase and lowercase letters
+    const verdictMatch = content.match(/VERDICT:\s*([A-Za-z_]+)/i);
     const confidenceMatch = content.match(/CONFIDENCE:\s*(\d+)/i);
     const summaryMatch = content.match(/SUMMARY:\s*\n([\s\S]*?)(?=\n\nREASONING:|$)/i);
     const reasoningMatch = content.match(/REASONING:\s*\n([\s\S]*?)$/i);
