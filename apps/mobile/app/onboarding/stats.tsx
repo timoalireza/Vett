@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -26,6 +26,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const STAT_VALUE = 84;
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Animated number counter component
 function AnimatedCounter({ targetValue, duration = 1500 }: { targetValue: number; duration?: number }) {
@@ -196,12 +197,12 @@ export default function StatsScreen() {
             buttonStyle,
           ]}
         >
-          <Animated.Pressable
+          <AnimatedPressable
             onPress={handleContinue}
             style={styles.continueButton}
           >
             <Text style={styles.continueButtonText}>Continue</Text>
-          </Animated.Pressable>
+          </AnimatedPressable>
         </Animated.View>
       </View>
     </GradientBackground>
