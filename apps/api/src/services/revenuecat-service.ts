@@ -99,27 +99,39 @@ function mapEventTypeToStatus(eventType: RevenueCatEventType): SubscriptionStatu
  * Extract plan from RevenueCat entitlement or product
  */
 function extractPlan(event: RevenueCatWebhookEvent["event"]): SubscriptionPlan {
+  console.log("[RevenueCat] Extracting plan from event:", {
+    entitlement_ids: event.entitlement_ids,
+    product_id: event.product_id
+  });
+
   // First try to get plan from entitlement IDs
   if (event.entitlement_ids && event.entitlement_ids.length > 0) {
     const entitlementId = event.entitlement_ids[0].toLowerCase();
+    console.log("[RevenueCat] Checking entitlement ID:", entitlementId);
     if (ENTITLEMENT_TO_PLAN[entitlementId]) {
-      return ENTITLEMENT_TO_PLAN[entitlementId];
+      const plan = ENTITLEMENT_TO_PLAN[entitlementId];
+      console.log("[RevenueCat] Plan from entitlement:", plan);
+      return plan;
     }
   }
 
   // Fallback to product ID
   if (event.product_id) {
     const productId = event.product_id.toLowerCase();
+    console.log("[RevenueCat] Checking product ID:", productId);
     // Check if product ID contains plan info (e.g., "vett_pro_monthly" -> "PRO")
     if (productId.includes("pro")) {
+      console.log("[RevenueCat] Plan from product ID: PRO");
       return "PRO";
     }
     if (productId.includes("plus")) {
+      console.log("[RevenueCat] Plan from product ID: PLUS");
       return "PLUS";
     }
   }
 
   // Default to FREE if we can't determine
+  console.log("[RevenueCat] Could not determine plan, defaulting to FREE");
   return "FREE";
 }
 
@@ -127,14 +139,26 @@ function extractPlan(event: RevenueCatWebhookEvent["event"]): SubscriptionPlan {
  * Determine billing cycle from product ID or period type
  */
 function extractBillingCycle(event: RevenueCatWebhookEvent["event"]): BillingCycle {
+  console.log("[RevenueCat] Extracting billing cycle from:", {
+    product_id: event.product_id,
+    period_type: event.period_type
+  });
+
   if (event.product_id) {
     const productId = event.product_id.toLowerCase();
     if (productId.includes("annual") || productId.includes("year")) {
+      console.log("[RevenueCat] Billing cycle from product ID: ANNUAL");
       return "ANNUAL";
+    }
+    if (productId.includes("monthly") || productId.includes("month")) {
+      console.log("[RevenueCat] Billing cycle from product ID: MONTHLY");
+      return "MONTHLY";
     }
   }
 
-  return mapPeriodTypeToBillingCycle(event.period_type);
+  const cycle = mapPeriodTypeToBillingCycle(event.period_type);
+  console.log("[RevenueCat] Billing cycle from period type:", cycle);
+  return cycle;
 }
 
 /**
@@ -189,6 +213,21 @@ export async function handleRevenueCatWebhook(event: RevenueCatWebhookEvent): Pr
   const cancelAtPeriodEnd =
     webhookEvent.type === "CANCELLATION" || webhookEvent.type === "EXPIRATION";
 
+  console.log("[RevenueCat] Subscription update details:", {
+    dbUserId,
+    clerkUserId,
+    existingSubscription: existingSubscription ? {
+      id: existingSubscription.id,
+      currentPlan: existingSubscription.plan,
+      currentStatus: existingSubscription.status
+    } : null,
+    newPlan: plan,
+    newStatus: status,
+    newBillingCycle: billingCycle,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString()
+  });
+
   if (existingSubscription) {
     // Update existing subscription
     await db
@@ -206,7 +245,7 @@ export async function handleRevenueCatWebhook(event: RevenueCatWebhookEvent): Pr
       })
       .where(eq(subscriptions.userId, dbUserId));
 
-    console.log("[RevenueCat] Updated subscription:", {
+    console.log("[RevenueCat] ✅ Updated subscription in database:", {
       userId: dbUserId,
       plan,
       status,
@@ -226,7 +265,7 @@ export async function handleRevenueCatWebhook(event: RevenueCatWebhookEvent): Pr
       revenueCatSubscriptionId: webhookEvent.transaction_id || webhookEvent.original_transaction_id || null
     });
 
-    console.log("[RevenueCat] Created subscription:", {
+    console.log("[RevenueCat] ✅ Created subscription in database:", {
       userId: dbUserId,
       plan,
       status,
@@ -282,6 +321,8 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
     throw new Error("RevenueCat API key not configured");
   }
 
+  console.log("[RevenueCat Sync] Starting sync for user:", clerkUserId);
+
   // Call RevenueCat REST API to get customer info
   // See: https://docs.revenuecat.com/reference/get-subscriber
   const response = await fetch(
@@ -295,23 +336,32 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
   );
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[RevenueCat Sync] API error:", {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText
+    });
     throw new Error(`RevenueCat API error: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
+  console.log("[RevenueCat Sync] API response:", JSON.stringify(data, null, 2));
 
   // Process the customer info similar to webhook handling
   // This is a simplified version - you may need to adjust based on RevenueCat API response
   const subscriber = data.subscriber;
   if (!subscriber) {
-    console.log("[RevenueCat] No subscriber found for:", clerkUserId);
+    console.log("[RevenueCat Sync] No subscriber found for:", clerkUserId);
     return;
   }
 
   // Get active entitlements
   const activeEntitlements = Object.keys(subscriber.entitlements?.active || {});
+  console.log("[RevenueCat Sync] Active entitlements:", activeEntitlements);
   
   if (activeEntitlements.length === 0) {
+    console.log("[RevenueCat Sync] No active entitlements - setting to FREE");
     // No active subscription - set to FREE
     const dbUserId = await userService.getOrCreateUser(clerkUserId);
     await subscriptionService.updateSubscription(dbUserId, "FREE", "MONTHLY");
@@ -321,6 +371,13 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
   // Process first active entitlement (assuming one subscription at a time)
   const entitlementId = activeEntitlements[0];
   const entitlement = subscriber.entitlements.active[entitlementId];
+  
+  console.log("[RevenueCat Sync] Processing entitlement:", {
+    entitlementId,
+    product_identifier: entitlement.product_identifier,
+    period_type: entitlement.period_type,
+    expires_date: new Date(entitlement.expires_date_ms).toISOString()
+  });
   
   // Create a synthetic webhook event to reuse existing logic
   const syntheticEvent: RevenueCatWebhookEvent = {
@@ -340,6 +397,8 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
     }
   };
 
+  console.log("[RevenueCat Sync] Calling handleRevenueCatWebhook with synthetic event");
   await handleRevenueCatWebhook(syntheticEvent);
+  console.log("[RevenueCat Sync] Sync completed successfully");
 }
 

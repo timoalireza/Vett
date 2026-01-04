@@ -760,10 +760,12 @@ export const resolvers: IResolvers<GraphQLContext> = {
       }
 
       try {
+        console.log("[GraphQL] syncSubscription called for user:", ctx.userId);
         const dbUserId = await userService.getOrCreateUser(ctx.userId);
 
         // Sync subscription from RevenueCat (this waits for completion)
         if (!process.env.REVENUECAT_API_KEY) {
+          console.warn("[GraphQL] REVENUECAT_API_KEY not configured");
           return {
             success: false,
             subscription: null,
@@ -772,10 +774,17 @@ export const resolvers: IResolvers<GraphQLContext> = {
         }
 
         const { syncUserSubscriptionFromRevenueCat } = await import("../services/revenuecat-sync.js");
+        console.log("[GraphQL] Calling syncUserSubscriptionFromRevenueCat...");
         await syncUserSubscriptionFromRevenueCat(ctx.userId);
+        console.log("[GraphQL] Sync completed, fetching updated subscription info...");
 
         // Get updated subscription info
         const info = await subscriptionService.getSubscriptionInfo(dbUserId);
+        console.log("[GraphQL] Updated subscription info:", {
+          plan: info.plan,
+          status: info.status,
+          billingCycle: info.billingCycle
+        });
 
         return {
           success: true,
@@ -796,7 +805,8 @@ export const resolvers: IResolvers<GraphQLContext> = {
         trackGraphQLError();
         console.error("[GraphQL] Error syncing subscription:", {
           userId: ctx.userId,
-          error: error.message
+          error: error.message,
+          stack: error.stack
         });
         return {
           success: false,
