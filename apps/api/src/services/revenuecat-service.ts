@@ -356,8 +356,31 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
     return;
   }
 
-  // Get active entitlements
-  const activeEntitlements = Object.keys(subscriber.entitlements?.active || {});
+  // Get active entitlements by filtering for non-expired ones
+  // RevenueCat REST API returns all entitlements, not separated into 'active'
+  const allEntitlements = subscriber.entitlements || {};
+  const now = Date.now();
+  
+  // Filter entitlements that haven't expired yet
+  const activeEntitlements = Object.entries(allEntitlements)
+    .filter(([_id, entitlement]: [string, any]) => {
+      const expiresDate = entitlement.expires_date;
+      if (!expiresDate) return false;
+      
+      const expiresMs = new Date(expiresDate).getTime();
+      const isActive = expiresMs > now;
+      
+      console.log("[RevenueCat Sync] Checking entitlement:", {
+        id: _id,
+        expires_date: expiresDate,
+        is_active: isActive,
+        time_until_expiry_hours: ((expiresMs - now) / (1000 * 60 * 60)).toFixed(2)
+      });
+      
+      return isActive;
+    })
+    .map(([id]) => id);
+  
   console.log("[RevenueCat Sync] Active entitlements:", activeEntitlements);
   
   if (activeEntitlements.length === 0) {
@@ -370,14 +393,23 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
 
   // Process first active entitlement (assuming one subscription at a time)
   const entitlementId = activeEntitlements[0];
-  const entitlement = subscriber.entitlements.active[entitlementId];
+  const entitlement = allEntitlements[entitlementId];
   
   console.log("[RevenueCat Sync] Processing entitlement:", {
     entitlementId,
     product_identifier: entitlement.product_identifier,
     period_type: entitlement.period_type,
-    expires_date: new Date(entitlement.expires_date_ms).toISOString()
+    expires_date: entitlement.expires_date,
+    purchase_date: entitlement.purchase_date
   });
+  
+  // Convert date strings to milliseconds for the webhook event
+  const purchaseMs = entitlement.purchase_date 
+    ? new Date(entitlement.purchase_date).getTime() 
+    : undefined;
+  const expiresMs = entitlement.expires_date 
+    ? new Date(entitlement.expires_date).getTime() 
+    : undefined;
   
   // Create a synthetic webhook event to reuse existing logic
   const syntheticEvent: RevenueCatWebhookEvent = {
@@ -388,8 +420,8 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
       app_id: data.app_id || "",
       product_id: entitlement.product_identifier,
       period_type: entitlement.period_type,
-      purchased_at_ms: entitlement.purchase_date_ms,
-      expiration_at_ms: entitlement.expires_date_ms,
+      purchased_at_ms: purchaseMs,
+      expiration_at_ms: expiresMs,
       environment: data.environment || "PRODUCTION",
       entitlement_ids: [entitlementId],
       transaction_id: entitlement.original_transaction_id,
