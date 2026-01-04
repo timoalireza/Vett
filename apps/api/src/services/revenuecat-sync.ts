@@ -13,11 +13,14 @@ export async function syncUserSubscriptionFromRevenueCat(clerkUserId: string): P
     // Sync subscription from RevenueCat
     await syncSubscriptionFromRevenueCat(clerkUserId);
   } catch (error: any) {
-    // Log error but don't throw - subscription sync failures shouldn't break the app
+    // Log error and re-throw so callers can handle it appropriately
     console.error("[RevenueCat] Failed to sync subscription:", {
       clerkUserId,
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
+    // Re-throw to propagate error to caller (resolver will handle it)
+    throw error;
   }
 }
 

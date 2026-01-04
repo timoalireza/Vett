@@ -148,7 +148,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
       // the database state. Webhooks keep subscriptions in sync automatically, so this
       // is primarily a fallback for manual syncs or when webhooks haven't fired yet.
       // Future queries will reflect the synced state.
-      if (process.env.REVENUECAT_API_KEY) {
+      if (env.REVENUECAT_API_KEY) {
         try {
           const { syncUserSubscriptionFromRevenueCat } = await import("../services/revenuecat-sync.js");
           // Sync in background - don't await to avoid blocking the response
@@ -764,7 +764,7 @@ export const resolvers: IResolvers<GraphQLContext> = {
         const dbUserId = await userService.getOrCreateUser(ctx.userId);
 
         // Sync subscription from RevenueCat (this waits for completion)
-        if (!process.env.REVENUECAT_API_KEY) {
+        if (!env.REVENUECAT_API_KEY) {
           console.warn("[GraphQL] REVENUECAT_API_KEY not configured");
           return {
             success: false,
