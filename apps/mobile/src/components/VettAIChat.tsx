@@ -202,9 +202,10 @@ export function VettAIChat({
           {/* Citations Section */}
           {hasCitations && (
             <View style={styles.citationsContainer}>
-              <Text style={styles.citationsHeader}>
-                <Ionicons name="link" size={12} color="rgba(255, 255, 255, 0.5)" /> Sources:
-              </Text>
+              <View style={styles.citationsHeaderContainer}>
+                <Ionicons name="link" size={12} color="rgba(255, 255, 255, 0.5)" />
+                <Text style={styles.citationsHeader}>Sources:</Text>
+              </View>
               {item.citations!.map((citation, index) => {
                 // Extract domain name from URL for display
                 let displayText = citation;
@@ -481,13 +482,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 6
   },
+  citationsHeaderContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 4
+  },
   citationsHeader: {
     color: "rgba(255, 255, 255, 0.5)",
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4
+    letterSpacing: 0.5
   },
   citationButton: {
     flexDirection: "row",
