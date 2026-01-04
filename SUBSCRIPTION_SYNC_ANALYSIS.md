@@ -112,6 +112,36 @@ const expiresMs = entitlement.expires_date
   : undefined;
 ```
 
+### Defensive Programming Fix:
+Added type guards to handle malformed API responses gracefully:
+
+**In the filter function (line 368-371)**:
+```typescript
+// Check if entitlement is a valid object before accessing properties
+if (!entitlement || typeof entitlement !== 'object') {
+  console.warn("[RevenueCat Sync] Invalid entitlement object:", { id: _id, entitlement });
+  return false;
+}
+```
+
+**Before processing selected entitlement (line 405-411)**:
+```typescript
+// Validate selected entitlement exists and is valid
+if (!entitlement || typeof entitlement !== 'object') {
+  console.error("[RevenueCat Sync] Selected entitlement is invalid:", { 
+    entitlementId, 
+    entitlement 
+  });
+  throw new Error(`Invalid entitlement object for ID: ${entitlementId}`);
+}
+```
+
+**Why this matters**:
+- Protects against `TypeError: Cannot read property 'expires_date' of null/undefined`
+- Handles edge cases where RevenueCat API might return unexpected data
+- Provides clear logging when malformed data is encountered
+- Fails fast with descriptive errors rather than cascading failures
+
 ---
 
 ## Testing Instructions
@@ -219,6 +249,12 @@ User has multiple entitlements → Sync processes first active one → Sets high
 - Enhanced logging for debugging
 - Fixed property name inconsistency: using `expires_date` and `purchase_date` (strings) instead of non-existent `_ms` versions
 - Added proper date-to-milliseconds conversion for webhook event creation
+
+### Fix 4: Defensive Programming (current fix)
+- Added type guard checks before accessing entitlement properties
+- Validates entitlement is an object in the filter function (prevents TypeError on malformed API responses)
+- Validates selected entitlement is valid before processing (throws descriptive error if corrupted)
+- Gracefully handles null/undefined entitlement values
 
 ---
 

@@ -364,6 +364,12 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
   // Filter entitlements that haven't expired yet
   const activeEntitlements = Object.entries(allEntitlements)
     .filter(([_id, entitlement]: [string, any]) => {
+      // Defensive check: ensure entitlement is a valid object
+      if (!entitlement || typeof entitlement !== 'object') {
+        console.warn("[RevenueCat Sync] Invalid entitlement object:", { id: _id, entitlement });
+        return false;
+      }
+      
       const expiresDate = entitlement.expires_date;
       if (!expiresDate) return false;
       
@@ -394,6 +400,15 @@ export async function syncSubscriptionFromRevenueCat(clerkUserId: string): Promi
   // Process first active entitlement (assuming one subscription at a time)
   const entitlementId = activeEntitlements[0];
   const entitlement = allEntitlements[entitlementId];
+  
+  // Defensive check: ensure selected entitlement is valid
+  if (!entitlement || typeof entitlement !== 'object') {
+    console.error("[RevenueCat Sync] Selected entitlement is invalid:", { 
+      entitlementId, 
+      entitlement 
+    });
+    throw new Error(`Invalid entitlement object for ID: ${entitlementId}`);
+  }
   
   console.log("[RevenueCat Sync] Processing entitlement:", {
     entitlementId,
