@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -13,6 +13,15 @@ export default function WrapUpScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { markOnboarded } = useAppState();
+
+  // Show subscription modal when this screen mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.push("/modals/subscription");
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleStartVetting = async () => {
     await markOnboarded();
@@ -31,7 +40,7 @@ export default function WrapUpScreen() {
     <GradientBackground>
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.backButtonContainer}>
-          <OnboardingBackButton goTo="/onboarding/premium" />
+          <OnboardingBackButton goTo="/onboarding/instagram" />
         </View>
         <View style={styles.content}>
           <GlassCard

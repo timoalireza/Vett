@@ -54,6 +54,12 @@ function isMutation(query: string): boolean {
   return cleaned.startsWith('mutation');
 }
 
+function isAuthErrorMessage(message: string | undefined | null): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return m.includes("authentication required") || m.includes("unauthorized");
+}
+
 async function checkMutationRateLimit(request: FastifyRequest): Promise<{ allowed: boolean; retryAfter?: number }> {
   if (!env.RATE_LIMIT_ENABLED) {
     return { allowed: true };
@@ -202,6 +208,15 @@ export async function registerGraphql(app: FastifyInstance) {
       }
       
       const errors = execution.errors.map((error) => {
+        const authError = isAuthErrorMessage(error.message);
+        if (authError) {
+          return {
+            message: "Authentication required",
+            extensions: {
+              code: "UNAUTHENTICATED"
+            }
+          };
+        }
         // Enhance security-related errors
         if (error.extensions?.code === "QUERY_DEPTH_EXCEEDED") {
           return {
@@ -224,9 +239,12 @@ export async function registerGraphql(app: FastifyInstance) {
         }
         
         // Log the actual error for debugging (even in production)
-        console.error("[GraphQL] Error:", {
+        // Auth errors are expected when a client calls authenticated fields without a valid token,
+        // so keep them low-noise to avoid spamming production logs.
+        const log = authError ? console.warn : console.error;
+        log("[GraphQL] Error:", {
           message: error.message,
-          stack: error.stack,
+          ...(authError ? {} : { stack: error.stack }),
           path: error.path,
           locations: error.locations
         });
@@ -246,12 +264,15 @@ export async function registerGraphql(app: FastifyInstance) {
           }
           
           // Log the actual error for debugging (even in production)
-          console.error("[GraphQL] Production error details:", {
-            message: error.message,
-            stack: error.stack,
-            path: error.path,
-            name: error.name
-          });
+          // Keep auth errors low-noise.
+          if (!authError) {
+            console.error("[GraphQL] Production error details:", {
+              message: error.message,
+              stack: error.stack,
+              path: error.path,
+              name: error.name
+            });
+          }
           
           // For database/auth errors, provide more context
           if (errorMessage.includes("row level security") || errorMessage.includes("rls") || errorMessage.includes("permission denied")) {

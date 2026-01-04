@@ -90,6 +90,11 @@ const envSchema = z.object({
   CLERK_SECRET_KEY: z.string().min(1).refine((val) => val && val.trim() !== "", {
     message: "CLERK_SECRET_KEY cannot be empty"
   }),
+  // Optional: Clerk JWT public key (PEM) used to verify JWT template tokens.
+  // If you use JWT templates in the mobile app (EXPO_PUBLIC_CLERK_JWT_TEMPLATE),
+  // set this so the API can verify those tokens as well.
+  // See Clerk Dashboard → JWT Templates → "Public key".
+  CLERK_JWT_KEY: z.string().optional(),
   PINECONE_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   PERPLEXITY_API_KEY: z.string().optional(),
@@ -195,10 +200,12 @@ if (process.env.NODE_ENV === "production") {
   const dbUrl = getEnv("DATABASE_URL");
   const redisUrl = getEnv("REDIS_URL");
   const clerkKey = getEnv("CLERK_SECRET_KEY");
+  const clerkJwtKey = getEnv("CLERK_JWT_KEY");
   
   console.log(`  DATABASE_URL: ${dbUrl ? "✅ Set" : process.env.DATABASE_URL ? "⚠️ Empty string" : "❌ Missing"}`);
   console.log(`  REDIS_URL: ${redisUrl ? "✅ Set" : process.env.REDIS_URL ? "⚠️ Empty string" : "❌ Missing"}`);
   console.log(`  CLERK_SECRET_KEY: ${clerkKey ? "✅ Set" : process.env.CLERK_SECRET_KEY ? "⚠️ Empty string" : "❌ Missing"}`);
+  console.log(`  CLERK_JWT_KEY: ${clerkJwtKey ? "✅ Set" : process.env.CLERK_JWT_KEY ? "⚠️ Empty string" : "➖ Not set"}`);
   console.log(`  All env keys containing DATABASE/REDIS/CLERK: ${envKeys.join(", ")}`);
   
   // Show actual values (truncated for security)
@@ -214,6 +221,10 @@ if (process.env.NODE_ENV === "production") {
     const clerkPreview = process.env.CLERK_SECRET_KEY.substring(0, 20) + "...";
     console.log(`  CLERK_SECRET_KEY value preview: ${clerkPreview}`);
   }
+  if (process.env.CLERK_JWT_KEY) {
+    const jwtPreview = process.env.CLERK_JWT_KEY.substring(0, 20) + "...";
+    console.log(`  CLERK_JWT_KEY value preview: ${jwtPreview}`);
+  }
 }
 
 // Create a normalized env object (handle empty strings)
@@ -221,7 +232,8 @@ const normalizedEnv = {
   ...process.env,
   DATABASE_URL: getEnv("DATABASE_URL"),
   REDIS_URL: getEnv("REDIS_URL"),
-  CLERK_SECRET_KEY: getEnv("CLERK_SECRET_KEY")
+  CLERK_SECRET_KEY: getEnv("CLERK_SECRET_KEY"),
+  CLERK_JWT_KEY: getEnv("CLERK_JWT_KEY")
 };
 
 const parsed = envSchema.safeParse(normalizedEnv);

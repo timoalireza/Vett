@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   backButtonContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 12,
   },
   content: {
     flex: 1,

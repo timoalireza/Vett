@@ -30,6 +30,13 @@ If `EXPO_PUBLIC_CLERK_JWT_TEMPLATE` is set but the template doesn't exist in Cle
 - OR create the JWT template in Clerk Dashboard → JWT Templates
 - The app will automatically fall back to default token if template fails
 
+**Important:** If the template exists and the app is using it successfully, the API must be able to verify that token type.
+Make sure the API has `CLERK_JWT_KEY` set (Clerk Dashboard → JWT Templates → Public key), otherwise the API may log
+“Auth verification failed” and GraphQL resolvers will behave as unauthenticated.
+
+**PEM formatting tip:** `CLERK_JWT_KEY` is a multi-line PEM. If your hosting UI doesn’t support multi-line env vars,
+use a single-line representation with `\n` between lines.
+
 ### 3. Token Not Stored in SecureStore
 The fallback mechanism tries to retrieve tokens from SecureStore, but Clerk may not have stored them yet.
 

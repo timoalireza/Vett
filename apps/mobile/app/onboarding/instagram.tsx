@@ -68,11 +68,11 @@ export default function InstagramScreen() {
   };
 
   const handleContinue = () => {
-    router.push("/onboarding/premium");
+    router.push("/onboarding/wrap-up");
   };
 
   const handleSkip = () => {
-    router.push("/onboarding/premium");
+    router.push("/onboarding/wrap-up");
   };
 
   return (

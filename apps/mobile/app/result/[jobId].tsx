@@ -27,6 +27,7 @@ import { useVideoAnimationState } from "../../src/components/Video/VideoAnimatio
 import { ResizeMode } from "expo-av";
 import { VettAIChat } from "../../src/components/VettAIChat";
 import { chatWithVettAI, getChatUsage, type ChatUsageInfo } from "../../src/api/vettai";
+import { fetchSubscription } from "../../src/api/subscription";
 
 // Define video assets
 const VIDEO_ASSETS = {
@@ -194,7 +195,19 @@ export default function ResultScreen() {
     },
   });
 
+  // Fetch subscription to check if user has access to Vett Chat
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: fetchSubscription,
+    enabled: !isDemo, // Skip for demo mode
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
   const analysis = isDemo ? demoAnalysis : apiAnalysis;
+  
+  // Check if user has Vett Chat access (Plus or Pro plan)
+  // Note: Both PLUS and PRO plans have chat access (PLUS has limited, PRO has unlimited)
+  const hasVettChatAccess = subscription?.plan === "PLUS" || subscription?.plan === "PRO";
 
   // Back handler
   useEffect(() => {
@@ -762,8 +775,8 @@ export default function ResultScreen() {
         <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* Floating Chat Button - only show when analysis is completed and not in demo mode */}
-      {isCompleted && !isDemo && (
+      {/* Floating Chat Button - only show when analysis is completed, not in demo mode, and user has Vett Chat access */}
+      {isCompleted && !isDemo && hasVettChatAccess && (
         <TouchableOpacity
           style={[styles.chatButton, { bottom: insets.bottom + 20 }]}
           onPress={() => setChatVisible(true)}

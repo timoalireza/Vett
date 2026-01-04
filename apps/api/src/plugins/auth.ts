@@ -88,7 +88,10 @@ export default fp(async (fastify: FastifyInstance) => {
       
       // Verify the token with Clerk
       const session = await verifyToken(token, {
-        secretKey: env.CLERK_SECRET_KEY
+        secretKey: env.CLERK_SECRET_KEY,
+        // Support verifying JWT template tokens (if configured)
+        // See Clerk Dashboard → JWT Templates → Public key
+        jwtKey: env.CLERK_JWT_KEY
       });
       
       if (session && session.sub) {
@@ -139,7 +142,8 @@ export default fp(async (fastify: FastifyInstance) => {
         errorCode: error?.code,
         url: request.url,
         method: request.method,
-        hasAuthHeader: !!authHeader
+        hasAuthHeader: !!authHeader,
+        clerkJwtKeyConfigured: !!env.CLERK_JWT_KEY
       }, "Auth verification failed");
       // Allow request to continue without auth (for development)
       // In production, you may want to require auth for mutations:

@@ -75,6 +75,7 @@ function AuthTokenSync() {
       if (!isSignedIn) {
         console.log("[AuthTokenSync] User signed out, clearing token");
         tokenProvider.setToken(null);
+        tokenProvider.setTokenFetcher(null);
         clearClerkTokenCache();
         return;
       }
@@ -83,6 +84,17 @@ function AuthTokenSync() {
       
       try {
         const template = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE;
+        // Register a fetcher so non-React API calls can refresh tokens on demand (e.g. after expiry).
+        tokenProvider.setTokenFetcher(async () => {
+          if (template) {
+            try {
+              return (await getToken?.({ template })) ?? null;
+            } catch {
+              return (await getToken?.()) ?? null;
+            }
+          }
+          return (await getToken?.()) ?? null;
+        });
         // Prefer a configured JWT template if provided; otherwise fall back to default token behavior.
         let token: string | null | undefined;
         if (template) {
@@ -128,8 +140,17 @@ function AuthTokenSync() {
 
     sync();
 
+    // Proactively refresh tokens periodically to avoid expiry-related auth failures.
+    // Clerk tokens typically expire within ~1 hour; refresh every 45 minutes.
+    const refreshInterval = setInterval(() => {
+      if (cancelled) return;
+      if (tokenProvider.getAuthState() !== "signedIn") return;
+      tokenProvider.refreshToken().catch(() => {});
+    }, 45 * 60 * 1000);
+
     return () => {
       cancelled = true;
+      clearInterval(refreshInterval);
     };
   }, [isSignedIn, getToken]);
 
@@ -323,10 +344,6 @@ function NavigationGate() {
       />
       <Stack.Screen 
         name="onboarding/demo" 
-        options={onboardingScreenOptions}
-      />
-      <Stack.Screen 
-        name="onboarding/premium" 
         options={onboardingScreenOptions}
       />
       <Stack.Screen 

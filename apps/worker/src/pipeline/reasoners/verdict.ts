@@ -27,6 +27,19 @@ SCORING GUIDELINES:
 - For claims that are FALSE or contradicted by evidence, assign scores in the 0-40 range ("False")
 - For claims with INSUFFICIENT EVIDENCE (not enough information to verify or contradict), use "Unverified" (set score to null)
 
+NUMBERS / AMOUNTS / ATTRIBUTION (IMPORTANT):
+- Do NOT mark a claim as "False" solely because a number/amount is wrong if the core event is supported by evidence.
+- If the core event happened but a numeric detail is exaggerated or off, use:
+  - "Mostly Accurate" (61-75) when the claim is right about the who/what/where and the number is only somewhat off.
+  - "Partially Accurate" (41-60) when the claim gets the core event right but key specifics are wrong (ex: wrong agency/actor AND wrong amount).
+- Use "False" (0-40) when the evidence indicates the core event did not happen, is fabricated, or is about a different subject.
+- When a claim says X but evidence supports the same thing at a different magnitude, score by severity:
+  - Small mismatch (roughly within ~25%): usually 65-75
+  - Moderate mismatch (roughly 25%-100%): usually 55-70
+  - Large mismatch (>100%) or multiple key details wrong: usually 41-60
+
+Example: Claim says "Agency A seized $60M of X" but evidence shows "Agency B seized ~$40M of X and Agency A only shared photos" => usually "Partially Accurate" around ~50-60.
+
 Map scores to verdicts as follows (STRICTLY follow these ranges):
 - 0-40 => "False"
 - 41-60 => "Partially Accurate"
@@ -59,28 +72,36 @@ FORBIDDEN patterns:
 - "should be", "must be", "it is recommended", "do not", "avoid", "reject", "accept", "share", "verify"
 - Any imperative verbs or commands
 - Telling the user what to do or think
+- Academic phrases like "it should be noted", "according to", "it is evident that", "notably", "furthermore", "moreover"
+- Formal transitions like "however", "nevertheless", "subsequently"
+- Reference phrases like "as mentioned", "as stated", "as noted"
 
-REQUIRED: Write in a clear, accessible tone - informative but conversational, like explaining something to a friend. Avoid academic jargon or overly formal language. Focus on:
-- What actually happened or what the evidence shows
-- Historical context or origin of the claim
-- Specific details that clarify or complicate the claim
-- Why this information is circulating
+TONE GUIDELINES - Write like you're texting a friend who asked about this claim:
+- Use simple, everyday words - pretend you're explaining this at a coffee shop
+- Get straight to the point - no fluff or filler phrases
+- Write in complete thoughts, but keep them short and punchy
+- Imagine someone asking "So what's the deal with this?" - that's your starting point
+- Skip formal language entirely - no "it should be noted" or "according to reports"
+- Just tell them what's actually going on in plain English
 
-TONE GUIDELINES:
-- Use simple, direct language
-- Avoid phrases like "it should be noted", "according to", "it is evident that"
-- Write naturally, as if explaining to someone in conversation
-- Keep it informative but approachable
+Focus on:
+- What really happened (in plain terms)
+- Where this claim came from or why people are talking about it
+- Key details that matter to understanding it
+- What's missing or unclear (if relevant)
 
-Examples:
-BAD: "Claim should be accepted as true."
+Examples of the RIGHT tone:
+BAD (too formal): "Multiple credible reports confirm the veracity of this claim, with documentation from official records substantiating the assertion."
 GOOD: "Multiple sources confirm this happened. The claim matches what we know from official records."
 
-BAD: "Do not share this misinformation."
-GOOD: "This started as a joke on a satirical site and got mistaken for real news. There's no actual policy like this."
+BAD (too academic): "It should be noted that public reporting in late-2025 has centered on newly released materials."
+GOOD: "Public reporting around late-2025 focused on what appeared in newly released materials and how some items were temporarily removed from a DOJ website after concerns were raised."
 
-BAD: "It should be noted that the claim references a policy that was proposed but never implemented."
+BAD (too analytical): "The claim references a policy proposal that underwent legislative review but failed to achieve implementation."
 GOOD: "The claim talks about a policy that was suggested but never actually put in place. The real policy works differently."
+
+BAD (instructive): "Users should exercise caution when sharing this information."
+GOOD: "This started as a joke on a satirical site and got mistaken for real news."
 `;
 
 const JSON_SCHEMA = {
@@ -99,13 +120,13 @@ const JSON_SCHEMA = {
     confidence: { type: "number", minimum: 0, maximum: 1 },
     summary: { 
       type: "string", 
-      maxLength: 300,
-      description: "A brief, conversational summary of what the evidence shows. Use simple, accessible language - avoid academic or overly formal phrasing."
+      maxLength: 500,
+      description: "A brief, conversational summary of what the evidence shows. Use simple, everyday language like you're explaining to a friend. Skip formal or academic phrasing entirely."
     },
     recommendation: { 
       type: "string", 
-      maxLength: 300,
-      description: "Factual background context only. NO advice, commands, or directives. Write like an encyclopedia entry explaining the claim's context, origin, or missing details. FORBIDDEN: 'should', 'must', 'do not', 'reject', 'accept', 'verify', 'share'."
+      maxLength: 500,
+      description: "Factual background context only. NO advice, commands, or directives. Explain the claim's context, origin, or key details in plain, conversational language. FORBIDDEN: 'should', 'must', 'do not', 'reject', 'accept', 'verify', 'share', and formal academic phrases."
     },
     rationale: { type: "string", maxLength: 200 },
     evidenceSupport: {

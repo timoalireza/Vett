@@ -17,6 +17,7 @@ export interface SubscriptionInfo {
     hasCrossPlatformSync: boolean;
     hasCustomAlerts: boolean;
     maxSources: number;
+    hasVettChat: boolean;
   };
   prices: {
     monthly: number;
@@ -50,6 +51,7 @@ const SUBSCRIPTION_QUERY = `
         hasCrossPlatformSync
         hasCustomAlerts
         maxSources
+        hasVettChat
       }
       prices {
         monthly
@@ -92,6 +94,7 @@ const SYNC_SUBSCRIPTION_MUTATION = `
           hasCrossPlatformSync
           hasCustomAlerts
           maxSources
+          hasVettChat
         }
         prices {
           monthly

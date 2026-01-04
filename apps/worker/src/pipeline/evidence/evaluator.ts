@@ -14,10 +14,16 @@ Return concise assessments (<=140 chars).
 If the evidence is in another language, translate the assessment to English.
 Also provide a stance label:
 - supports: clearly supports the claim
-- refutes: clearly contradicts the claim
+- refutes: clearly contradicts the core claim (the main event/statement is wrong)
 - mixed: includes both supporting and refuting info
 - unclear: related but not definitive
 - irrelevant: not about the claim
+
+DETAIL SENSITIVITY (IMPORTANT):
+- If the evidence supports the core event but contradicts a specific detail (numbers/amounts, dates, locations, who did it),
+  label stance as "mixed" (NOT "refutes") and keep relevance relatively high.
+- Use "refutes" mainly when the evidence indicates the core event did not happen, is fabricated, or is about a different event entirely.
+- If the only disagreement is the exact number/amount, this is usually "mixed" (not "refutes").
 `;
 
 const JSON_SCHEMA = {

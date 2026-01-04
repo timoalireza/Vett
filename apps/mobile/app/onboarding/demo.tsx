@@ -85,7 +85,7 @@ export default function DemoScreen() {
   const ANALYZE_BUTTON_TOP_SPACING = 22;
   // Negative moves the Analyze button upward without affecting the title or claim positioning.
   // Preserve original (non-short) positioning to avoid layout drift on standard devices.
-  const ANALYZE_BUTTON_TRANSLATE_Y = isShortScreen ? -90 : -120;
+  const ANALYZE_BUTTON_TRANSLATE_Y = isShortScreen ? -60 : -90;
   // Negative moves the whole demo stack upward so the lens lives in the upper-mid area (button lands around mid-screen).
   // Preserve original (non-short) positioning to avoid layout drift on standard devices.
   const STACK_TRANSLATE_Y = isShortScreen ? -50 : -80;
@@ -229,7 +229,7 @@ export default function DemoScreen() {
 
   const actionRowStyle = useAnimatedStyle(() => ({
     opacity: actionRowOpacity.value,
-    transform: [{ translateY: actionRowTranslateY.value }],
+    transform: [{ translateY: actionRowTranslateY.value + ANALYZE_BUTTON_TRANSLATE_Y }],
   }));
 
   const handleAnalyze = () => {
@@ -315,7 +315,7 @@ export default function DemoScreen() {
       </Animated.View>
 
       {/* Onboarding back */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 16 }]}>
         <OnboardingBackButton goTo="/onboarding/stats" />
       </View>
 
@@ -332,7 +332,7 @@ export default function DemoScreen() {
               <Animated.View
                 entering={FadeInDown.duration(400).delay(200)}
                 exiting={FadeOut.duration(200)}
-                style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING }]}
+                style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING, transform: [{ translateY: -25 }] }]}
               >
                 <Text style={styles.instructionTitle} maxFontSizeMultiplier={1.15}>
                   {instructionTitle}
@@ -404,7 +404,7 @@ export default function DemoScreen() {
               <Animated.View 
                 style={[
                   styles.analyzeButtonContainer,
-                  { marginTop: ANALYZE_BUTTON_TOP_SPACING, transform: [{ translateY: ANALYZE_BUTTON_TRANSLATE_Y }] },
+                  { marginTop: ANALYZE_BUTTON_TOP_SPACING },
                   actionRowStyle
                 ]}
               >

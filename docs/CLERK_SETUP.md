@@ -82,6 +82,18 @@ In your Railway API service, add:
 CLERK_SECRET_KEY=sk_test_... (or sk_live_... for production)
 ```
 
+If your mobile app is configured to use a Clerk JWT template (`EXPO_PUBLIC_CLERK_JWT_TEMPLATE`), also add:
+
+```
+CLERK_JWT_KEY=-----BEGIN PUBLIC KEY-----...-----END PUBLIC KEY-----
+```
+
+(Find it in Clerk Dashboard → **JWT Templates** → **Public key**.)
+
+**Note on formatting:** `CLERK_JWT_KEY` is a multi-line PEM. In Railway you can usually paste it as-is (multi-line).
+If your environment UI does not support multi-line values, store it as a single line with literal newlines (`\n`), e.g.
+`-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----`.
+
 ### 3.2 Verify API Configuration
 
 The API already has Clerk authentication configured in `apps/api/src/plugins/auth.ts`. It will:
@@ -142,6 +154,7 @@ The API already has Clerk authentication configured in `apps/api/src/plugins/aut
 1. Verify `CLERK_SECRET_KEY` is set in Railway
 2. Check API logs for authentication errors
 3. Ensure the secret key matches the publishable key (both test or both live)
+4. If using `EXPO_PUBLIC_CLERK_JWT_TEMPLATE`, ensure `CLERK_JWT_KEY` is set in the API, or remove the template
 
 ### Issue: Email verification not working
 

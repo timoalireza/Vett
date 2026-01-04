@@ -9,6 +9,7 @@ let currentToken: string | null = null;
 let tokenListeners: Array<(token: string | null) => void> = [];
 let authState: TokenAuthState = "unknown";
 let authStateListeners: Array<(state: TokenAuthState) => void> = [];
+let tokenFetcher: (() => Promise<string | null>) | null = null;
 
 export const tokenProvider = {
   setAuthState(state: TokenAuthState) {
@@ -27,6 +28,29 @@ export const tokenProvider = {
   
   getToken(): string | null {
     return currentToken;
+  },
+
+  /**
+   * Allow React layer to register a token fetcher (e.g. Clerk `getToken`) so non-React API
+   * calls can refresh tokens on-demand (fixes expired token issues).
+   */
+  setTokenFetcher(fetcher: (() => Promise<string | null>) | null) {
+    tokenFetcher = fetcher;
+  },
+
+  /**
+   * Attempt to fetch a fresh token (if a fetcher is registered) and update provider state.
+   */
+  async refreshToken(): Promise<string | null> {
+    if (!tokenFetcher) return currentToken;
+    try {
+      const next = await tokenFetcher();
+      tokenProvider.setToken(next ?? null);
+      return next ?? null;
+    } catch {
+      // Don't change currentToken on refresh failure
+      return currentToken;
+    }
   },
 
   /**
