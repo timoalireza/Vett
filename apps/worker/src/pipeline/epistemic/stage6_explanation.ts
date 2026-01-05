@@ -277,7 +277,8 @@ function generateExplanationText(
   if (finalScore >= 75) {
     // Strongly Supported / Supported
     // Use original threshold: supporting > refuting * 2 (roughly 67% when many sources)
-    if (stats.supportingCount > stats.refutingCount * 2) {
+    // Only use "multiple" when there are actually 2+ supporting sources
+    if (stats.supportingCount > stats.refutingCount * 2 && stats.supportingCount >= 2) {
       parts.push("Multiple independent sources support this claim.");
     } else {
       parts.push("Available evidence generally supports this claim.");
@@ -324,13 +325,17 @@ function generateExplanationText(
         const refutingRatio = refuting / total;
         if (refutingRatio >= 0.8 && total >= 5) {
           parts.push("Available evidence overwhelmingly contradicts this claim.");
-        } else {
+        } else if (refuting >= 2) {
+          // Only use "multiple" when there are actually 2+ refuting sources
           parts.push("Multiple independent sources refute this claim.");
+        } else {
+          parts.push("Available evidence contradicts this claim.");
         }
       } else {
         parts.push("Available evidence contradicts this claim.");
       }
-    } else if (stats.refutingCount > stats.supportingCount * 2) {
+    } else if (stats.refutingCount > stats.supportingCount * 2 && stats.refutingCount >= 2) {
+      // Only use strong language when there are actually 2+ refuting sources
       parts.push("Available evidence contradicts this claim.");
     } else {
       parts.push("No credible evidence supports this claim.");
