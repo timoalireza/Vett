@@ -185,8 +185,16 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
     
     // Safety check: after retry, json.errors could be null/undefined
     // (we're inside the original if block from line 146, but json was replaced at line 170)
-    if (!json.errors || json.errors.length === 0) {
-      throw new Error("GraphQL request failed with no error details");
+    // Note: An empty errors array ([]) means success, not failure - only throw if null/undefined
+    if (!json.errors) {
+      throw new Error("GraphQL request failed with malformed response (no errors array)");
+    }
+    
+    // If errors array is empty after retry, it means the retry succeeded but we're still in this block
+    // This shouldn't happen given the early return at line 172, but handle it gracefully
+    if (json.errors.length === 0) {
+      console.warn("[GraphQL] Retry response has empty errors array but no data - malformed success response");
+      throw new Error("GraphQL response missing data");
     }
     
     const errorMessages = json.errors.map((error: any) => {
