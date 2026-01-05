@@ -446,12 +446,13 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     !/https?:\/\/[^\s]+/i.test(context.normalizedText) &&
     context.normalizedText.trim().length > 0 &&
     context.normalizedText.trim().length <= 320;
+  const fastClaimText = context.normalizedText.trim();
 
   // Run classification and extraction in parallel to save time
   const classificationStart = Date.now();
   const [classification, claimExtraction] = await Promise.all([
     isFastTypedClaim
-      ? Promise.resolve(classifyTopicHeuristically(analysisCorpus))
+      ? Promise.resolve(classifyTopicHeuristically(fastClaimText))
       : classifyTopicWithOpenAI({
           ...payload.input,
           text: analysisCorpus
@@ -461,7 +462,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
           claims: [
             {
               id: randomUUID(),
-              text: context.normalizedText.trim(),
+              text: fastClaimText,
               extractionConfidence: 1,
               verdict: "Opinion" as const,
               confidence: 0.75
