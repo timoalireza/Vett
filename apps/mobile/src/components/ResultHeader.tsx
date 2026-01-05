@@ -33,9 +33,10 @@ export function ResultHeader({
   const theme = useTheme();
   const gradient = getScoreGradient(score, verdict, scoreBand);
   
-  // Use confidence interval if available, otherwise use adjusted confidence
+  // Use midpoint of confidence interval if available, otherwise use adjusted confidence
+  // Confidence interval is in 0-100 scale, so divide midpoint by 100 for 0-1 scale
   const displayConfidence = confidenceInterval 
-    ? (confidenceInterval.high - confidenceInterval.low) / 100 
+    ? ((confidenceInterval.low + confidenceInterval.high) / 2) / 100
     : adjustConfidence(confidence);
   
   // Use epistemic band label if available, otherwise fall back to verdict

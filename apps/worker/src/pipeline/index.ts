@@ -656,7 +656,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         score: epistemicResult.finalScore,
         verdict: epistemicToLegacyVerdict(epistemicResult.scoreBand),
         confidence: epistemicResult.confidenceInterval 
-          ? (epistemicResult.confidenceInterval.high - epistemicResult.confidenceInterval.low) / 100
+          ? ((epistemicResult.confidenceInterval.low + epistemicResult.confidenceInterval.high) / 2) / 100
           : verdictData.confidence,
         summary: epistemicResult.explanationText,
         recommendation: epistemicResult.evidenceSummary
