@@ -337,23 +337,43 @@ function generateExplanationText(
     }
   }
 
-  // Sentence 2: Add specific limitation from secondary penalty or provide context
-  if (topPenalties.length > 1) {
-    const secondaryPenalty = topPenalties[1];
-    if (secondaryPenalty.name === "Model dependence") {
-      parts.push("The claim involves future projections rather than established facts.");
-    } else if (secondaryPenalty.name === "Temporal mismatch") {
-      parts.push("The timeframe referenced in the claim does not match the evidence.");
-    } else if (secondaryPenalty.name === "Missing context") {
-      parts.push("Important qualifying context is missing from the claim.");
-    } else if (secondaryPenalty.name === "Causal overreach") {
-      parts.push("The evidence shows association but not the causal link stated.");
-    } else if (secondaryPenalty.name === "Scope exaggeration") {
-      parts.push("The claim overgeneralizes from more limited evidence.");
-    } else if (secondaryPenalty.name === "Low expert consensus") {
-      parts.push("Expert sources show disagreement on this topic.");
-    } else if (secondaryPenalty.name === "Outdated evidence") {
-      parts.push("The available evidence may not reflect current knowledge.");
+  // Sentence 2: Add specific limitation from penalties (if not already covered in sentence 1)
+  if (topPenalties.length > 0) {
+    // Determine which penalty to use for sentence 2
+    // If primary penalty was "Evidence contradiction" and used in sentence 1, try secondary
+    const primaryWasUsedInSentence1 = primaryPenalty && 
+      primaryPenalty.name === "Evidence contradiction" && 
+      finalScore < 45;
+    
+    const penaltyForSentence2 = primaryWasUsedInSentence1 && topPenalties.length > 1
+      ? topPenalties[1]
+      : primaryPenalty;
+    
+    // Add context if the penalty wasn't already extensively covered in sentence 1
+    if (penaltyForSentence2 && penaltyForSentence2.name !== "Evidence contradiction") {
+      if (penaltyForSentence2.name === "Model dependence") {
+        parts.push("The claim involves future projections rather than established facts.");
+      } else if (penaltyForSentence2.name === "Temporal mismatch") {
+        parts.push("The timeframe referenced in the claim does not match the evidence.");
+      } else if (penaltyForSentence2.name === "Missing context") {
+        parts.push("Important qualifying context is missing from the claim.");
+      } else if (penaltyForSentence2.name === "Causal overreach") {
+        parts.push("The evidence shows association but not the causal link stated.");
+      } else if (penaltyForSentence2.name === "Scope exaggeration") {
+        parts.push("The claim overgeneralizes from more limited evidence.");
+      } else if (penaltyForSentence2.name === "Low expert consensus") {
+        parts.push("Expert sources show disagreement on this topic.");
+      } else if (penaltyForSentence2.name === "Outdated evidence") {
+        parts.push("The available evidence may not reflect current knowledge.");
+      } else if (penaltyForSentence2.name === "Selective citation") {
+        parts.push("The available evidence comes from a limited range of sources.");
+      } else if (penaltyForSentence2.name === "Rhetorical certainty") {
+        parts.push("The claim uses definitive language that may overstate certainty.");
+      } else if (penaltyForSentence2.name === "Ambiguous quantifiers") {
+        parts.push("The claim uses vague quantifiers that make verification difficult.");
+      } else if (penaltyForSentence2.name === "Comparative distortion") {
+        parts.push("The comparison may oversimplify or depend on specific methodologies.");
+      }
     }
   }
 
