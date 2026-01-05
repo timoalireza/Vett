@@ -45,6 +45,7 @@ export interface AnalysisSummary {
   classificationMeta?: ClassificationMeta | null;
   claimExtractionMeta?: ClaimExtractionMeta | null;
   reasonerMeta?: ReasonerMeta | null;
+  epistemic?: EpistemicResultSummary | null;
 }
 
 export interface ClaimSummary {
@@ -138,6 +139,33 @@ export interface ReasonerMeta {
   confidence: number | null;
   fallbackUsed: boolean;
   rationale?: string | null;
+}
+
+// Epistemic Pipeline Result Types
+export interface EpistemicPenaltySummary {
+  name: string;
+  weight: number;
+  rationale: string;
+  severity: "low" | "medium" | "high";
+}
+
+export interface EpistemicConfidenceIntervalSummary {
+  low: number;
+  high: number;
+}
+
+export interface EpistemicResultSummary {
+  version: string;
+  finalScore: number;
+  scoreBand: string;
+  scoreBandDescription: string;
+  penaltiesApplied: EpistemicPenaltySummary[];
+  evidenceSummary: string;
+  confidenceInterval?: EpistemicConfidenceIntervalSummary | null;
+  explanationText: string;
+  pipelineVersion: string;
+  processedAt: string;
+  totalProcessingTimeMs: number;
 }
 
 class AnalysisService {
@@ -616,6 +644,50 @@ class AnalysisService {
       rawInputText = null;
     }
 
+    // Parse epistemic pipeline result from resultJson
+    let epistemic: EpistemicResultSummary | null = null;
+    const epistemicRaw = (parsedResultJson as Record<string, unknown>)?.epistemic as Record<string, unknown> | undefined;
+    if (epistemicRaw) {
+      try {
+        const penaltiesRaw = Array.isArray(epistemicRaw.penaltiesApplied) 
+          ? epistemicRaw.penaltiesApplied as Array<Record<string, unknown>>
+          : [];
+        
+        const confidenceIntervalRaw = epistemicRaw.confidenceInterval as Record<string, unknown> | undefined;
+        
+        epistemic = {
+          version: String(epistemicRaw.version ?? "1.0.0"),
+          finalScore: typeof epistemicRaw.finalScore === "number" ? Math.round(epistemicRaw.finalScore) : 50,
+          scoreBand: String(epistemicRaw.scoreBand ?? "Unknown"),
+          scoreBandDescription: String(epistemicRaw.scoreBandDescription ?? ""),
+          penaltiesApplied: penaltiesRaw.map((p) => ({
+            name: String(p.name ?? ""),
+            weight: typeof p.weight === "number" ? Math.round(p.weight) : 0,
+            rationale: String(p.rationale ?? ""),
+            severity: (["low", "medium", "high"].includes(String(p.severity)) 
+              ? String(p.severity) 
+              : "low") as "low" | "medium" | "high"
+          })),
+          evidenceSummary: String(epistemicRaw.evidenceSummary ?? ""),
+          confidenceInterval: confidenceIntervalRaw 
+            ? {
+                low: typeof confidenceIntervalRaw.low === "number" ? Math.round(confidenceIntervalRaw.low) : 0,
+                high: typeof confidenceIntervalRaw.high === "number" ? Math.round(confidenceIntervalRaw.high) : 100
+              }
+            : null,
+          explanationText: String(epistemicRaw.explanationText ?? ""),
+          pipelineVersion: String(epistemicRaw.pipelineVersion ?? "1.0.0"),
+          processedAt: String(epistemicRaw.processedAt ?? new Date().toISOString()),
+          totalProcessingTimeMs: typeof epistemicRaw.totalProcessingTimeMs === "number" 
+            ? Math.round(epistemicRaw.totalProcessingTimeMs) 
+            : 0
+        };
+      } catch (error) {
+        console.warn(`[AnalysisService] Error parsing epistemic result for analysis ${id}:`, error);
+        epistemic = null;
+      }
+    }
+
     return {
       id: record.id,
       userId: record.userId ?? null,
@@ -640,7 +712,8 @@ class AnalysisService {
       ingestionRecords,
       classificationMeta,
       claimExtractionMeta,
-      reasonerMeta
+      reasonerMeta,
+      epistemic
     };
   }
 

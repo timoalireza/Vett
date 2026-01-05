@@ -16,6 +16,33 @@ export interface SubmitAnalysisInput {
   }>;
 }
 
+// Epistemic Pipeline Types (Graded Evaluator)
+export interface EpistemicPenalty {
+  name: string;
+  weight: number;
+  rationale: string;
+  severity: "LOW" | "MEDIUM" | "HIGH";
+}
+
+export interface EpistemicConfidenceInterval {
+  low: number;
+  high: number;
+}
+
+export interface EpistemicResult {
+  version: string;
+  finalScore: number;
+  scoreBand: string;
+  scoreBandDescription: string;
+  penaltiesApplied: EpistemicPenalty[];
+  evidenceSummary: string;
+  confidenceInterval?: EpistemicConfidenceInterval | null;
+  explanationText: string;
+  pipelineVersion: string;
+  processedAt: string;
+  totalProcessingTimeMs: number;
+}
+
 export interface AnalysisResponse {
   id: string;
   status: string;
@@ -43,6 +70,7 @@ export interface AnalysisResponse {
     reliability: number | null;
     summary?: string | null;
   }>;
+  epistemic?: EpistemicResult | null;
 }
 
 const SUBMIT_ANALYSIS_MUTATION = `
@@ -82,6 +110,27 @@ const ANALYSIS_QUERY = `
         reliability
         summary
       }
+      epistemic {
+        version
+        finalScore
+        scoreBand
+        scoreBandDescription
+        penaltiesApplied {
+          name
+          weight
+          rationale
+          severity
+        }
+        evidenceSummary
+        confidenceInterval {
+          low
+          high
+        }
+        explanationText
+        pipelineVersion
+        processedAt
+        totalProcessingTimeMs
+      }
     }
   }
 `;
@@ -113,6 +162,7 @@ export interface AnalysisSummary {
   recommendation?: string | null;
   complexity?: string | null;
   claims?: Array<{ text: string }>;
+  epistemic?: EpistemicResult | null;
 }
 
 export interface AnalysesConnection {
@@ -148,6 +198,19 @@ const ANALYSES_QUERY = `
           complexity
           claims {
             text
+          }
+          epistemic {
+            finalScore
+            scoreBand
+            scoreBandDescription
+            penaltiesApplied {
+              name
+              weight
+              rationale
+              severity
+            }
+            evidenceSummary
+            explanationText
           }
         }
         cursor

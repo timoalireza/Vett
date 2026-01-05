@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { ScoreRing } from "./ScoreRing";
 import { useTheme } from "../hooks/use-theme";
-import { getScoreGradient, adjustConfidence } from "../utils/scoreColors";
+import { getScoreGradient, adjustConfidence, getScoreBandLabel } from "../utils/scoreColors";
 
 interface ResultHeaderProps {
   platform: string;
@@ -15,12 +15,31 @@ interface ResultHeaderProps {
   score: number;
   imageUrl?: string | null;
   onShare?: () => void;
+  // Epistemic scoring props
+  scoreBand?: string | null;
+  confidenceInterval?: { low: number; high: number } | null;
 }
 
-export function ResultHeader({ platform, verdict, confidence, score, imageUrl, onShare }: ResultHeaderProps) {
+export function ResultHeader({ 
+  platform, 
+  verdict, 
+  confidence, 
+  score, 
+  imageUrl, 
+  onShare,
+  scoreBand,
+  confidenceInterval
+}: ResultHeaderProps) {
   const theme = useTheme();
-  const gradient = getScoreGradient(score, verdict);
-  const adjustedConfidence = adjustConfidence(confidence);
+  const gradient = getScoreGradient(score, verdict, scoreBand);
+  
+  // Use confidence interval if available, otherwise use adjusted confidence
+  const displayConfidence = confidenceInterval 
+    ? (confidenceInterval.high - confidenceInterval.low) / 100 
+    : adjustConfidence(confidence);
+  
+  // Use epistemic band label if available, otherwise fall back to verdict
+  const displayBand = scoreBand ?? getScoreBandLabel(score, scoreBand);
 
   return (
     <MotiView
@@ -98,10 +117,10 @@ export function ResultHeader({ platform, verdict, confidence, score, imageUrl, o
 
         {/* Middle: Vett Score */}
         <View style={styles.scoreContainer}>
-          <ScoreRing score={score} size={140} verdict={verdict} />
+          <ScoreRing score={score} size={140} verdict={verdict} scoreBand={scoreBand} />
         </View>
 
-        {/* Bottom: Verdict and Confidence */}
+        {/* Bottom: Assessment Band and Confidence */}
         <View style={styles.bottomRow}>
           <View style={styles.verdictContainer}>
             <Text
@@ -116,7 +135,7 @@ export function ResultHeader({ platform, verdict, confidence, score, imageUrl, o
                 }
               ]}
             >
-              Verdict
+              Assessment
             </Text>
             <Text
               style={[
@@ -131,7 +150,7 @@ export function ResultHeader({ platform, verdict, confidence, score, imageUrl, o
               ]}
               numberOfLines={1}
             >
-              {verdict}
+              {displayBand}
             </Text>
           </View>
           <View style={styles.confidenceContainer}>
@@ -147,44 +166,61 @@ export function ResultHeader({ platform, verdict, confidence, score, imageUrl, o
                 }
               ]}
             >
-              Confidence
+              {confidenceInterval ? "Range" : "Confidence"}
             </Text>
             <View style={styles.confidenceBarRow}>
-              <View
-                style={[
-                  styles.confidenceBar,
-                  {
-                    width: 100,
-                    height: 6,
-                    borderRadius: theme.radii.pill,
-                    backgroundColor: theme.colors.card + "80",
-                    overflow: "hidden"
-                  }
-                ]}
-              >
-                <View
-                  style={{
-                    width: `${Math.min(100, Math.max(0, adjustedConfidence * 100))}%`,
-                    height: "100%",
-                    borderRadius: theme.radii.pill,
-                    backgroundColor: gradient.end
-                  }}
-                />
-              </View>
-              <Text
-                style={[
-                  styles.confidenceText,
-                  {
-                    color: "#FFFFFF",
-                    fontSize: theme.typography.caption,
-                    fontWeight: "600",
-                    marginLeft: 8,
-                    minWidth: 35
-                  }
-                ]}
-              >
-                {(adjustedConfidence * 100).toFixed(0)}%
-              </Text>
+              {confidenceInterval ? (
+                <Text
+                  style={[
+                    styles.confidenceText,
+                    {
+                      color: "#FFFFFF",
+                      fontSize: theme.typography.caption,
+                      fontWeight: "600"
+                    }
+                  ]}
+                >
+                  {confidenceInterval.low}–{confidenceInterval.high}
+                </Text>
+              ) : (
+                <>
+                  <View
+                    style={[
+                      styles.confidenceBar,
+                      {
+                        width: 100,
+                        height: 6,
+                        borderRadius: theme.radii.pill,
+                        backgroundColor: theme.colors.card + "80",
+                        overflow: "hidden"
+                      }
+                    ]}
+                  >
+                    <View
+                      style={{
+                        width: `${Math.min(100, Math.max(0, displayConfidence * 100))}%`,
+                        height: "100%",
+                        borderRadius: theme.radii.pill,
+                        backgroundColor: gradient.end
+                      }}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.confidenceText,
+                      {
+                        color: "#FFFFFF",
+                        fontSize: theme.typography.caption,
+                        fontWeight: "600",
+                        marginLeft: 8,
+                        minWidth: 35
+                      }
+                    ]}
+                  >
+                    {(displayConfidence * 100).toFixed(0)}%
+                  </Text>
+                </>
+              )}
             </View>
           </View>
         </View>

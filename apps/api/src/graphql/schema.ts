@@ -28,6 +28,41 @@ export const schema = `
     classificationMeta: ClassificationMeta
     claimExtractionMeta: ClaimExtractionMeta
     reasonerMeta: ReasonerMeta
+    epistemic: EpistemicResult
+  }
+
+  # Epistemic Pipeline Result (Graded Evaluator)
+  # This is the new primary scoring system
+  type EpistemicResult {
+    version: String!
+    finalScore: Int!
+    scoreBand: String!
+    scoreBandDescription: String!
+    penaltiesApplied: [EpistemicPenalty!]!
+    evidenceSummary: String!
+    confidenceInterval: EpistemicConfidenceInterval
+    explanationText: String!
+    pipelineVersion: String!
+    processedAt: String!
+    totalProcessingTimeMs: Int!
+  }
+
+  type EpistemicPenalty {
+    name: String!
+    weight: Int!
+    rationale: String!
+    severity: EpistemicPenaltySeverity!
+  }
+
+  enum EpistemicPenaltySeverity {
+    LOW
+    MEDIUM
+    HIGH
+  }
+
+  type EpistemicConfidenceInterval {
+    low: Int!
+    high: Int!
   }
 
   type Claim {

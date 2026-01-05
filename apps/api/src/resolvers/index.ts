@@ -867,6 +867,18 @@ export const resolvers: IResolvers<GraphQLContext> = {
       };
       return recMap[parent.recommendation.toLowerCase()] || null;
     }
-  } as IResolvers<GraphQLContext>["IngestionQuality"]
+  } as IResolvers<GraphQLContext>["IngestionQuality"],
+
+  EpistemicPenalty: {
+    severity: (parent: { severity: string }): string => {
+      // Map lowercase enum to uppercase GraphQL enum
+      const severityMap: Record<string, string> = {
+        low: "LOW",
+        medium: "MEDIUM",
+        high: "HIGH"
+      };
+      return severityMap[parent.severity.toLowerCase()] || "LOW";
+    }
+  } as IResolvers<GraphQLContext>["EpistemicPenalty"]
 };
 

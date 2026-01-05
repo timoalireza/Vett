@@ -17,6 +17,7 @@ import { reasonVerdict, VERDICT_MODEL, type ReasonerVerdictOutput } from "./reas
 import { adjustReliability, extractHostname } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
 import { openai } from "../clients/openai.js";
+import { runEpistemicPipeline, EpistemicResult, SCORE_BANDS } from "./epistemic/index.js";
 
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
 
@@ -502,6 +503,29 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   });
 
   const imageDerivedClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
+  
+  // ============================================================================
+  // Run Epistemic Pipeline (new graded evaluator)
+  // This produces the deterministic, penalty-based score
+  // ============================================================================
+  const epistemicStart = Date.now();
+  let epistemicResult: EpistemicResult | null = null;
+  try {
+    const epistemicOutput = await runEpistemicPipeline({
+      analysisId: payload.analysisId,
+      claims: claims.map((c) => ({ id: c.id, text: c.text })),
+      topic: classification.topic,
+      maxEvidencePerClaim: 5
+    });
+    epistemicResult = epistemicOutput.result;
+    console.log(`[Pipeline] Epistemic pipeline completed: score=${epistemicResult.finalScore}, band="${epistemicResult.scoreBand}"`);
+  } catch (error) {
+    console.error("[Pipeline] Epistemic pipeline failed, falling back to legacy reasoning:", error);
+    epistemicResult = null;
+  }
+  timings.epistemic = Date.now() - epistemicStart;
+  
+  // Legacy reasoning (kept for backward compatibility, will be phased out)
   const reasonStart = Date.now();
   let reasoned = await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
   timings.reasoning = Date.now() - reasonStart;
@@ -607,18 +631,48 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ? validateVerdict("Unverified")
     : validateVerdict(verdictData.verdict);
   
-  const adjustedVerdictData = {
-    ...verdictData,
-    verdict: finalVerdict,
-    score:
-      finalVerdict === "Unverified"
-        ? null // Unverified has no score
-      : finalVerdict === "False" && verdictData.confidence >= 0.9
-          ? 0
-        : finalVerdict === "Verified"
-            ? 100
-            : verdictData.score
+  // Use epistemic score as the primary score if available
+  // Map epistemic score band to legacy verdict for backward compatibility
+  const epistemicToLegacyVerdict = (scoreBand: string): PipelineResult["verdict"] => {
+    switch (scoreBand) {
+      case "Strongly Supported":
+        return "Verified";
+      case "Supported":
+        return "Mostly Accurate";
+      case "Plausible":
+      case "Mixed":
+        return "Partially Accurate";
+      case "Weakly Supported":
+      case "Mostly False":
+      case "False":
+        return "False";
+      default:
+        return "Unverified";
+    }
   };
+
+  const adjustedVerdictData = epistemicResult
+    ? {
+        score: epistemicResult.finalScore,
+        verdict: epistemicToLegacyVerdict(epistemicResult.scoreBand),
+        confidence: epistemicResult.confidenceInterval 
+          ? (epistemicResult.confidenceInterval.high - epistemicResult.confidenceInterval.low) / 100
+          : verdictData.confidence,
+        summary: epistemicResult.explanationText,
+        recommendation: epistemicResult.evidenceSummary
+      }
+    : {
+        ...verdictData,
+        verdict: finalVerdict,
+        score:
+          finalVerdict === "Unverified"
+            ? null // Unverified has no score
+          : finalVerdict === "False" && verdictData.confidence >= 0.9
+              ? 0
+            : finalVerdict === "Verified"
+                ? 100
+                : verdictData.score
+      };
 
   // Guardrail: require corroboration across multiple independent sources for high-certainty verdicts.
   // This prevents "looks plausible" conclusions when only one outlet is retrieved, and encourages multi-perspective grounding.
@@ -663,9 +717,12 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ingestion: timings.ingestion,
     classificationAndExtraction: timings.classificationAndExtraction,
     evidenceRetrievalAndEvaluation: timings.evidenceRetrievalAndEvaluation,
+    epistemic: timings.epistemic,
     reasoning: timings.reasoning,
     total: timings.total,
-    claimsProcessed: processedClaims.length
+    claimsProcessed: processedClaims.length,
+    epistemicScore: epistemicResult?.finalScore ?? "N/A",
+    epistemicBand: epistemicResult?.scoreBand ?? "N/A"
   });
 
   const metadata: PipelineMetadata = {
@@ -858,6 +915,24 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
               truncated: record.truncated,
               error: record.error
             }))
+          }
+        : undefined,
+      // Epistemic pipeline result (new graded evaluator - source of truth for scoring)
+      epistemic: epistemicResult
+        ? {
+            version: epistemicResult.version,
+            finalScore: epistemicResult.finalScore,
+            scoreBand: epistemicResult.scoreBand,
+            scoreBandDescription: epistemicResult.scoreBandDescription,
+            penaltiesApplied: epistemicResult.penaltiesApplied,
+            evidenceSummary: epistemicResult.evidenceSummary,
+            confidenceInterval: epistemicResult.confidenceInterval,
+            explanationText: epistemicResult.explanationText,
+            pipelineVersion: epistemicResult.pipelineVersion,
+            processedAt: epistemicResult.processedAt,
+            totalProcessingTimeMs: epistemicResult.totalProcessingTimeMs,
+            // Include artifacts for audit/determinism verification
+            artifacts: epistemicResult.artifacts
           }
         : undefined
     }

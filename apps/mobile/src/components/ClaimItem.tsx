@@ -2,22 +2,32 @@ import { Text, TouchableOpacity, View, StyleSheet, Linking } from "react-native"
 import { BlurView } from "expo-blur";
 
 import { useTheme } from "../hooks/use-theme";
+import { getScoreColorFromBand, getScoreBandLabel } from "../utils/scoreColors";
 
 interface ClaimItemProps {
   text: string;
   verdict: string;
   confidence: number;
   onPress?: () => void;
+  // Epistemic scoring
+  scoreBand?: string | null;
+  topPenalty?: { name: string; weight: number } | null;
 }
 
-export function ClaimItem({ text, verdict, confidence, onPress }: ClaimItemProps) {
+export function ClaimItem({ text, verdict, confidence, onPress, scoreBand, topPenalty }: ClaimItemProps) {
   const theme = useTheme();
-  const statusColor =
-    verdict === "False"
+  
+  // Use epistemic band color if available, otherwise fall back to verdict-based
+  const statusColor = scoreBand 
+    ? getScoreColorFromBand(scoreBand)
+    : verdict === "False"
       ? theme.colors.danger
       : verdict === "Verified"
         ? theme.colors.success
         : theme.colors.warning;
+  
+  // Display epistemic band if available, otherwise verdict
+  const displayLabel = scoreBand ?? verdict;
 
   return (
     <TouchableOpacity
@@ -78,9 +88,24 @@ export function ClaimItem({ text, verdict, confidence, onPress }: ClaimItemProps
                   }
                 ]}
               >
-                {verdict}
+                {displayLabel}
               </Text>
             </View>
+            {topPenalty && (
+              <Text
+                style={[
+                  styles.penaltyText,
+                  {
+                    color: theme.colors.subtitle,
+                    fontSize: theme.typography.small,
+                    marginLeft: 8
+                  }
+                ]}
+                numberOfLines={1}
+              >
+                {topPenalty.name} (−{topPenalty.weight})
+              </Text>
+            )}
           </View>
         </View>
       </BlurView>
@@ -116,6 +141,9 @@ const styles = StyleSheet.create({
   },
   verdictText: {
     letterSpacing: 0.2
+  },
+  penaltyText: {
+    letterSpacing: 0.1
   }
 });
 

@@ -12,16 +12,11 @@ interface ScoreRingProps {
   score: number;
   label?: string;
   size?: number;
-}
-
-interface ScoreRingProps {
-  score: number;
-  label?: string;
-  size?: number;
   verdict?: string | null;
+  scoreBand?: string | null;
 }
 
-export function ScoreRing({ score, label = "Vett Score", size = 140, verdict }: ScoreRingProps) {
+export function ScoreRing({ score, label = "Vett Score", size = 140, verdict, scoreBand }: ScoreRingProps) {
   const theme = useTheme();
   const radius = (size - 20) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -36,7 +31,8 @@ export function ScoreRing({ score, label = "Vett Score", size = 140, verdict }: 
     strokeDashoffset: circumference * (1 - progress.value)
   }));
 
-  const { start, end } = getScoreGradient(score, verdict);
+  // Use scoreBand for gradient color if available
+  const { start, end } = getScoreGradient(score, verdict, scoreBand);
 
   return (
     <View

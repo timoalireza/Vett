@@ -19,6 +19,8 @@ interface AnalysisCardVerticalProps {
   onResubmit?: (id: string, title: string) => void;
   onDelete?: (id: string) => void;
   onShare?: (id: string, title: string, score: number) => void;
+  // Epistemic scoring
+  scoreBand?: string | null;
 }
 
 /**
@@ -35,11 +37,13 @@ export function AnalysisCardVertical({
   onPress,
   onResubmit,
   onDelete,
-  onShare
+  onShare,
+  scoreBand
 }: AnalysisCardVerticalProps) {
   const theme = useTheme();
   const router = useRouter();
-  const scoreGradient = getScoreGradient(score, verdict ?? null);
+  // Use epistemic scoreBand for gradient if available
+  const scoreGradient = getScoreGradient(score, verdict ?? null, scoreBand);
   const [menuVisible, setMenuVisible] = useState(false);
 
   const handlePress = () => {
