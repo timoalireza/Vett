@@ -602,8 +602,14 @@ export default function ResultScreen() {
           {isCompleted ? (
             <>
               {/* Verdict and Score side-by-side boxes */}
-              <View style={[styles.verdictScoreRow, { marginTop: -140 }]}>
-                <Animated.View style={[card1AnimatedStyle, styles.verdictBox]}>
+              <View
+                style={[
+                  styles.verdictScoreRow,
+                  { marginTop: -140 },
+                  isUnverified && { flexDirection: "column" }
+                ]}
+              >
+                <Animated.View style={[card1AnimatedStyle, styles.verdictBox, isUnverified && { width: "100%" }]}>
                   <Text style={styles.verdictScoreLabel}>Verdict:</Text>
                   <View style={styles.verdictValueContainer}>
                     <Text style={[styles.verdictScoreValue, { color: scoreColor }]}>
@@ -611,7 +617,7 @@ export default function ResultScreen() {
                     </Text>
                   </View>
                 </Animated.View>
-                <Animated.View style={[card1AnimatedStyle, styles.scoreBox]}>
+                <Animated.View style={[card1AnimatedStyle, styles.scoreBox, isUnverified && { width: "100%" }]}>
                   <Text style={styles.verdictScoreLabel}>Score:</Text>
                   <Text style={[styles.verdictScoreValue, { color: scoreColor, fontSize: 36, textAlign: "center" }]}>
                     {hasScore && !isUnverified ? score : "N/A"}
