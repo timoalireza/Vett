@@ -6,7 +6,8 @@ import { parseJsonContent } from "../utils/openai.js";
 
 type ClaimWithoutSources = Omit<PipelineClaim, "sourceKeys">;
 
-const MODEL_NAME = "gpt-5.2";
+// Claim extraction is latency-sensitive; default to a fast model.
+const MODEL_NAME = process.env.CLAIM_EXTRACTION_MODEL ?? "gpt-4.1-mini";
 const MAX_CLAIMS = 3;
 
 const FALLBACK_VERDICT: PipelineClaim["verdict"] = "Opinion";

@@ -40,7 +40,7 @@ export interface ScoringOutput {
  * If so, floor rule applies: score >= 20
  */
 function checkFloorRule(
-  claims: TypedClaim[],
+  _claims: TypedClaim[],
   evidence: EvidenceGraph
 ): { applies: boolean; reason?: string } {
   const peerReviewedEvidence = evidence.nodes.filter((n) =>

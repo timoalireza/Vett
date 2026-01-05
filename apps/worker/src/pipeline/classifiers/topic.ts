@@ -4,7 +4,8 @@ import { openai } from "../../clients/openai.js";
 import type { ClassificationMetadata } from "../types.js";
 import { parseJsonContent } from "../utils/openai.js";
 
-const MODEL_NAME = "gpt-5.2";
+// Topic classification is latency-sensitive; default to a fast model.
+const MODEL_NAME = process.env.TOPIC_CLASSIFICATION_MODEL ?? "gpt-4.1-mini";
 
 const TOPIC_KEYWORDS: Record<string, RegExp[]> = {
   politics: [/election/i, /policy/i, /government/i, /senate/i],
@@ -64,6 +65,10 @@ function heuristicClassification(text: string): TopicClassificationResult {
       fallbackUsed: true
     }
   };
+}
+
+export function classifyTopicHeuristically(text: string): TopicClassificationResult {
+  return heuristicClassification(text);
 }
 
 function normalizeTopic(rawTopic: unknown): string {

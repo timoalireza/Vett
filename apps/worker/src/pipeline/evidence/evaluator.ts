@@ -3,8 +3,67 @@ import type { EvidenceResult } from "../retrievers/types.js";
 import { parseJsonContent } from "../utils/openai.js";
 import { recordEvidenceReliability } from "../retrievers/trust.js";
 
-const MODEL_NAME = "gpt-5.2";
-const MAX_EVIDENCE_PER_REQUEST = 3;
+const MODEL_NAME = process.env.EVIDENCE_EVALUATOR_MODEL ?? "gpt-4.1-mini";
+const MAX_EVIDENCE_PER_REQUEST = 5;
+const EVIDENCE_EVALUATION_TIMEOUT_MS = Number(process.env.EVIDENCE_EVALUATION_TIMEOUT_MS ?? 3_500);
+const CACHE_TTL_MS = Number(process.env.EVIDENCE_EVALUATION_CACHE_TTL_MS ?? 10 * 60 * 1000);
+
+type CacheEntry = { expiresAt: number; results: EvidenceResult[] };
+const evaluationCache = new Map<string, CacheEntry>();
+
+function cacheKey(claimText: string, evidence: EvidenceResult[]): string {
+  return JSON.stringify({
+    claim: claimText.trim().toLowerCase(),
+    evidence: evidence.map((e) => ({
+      url: e.url,
+      provider: e.provider,
+      title: e.title,
+      summary: (e.summary ?? "").slice(0, 500)
+    }))
+  });
+}
+
+function getCachedEvaluation(claimText: string, evidence: EvidenceResult[]): EvidenceResult[] | null {
+  const key = cacheKey(claimText, evidence);
+  const entry = evaluationCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    evaluationCache.delete(key);
+    return null;
+  }
+  // return a fresh copy so callers can mutate safely
+  return entry.results.map((r) => ({ ...r, evaluation: r.evaluation ? { ...r.evaluation } : undefined }));
+}
+
+function setCachedEvaluation(claimText: string, evidence: EvidenceResult[], results: EvidenceResult[]): void {
+  const key = cacheKey(claimText, evidence);
+  evaluationCache.set(key, {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    results: results.map((r) => ({ ...r, evaluation: r.evaluation ? { ...r.evaluation } : undefined }))
+  });
+}
+
+function pruneEvaluationCache(): void {
+  const now = Date.now();
+  for (const [key, entry] of evaluationCache.entries()) {
+    if (entry.expiresAt <= now) {
+      evaluationCache.delete(key);
+    }
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  if (!Number.isFinite(ms) || ms <= 0) return promise;
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
 
 const EVIDENCE_PROMPT = `
 You are assisting in fact-checking. Evaluate each evidence item relative to the provided claim.
@@ -66,6 +125,12 @@ export async function evaluateEvidenceForClaim(
     return evidence;
   }
 
+  pruneEvaluationCache();
+  const cached = getCachedEvaluation(claimText, evidence);
+  if (cached) {
+    return cached;
+  }
+
   // OPTIMIZATION: Process batches in parallel if multiple batches exist
   const batches: EvidenceResult[][] = [];
   for (let i = 0; i < evidence.length; i += MAX_EVIDENCE_PER_REQUEST) {
@@ -76,36 +141,40 @@ export async function evaluateEvidenceForClaim(
   const batchResults = await Promise.all(
     batches.map(async (batch) => {
     try {
-      const response = await openai.responses.create({
-        model: MODEL_NAME,
-        input: [
-          {
-            role: "system",
-            content: EVIDENCE_PROMPT
-          },
-          {
-            role: "user",
-            content: JSON.stringify({
-              claim: claimText,
-              evidence: batch.map((item, index) => ({
-                index,
-                provider: item.provider,
-                title: item.title,
-                url: item.url,
-                summary: item.summary ?? ""
-              }))
-            })
+      const response = await withTimeout(
+        openai.responses.create({
+          model: MODEL_NAME,
+          input: [
+            {
+              role: "system",
+              content: EVIDENCE_PROMPT
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                claim: claimText,
+                evidence: batch.map((item, index) => ({
+                  index,
+                  provider: item.provider,
+                  title: item.title,
+                  url: item.url,
+                  summary: item.summary ?? ""
+                }))
+              })
+            }
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "evidence_evaluation",
+              schema: JSON_SCHEMA,
+              strict: true
+            }
           }
-        ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "evidence_evaluation",
-          schema: JSON_SCHEMA,
-          strict: true
-        }
-      }
-      });
+        }),
+        EVIDENCE_EVALUATION_TIMEOUT_MS,
+        "Evidence evaluation"
+      );
 
       const firstOutput = response.output?.[0] as any;
       const firstContent = firstOutput?.content?.[0];
@@ -163,7 +232,9 @@ export async function evaluateEvidenceForClaim(
     })
   );
 
-  return batchResults.flat();
+  const evaluated = batchResults.flat();
+  setCachedEvaluation(claimText, evidence, evaluated);
+  return evaluated;
 }
 
 

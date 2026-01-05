@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   PipelineContext,
   PipelineResult,
@@ -8,7 +9,7 @@ import {
   ReasonerMetadata
 } from "./types.js";
 import { AnalysisJobPayload } from "@vett/shared";
-import { classifyTopicWithOpenAI } from "./classifiers/topic.js";
+import { classifyTopicHeuristically, classifyTopicWithOpenAI } from "./classifiers/topic.js";
 import { extractClaimsWithOpenAI } from "./extractors/claims.js";
 import { retrieveEvidence } from "./retrievers/index.js";
 import type { EvidenceResult } from "./retrievers/types.js";
@@ -17,9 +18,40 @@ import { reasonVerdict, VERDICT_MODEL, type ReasonerVerdictOutput } from "./reas
 import { adjustReliability, extractHostname } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
 import { openai } from "../clients/openai.js";
-import { runEpistemicPipeline, EpistemicResult, SCORE_BANDS } from "./epistemic/index.js";
+import { runEpistemicPipeline, EpistemicResult } from "./epistemic/index.js";
 
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
+const LEGACY_EVIDENCE_CONCURRENCY = Number(process.env.LEGACY_EVIDENCE_CONCURRENCY ?? 2);
+
+async function asyncPool<T, R>(
+  poolLimit: number,
+  items: T[],
+  iteratorFn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const limit = Number.isFinite(poolLimit) && poolLimit > 0 ? Math.floor(poolLimit) : 1;
+  const ret: R[] = new Array(items.length);
+  const executing = new Set<Promise<void>>();
+
+  const enqueue = async (item: T, index: number) => {
+    const p = (async () => {
+      ret[index] = await iteratorFn(item, index);
+    })();
+    executing.add(p);
+    const clean = () => executing.delete(p);
+    p.then(clean, clean);
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  };
+
+  for (let i = 0; i < items.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await enqueue(items[i]!, i);
+  }
+
+  await Promise.all(executing);
+  return ret;
+}
 
 function stanceToSignedValue(
   stance?: "supports" | "refutes" | "mixed" | "unclear" | "irrelevant" | null
@@ -409,14 +441,40 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     }
   }
   
+  const isFastTypedClaim =
+    context.attachments.length === 0 &&
+    !/https?:\/\/[^\s]+/i.test(context.normalizedText) &&
+    context.normalizedText.trim().length > 0 &&
+    context.normalizedText.trim().length <= 320;
+
   // Run classification and extraction in parallel to save time
   const classificationStart = Date.now();
   const [classification, claimExtraction] = await Promise.all([
-    classifyTopicWithOpenAI({
-    ...payload.input,
-    text: analysisCorpus
-    }),
-    extractClaimsWithOpenAI(analysisCorpus)
+    isFastTypedClaim
+      ? Promise.resolve(classifyTopicHeuristically(analysisCorpus))
+      : classifyTopicWithOpenAI({
+          ...payload.input,
+          text: analysisCorpus
+        }),
+    isFastTypedClaim
+      ? Promise.resolve({
+          claims: [
+            {
+              id: randomUUID(),
+              text: context.normalizedText.trim(),
+              extractionConfidence: 1,
+              verdict: "Opinion" as const,
+              confidence: 0.75
+            }
+          ],
+          meta: {
+            model: "fast-path-single-claim",
+            usedFallback: true,
+            totalClaims: 1,
+            warnings: ["Fast path: treated input as a single claim."]
+          }
+        })
+      : extractClaimsWithOpenAI(analysisCorpus)
   ]);
   timings.classificationAndExtraction = Date.now() - classificationStart;
 
@@ -425,57 +483,6 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   if (processedClaims.length === 0) {
     throw new Error("Unable to extract meaningful claims from the content.");
   }
-
-  // OPTIMIZATION: Parallelize evidence retrieval and evaluation across all claims
-  const evidenceStart = Date.now();
-  const evidenceByClaim = await Promise.all(
-    processedClaims.map(async (claim) => {
-      const retrieveStart = Date.now();
-      const evidence = await retrieveEvidence({
-        topic: classification.topic,
-        claimText: claim.text,
-        maxResults: 5 // More headroom improves corroboration for breaking news
-      });
-      const retrieveTime = Date.now() - retrieveStart;
-      
-      const evalStart = Date.now();
-      const evaluated = await evaluateEvidenceForClaim(claim.text, evidence);
-      const evalTime = Date.now() - evalStart;
-      
-      return { 
-        claimId: claim.id, 
-        evidence: evaluated,
-        timings: { retrieve: retrieveTime, evaluate: evalTime }
-      };
-    })
-  );
-  timings.evidenceRetrievalAndEvaluation = Date.now() - evidenceStart;
-
-  const evidenceResults: EvidenceResult[] = evidenceByClaim.flatMap((entry) => entry.evidence);
-
-  const hasRealSources = evidenceResults.length > 0;
-  const sources =
-    hasRealSources
-      ? evidenceResults.map((item, index) => ({
-          key: `retrieved-${index}`,
-          provider: item.provider,
-          title: item.title,
-          url: item.url,
-          reliability: item.evaluation ? (item.evaluation.reliability + item.reliability) / 2 : item.reliability,
-          summary: item.summary,
-          publishedAt: item.publishedAt,
-          evaluation: item.evaluation
-        }))
-      : fabricateSources(classification.topic, processedClaims);
-
-  const claimEvidenceMap = new Map<string, EvidenceResult[]>();
-  evidenceByClaim.forEach(({ claimId, evidence }) => {
-    claimEvidenceMap.set(claimId, evidence);
-  });
-
-  const rankedSources = rankEvidenceByTrust(sources);
-
-  const claims = attachSourcesToClaims(processedClaims, rankedSources, claimEvidenceMap);
 
   // Validate image-derived claims against evidence
   // Check if any image descriptions were successfully processed
@@ -487,7 +494,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       (record.attachment.kind === "image" || record.text.toLowerCase().includes("image summary:"))
   );
   
-  const imageDerivedClaims = claims.filter((claim) => {
+  const imageDerivedClaims = processedClaims.filter((claim) => {
     const claimText = claim.text.toLowerCase();
     // Check if claim contains image-related keywords or was likely derived from image description
     // Only flag as image-derived if image descriptions were successfully processed
@@ -513,21 +520,90 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   try {
     const epistemicOutput = await runEpistemicPipeline({
       analysisId: payload.analysisId,
-      claims: claims.map((c) => ({ id: c.id, text: c.text })),
+      claims: processedClaims.map((c) => ({ id: c.id, text: c.text })),
       topic: classification.topic,
-      maxEvidencePerClaim: 5
+      maxEvidencePerClaim: 5,
+      evidenceRetrieverTimeoutMs: isFastTypedClaim ? 2_500 : undefined
     });
     epistemicResult = epistemicOutput.result;
+    const stage3 = epistemicOutput.auditLog.stages.find((s) => s.stage === "Stage3_EvidenceRetrieval");
+    if (stage3) timings.epistemicEvidenceRetrieval = stage3.durationMs;
     console.log(`[Pipeline] Epistemic pipeline completed: score=${epistemicResult.finalScore}, band="${epistemicResult.scoreBand}"`);
   } catch (error) {
     console.error("[Pipeline] Epistemic pipeline failed, falling back to legacy reasoning:", error);
     epistemicResult = null;
   }
   timings.epistemic = Date.now() - epistemicStart;
+
+  // ============================================================================
+  // Evidence + sources
+  // Prefer epistemic evidence graph (single pass); fall back to legacy retrieval/eval if needed.
+  // ============================================================================
+  const evidenceStart = Date.now();
+  let evidenceResults: EvidenceResult[] = [];
+  const claimEvidenceMap = new Map<string, EvidenceResult[]>();
+
+  if (epistemicResult) {
+    const evidenceGraph = epistemicResult.artifacts.evidenceRetrieval.evidenceGraph;
+    for (const node of evidenceGraph.nodes) {
+      const ev: EvidenceResult = {
+        id: node.id,
+        provider: node.provider,
+        title: node.title,
+        url: node.url,
+        summary: node.summary ?? "",
+        reliability: node.reliability,
+        publishedAt: node.publishedAt,
+        evaluation: {
+          reliability: node.reliability,
+          relevance: node.relevance,
+          stance: node.stance,
+          assessment: node.summary?.slice(0, 140) || "Evidence summary."
+        }
+      };
+      evidenceResults.push(ev);
+      for (const claimId of node.claimIds ?? []) {
+        const list = claimEvidenceMap.get(claimId) ?? [];
+        list.push(ev);
+        claimEvidenceMap.set(claimId, list);
+      }
+    }
+  } else {
+    const evidenceByClaim = await asyncPool(LEGACY_EVIDENCE_CONCURRENCY, processedClaims, async (claim) => {
+      const evidence = await retrieveEvidence({
+        topic: classification.topic,
+        claimText: claim.text,
+        maxResults: 5
+      });
+      const evaluated = await evaluateEvidenceForClaim(claim.text, evidence);
+      return { claimId: claim.id, evidence: evaluated };
+    });
+
+    evidenceResults = evidenceByClaim.flatMap((entry) => entry.evidence);
+    evidenceByClaim.forEach(({ claimId, evidence }) => claimEvidenceMap.set(claimId, evidence));
+  }
+  timings.evidenceRetrievalAndEvaluation = Date.now() - evidenceStart;
+
+  const hasRealSources = evidenceResults.length > 0;
+  const sources: PipelineSource[] = hasRealSources
+    ? evidenceResults.map((item, index) => ({
+        key: `retrieved-${index}`,
+        provider: item.provider,
+        title: item.title,
+        url: item.url,
+        reliability: item.evaluation ? (item.evaluation.reliability + item.reliability) / 2 : item.reliability,
+        summary: item.summary,
+        publishedAt: item.publishedAt,
+        evaluation: item.evaluation
+      }))
+    : fabricateSources(classification.topic, processedClaims);
+
+  const rankedSources = rankEvidenceByTrust(sources);
+  const claims = attachSourcesToClaims(processedClaims, rankedSources, claimEvidenceMap);
   
   // Legacy reasoning (kept for backward compatibility, will be phased out)
   const reasonStart = Date.now();
-  let reasoned = await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
+  let reasoned = epistemicResult ? null : await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
   timings.reasoning = Date.now() - reasonStart;
   
   // Validate reasoned verdict immediately after receiving it
@@ -695,19 +771,28 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   // Image generation removed - no longer using DALL-E 3 or Unsplash
 
-  const reasonerMeta: ReasonerMetadata = reasoned
+  const reasonerMeta: ReasonerMetadata = epistemicResult
     ? {
-        model: VERDICT_MODEL,
-        confidence: reasoned.confidence,
+        model: `epistemic:${epistemicResult.pipelineVersion}`,
+        confidence: epistemicResult.confidenceInterval
+          ? ((epistemicResult.confidenceInterval.low + epistemicResult.confidenceInterval.high) / 2) / 100
+          : verdictData.confidence,
         fallbackUsed: false,
-        rationale: reasoned.rationale
+        rationale: `Epistemic pipeline ${epistemicResult.pipelineVersion} applied.`
       }
-    : {
-        model: VERDICT_MODEL,
-        confidence: verdictData.confidence,
-        fallbackUsed: true,
-        rationale: "Reasoning model unavailable. Heuristic verdict applied."
-      };
+    : reasoned
+      ? {
+          model: VERDICT_MODEL,
+          confidence: reasoned.confidence,
+          fallbackUsed: false,
+          rationale: reasoned.rationale
+        }
+      : {
+          model: VERDICT_MODEL,
+          confidence: verdictData.confidence,
+          fallbackUsed: true,
+          rationale: "Reasoning model unavailable. Heuristic verdict applied."
+        };
 
   const totalTime = Date.now() - startTime;
   timings.total = totalTime;
@@ -717,6 +802,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ingestion: timings.ingestion,
     classificationAndExtraction: timings.classificationAndExtraction,
     evidenceRetrievalAndEvaluation: timings.evidenceRetrievalAndEvaluation,
+    epistemicEvidenceRetrieval: timings.epistemicEvidenceRetrieval ?? "N/A",
     epistemic: timings.epistemic,
     reasoning: timings.reasoning,
     total: timings.total,

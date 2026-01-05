@@ -24,6 +24,51 @@ import {
 } from "./types.js";
 
 const MODEL_NAME = "gpt-4.1-mini";
+const SOURCE_TYPING_TIMEOUT_MS = Number(process.env.EPISTEMIC_SOURCE_TYPING_TIMEOUT_MS ?? 2_000);
+const EVIDENCE_CONCURRENCY = Number(process.env.EPISTEMIC_EVIDENCE_CONCURRENCY ?? 2);
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  if (!Number.isFinite(ms) || ms <= 0) return promise;
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
+async function asyncPool<T, R>(
+  poolLimit: number,
+  items: T[],
+  iteratorFn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const limit = Number.isFinite(poolLimit) && poolLimit > 0 ? Math.floor(poolLimit) : 1;
+  const ret: R[] = new Array(items.length);
+  const executing = new Set<Promise<void>>();
+
+  const enqueue = async (item: T, index: number) => {
+    const p = (async () => {
+      ret[index] = await iteratorFn(item, index);
+    })();
+    executing.add(p);
+    const clean = () => executing.delete(p);
+    p.then(clean, clean);
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  };
+
+  for (let i = 0; i < items.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await enqueue(items[i]!, i);
+  }
+
+  await Promise.all(executing);
+  return ret;
+}
 
 // Institutional/high-trust domains that are considered authoritative
 const INSTITUTIONAL_DOMAINS = new Set([
@@ -120,6 +165,7 @@ export interface EvidenceRetrievalInput {
   typedClaims: TypedClaim[];
   topic: string;
   maxResultsPerClaim?: number;
+  retrieverTimeoutMs?: number;
 }
 
 export interface EvidenceRetrievalOutput {
@@ -175,21 +221,25 @@ async function classifySourceTypes(
         .map((s) => `ID: ${s.id}\nURL: ${s.url}\nTitle: ${s.title}\nProvider: ${s.provider}\nSummary: ${s.summary.slice(0, 200)}`)
         .join("\n\n---\n\n");
 
-      const response = await openai.responses.create({
-        model: MODEL_NAME,
-        input: [
-          { role: "system", content: SOURCE_TYPING_PROMPT },
-          { role: "user", content: sourcesInput }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "source_typing",
-            schema: SOURCE_TYPING_SCHEMA,
-            strict: true
+      const response = await withTimeout(
+        openai.responses.create({
+          model: MODEL_NAME,
+          input: [
+            { role: "system", content: SOURCE_TYPING_PROMPT },
+            { role: "user", content: sourcesInput }
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "source_typing",
+              schema: SOURCE_TYPING_SCHEMA,
+              strict: true
+            }
           }
-        }
-      });
+        }),
+        SOURCE_TYPING_TIMEOUT_MS,
+        "Epistemic source typing"
+      );
 
       const firstOutput = response.output?.[0] as any;
       const firstContent = firstOutput?.content?.[0];
@@ -328,15 +378,15 @@ export async function retrieveEvidenceForEpistemic(
     };
   }
 
-  // Retrieve evidence for each claim in parallel
-  const evidenceByClaimPromises = input.typedClaims.map(async (claim) => {
+  // Retrieve + evaluate evidence for each claim with a concurrency limit to avoid rate limiting / tail latency.
+  const evidenceByClaim = await asyncPool(EVIDENCE_CONCURRENCY, input.typedClaims, async (claim) => {
     const rawEvidence = await retrieveEvidence({
       topic: input.topic,
       claimText: claim.originalText,
-      maxResults
+      maxResults,
+      timeoutMs: input.retrieverTimeoutMs
     });
 
-    // Evaluate evidence relevance/stance
     const evaluated = await evaluateEvidenceForClaim(claim.originalText, rawEvidence);
 
     return {
@@ -344,8 +394,6 @@ export async function retrieveEvidenceForEpistemic(
       evidence: evaluated
     };
   });
-
-  const evidenceByClaim = await Promise.all(evidenceByClaimPromises);
 
   // Deduplicate by URL across all claims
   const seenUrls = new Set<string>();

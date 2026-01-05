@@ -45,6 +45,11 @@ export interface EpistemicPipelineInput {
   claims: Array<{ id: string; text: string }>;
   topic: string;
   maxEvidencePerClaim?: number;
+  /**
+   * Optional per-retriever timeout for evidence retrieval (ms).
+   * Use this to keep "typed claim" latency low.
+   */
+  evidenceRetrieverTimeoutMs?: number;
 }
 
 export interface EpistemicPipelineOutput {
@@ -265,7 +270,8 @@ export async function runEpistemicPipeline(
     evidenceRetrievalOutput = await retrieveEvidenceForEpistemic({
       typedClaims: scorableClaims,
       topic: input.topic,
-      maxResultsPerClaim: input.maxEvidencePerClaim ?? 5
+      maxResultsPerClaim: input.maxEvidencePerClaim ?? 5,
+      retrieverTimeoutMs: input.evidenceRetrieverTimeoutMs
     });
     stageLogs.push(createStageLog(
       "Stage3_EvidenceRetrieval",

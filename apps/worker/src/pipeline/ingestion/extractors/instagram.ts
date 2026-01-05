@@ -107,7 +107,8 @@ export async function extractInstagramContent(
   // 2. Fall back to HTML scraping
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000); // Increased timeout
+    const timeoutMs = Number(process.env.INSTAGRAM_FETCH_TIMEOUT_MS ?? 8_000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       // Try multiple user agents to avoid blocking

@@ -9,7 +9,7 @@ import { adjustReliability, extractHostname, isBlacklisted, isLowTrust } from ".
 // Prioritize Perplexity for better citation quality and real-time information
 const RETRIEVERS: Retriever[] = [perplexityRetriever, braveRetriever, serperRetriever, googleFactCheckRetriever];
 
-const EVIDENCE_RETRIEVAL_TIMEOUT_MS = 5_000; // 5 second timeout per retriever
+const DEFAULT_EVIDENCE_RETRIEVAL_TIMEOUT_MS = Number(process.env.EVIDENCE_RETRIEVAL_TIMEOUT_MS ?? 4_000); // per retriever
 
 async function runWithRetry(
   retriever: Retriever,
@@ -17,11 +17,15 @@ async function runWithRetry(
   attempts = 1 // Reduced from 2 to 1 for speed - fail fast
 ): Promise<EvidenceResult[]> {
   let lastError: unknown;
+  const timeoutMs =
+    typeof options.timeoutMs === "number" && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+      ? options.timeoutMs
+      : DEFAULT_EVIDENCE_RETRIEVAL_TIMEOUT_MS;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       // Add timeout wrapper to prevent slow retrievers from blocking
       const timeoutPromise = new Promise<EvidenceResult[]>((_, reject) => {
-        setTimeout(() => reject(new Error(`Timeout after ${EVIDENCE_RETRIEVAL_TIMEOUT_MS}ms`)), EVIDENCE_RETRIEVAL_TIMEOUT_MS);
+        setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
       });
       
       const results = await Promise.race([
@@ -38,7 +42,7 @@ async function runWithRetry(
       // Only log timeout errors, not all failures (reduce noise)
       if (error instanceof Error && error.message.includes("Timeout")) {
         // eslint-disable-next-line no-console
-        console.warn(`[retrievers] ${retriever.name} timed out after ${EVIDENCE_RETRIEVAL_TIMEOUT_MS}ms`);
+        console.warn(`[retrievers] ${retriever.name} timed out after ${timeoutMs}ms`);
       }
       if (attempt < attempts) {
         const backoff = 250 * attempt;

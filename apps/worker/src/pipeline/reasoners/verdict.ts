@@ -6,7 +6,7 @@ export const VERDICT_MODEL = "gpt-5.2";
 
 const VERDICT_PROMPT = `
 You are a fact-checking adjudicator. Given claims and evaluated evidence, produce a grounded verdict.
-Respond in English JSON ONLY, matching the schema. Cite evidence using the provided \`key\` values.
+Respond in English JSON ONLY, matching the schema.
 If evidence contradicts a claim, LOWER the numeric score. If evidence strongly supports it, raise the score.
 
 GROUNDING RULES (CRITICAL):
@@ -68,6 +68,14 @@ CRITICAL: For claims derived from images (marked with \`is_image_derived: true\`
 
 IMPORTANT: The "recommendation" field is MISNAMED - it must contain ONLY factual context, never advice or directives.
 
+WRITING RULES FOR SUMMARY + CONTEXT (STRICT):
+- The Summary and Context must describe the CLAIM itself (what it gets right/wrong/missing), not “what sources say”.
+- Do NOT mention sources, reporting, outlets, links, citations, or “evidence” in the Summary or Context.
+- Do NOT use authority appeals or attribution language (forbidden examples: "sources say", "reports claim", "experts say", "studies show", "according to").
+- Do NOT use bullet points, numbered lists, emojis, or percentages.
+- Do NOT use the words "true" or "false" anywhere, except as part of the verdict label in the required "Verdict: <LABEL>" phrase.
+- If the provided material is insufficient, say so plainly (without mentioning sources).
+
 FORBIDDEN patterns:
 - "should be", "must be", "it is recommended", "do not", "avoid", "reject", "accept", "share", "verify"
 - Any imperative verbs or commands
@@ -76,32 +84,26 @@ FORBIDDEN patterns:
 - Formal transitions like "however", "nevertheless", "subsequently"
 - Reference phrases like "as mentioned", "as stated", "as noted"
 
-TONE GUIDELINES - Write like you're texting a friend who asked about this claim:
-- Use simple, everyday words - pretend you're explaining this at a coffee shop
-- Get straight to the point - no fluff or filler phrases
-- Write in complete thoughts, but keep them short and punchy
-- Imagine someone asking "So what's the deal with this?" - that's your starting point
-- Skip formal language entirely - no "it should be noted" or "according to reports"
-- Just tell them what's actually going on in plain English
+TONE GUIDELINES:
+- Calm, neutral, factual.
+- Plain language. No “confidence theater”. No rhetorical flourishes.
+- Keep it short and direct.
 
-Focus on:
-- What really happened (in plain terms)
-- Where this claim came from or why people are talking about it
-- Key details that matter to understanding it
-- What's missing or unclear (if relevant)
+SUMMARY (What's the answer?) RULES:
+- 2–3 sentences maximum.
+- Sentence 1 MUST be: "Verdict: <LABEL> — <core reason>."
+- Sentence 2 (optional): key limitation or uncertainty.
+- Sentence 3 (optional): scope clarification (what the claim does not cover).
 
-Examples of the RIGHT tone:
-BAD (too formal): "Multiple credible reports confirm the veracity of this claim, with documentation from official records substantiating the assertion."
-GOOD: "Multiple sources confirm this happened. The claim matches what we know from official records."
+CONTEXT (How to understand this claim) RULES:
+- 3–5 sentences maximum.
+- Provide background needed to interpret the claim correctly.
+- Clarify common misunderstandings or misleading framings.
+- Distinguish related-but-different claims when relevant.
+- Do NOT restate the Summary or repeat the verdict label.
 
-BAD (too academic): "It should be noted that public reporting in late-2025 has centered on newly released materials."
-GOOD: "Public reporting around late-2025 focused on what appeared in newly released materials and how some items were temporarily removed from a DOJ website after concerns were raised."
-
-BAD (too analytical): "The claim references a policy proposal that underwent legislative review but failed to achieve implementation."
-GOOD: "The claim talks about a policy that was suggested but never actually put in place. The real policy works differently."
-
-BAD (instructive): "Users should exercise caution when sharing this information."
-GOOD: "This started as a joke on a satirical site and got mistaken for real news."
+EVIDENCE SUPPORT RULES:
+- The \`evidenceSupport\` field must cite evidence using the provided \`key\` values (strings).
 `;
 
 const JSON_SCHEMA = {
@@ -121,12 +123,14 @@ const JSON_SCHEMA = {
     summary: { 
       type: "string", 
       maxLength: 500,
-      description: "SUMMARY (What's the answer?) - 2-3 sentences max. State the verdict clearly and why. Use calm, neutral, factual tone. NO citations by name, NO bullet points, NO percentages, NO emojis, NO 'experts say'. Structure: Sentence 1 = verdict + core reason. Optional sentence 2 = key limitation. Optional sentence 3 = scope clarification."
+      description:
+        "SUMMARY (What's the answer?) - 2–3 sentences max. Must describe the claim itself, not what sources are saying. Sentence 1 MUST be exactly: \"Verdict: <LABEL> — <core reason>.\" Sentence 2 (optional): key limitation/uncertainty. Sentence 3 (optional): scope clarification. Calm, neutral, factual. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\" except as part of the verdict label in the required \"Verdict: <LABEL>\" phrase."
     },
     recommendation: { 
       type: "string", 
       maxLength: 500,
-      description: "CONTEXT (How to understand this claim) - 3-5 sentences max. Explain relevant background to interpret the claim correctly. Clarify common misunderstandings or misleading framings. Note uncertainty or missing data when applicable. Explanatory tone, assume good-faith curiosity. DO NOT restate summary, argue with user, mention Vett/models/analysis, or speculate beyond evidence. NO citations, links, or references."
+      description:
+        "CONTEXT (How to understand this claim) - 3–5 sentences max. Must describe the claim itself (background/framing), not what sources are saying. Explain relevant background needed to interpret the claim correctly, clarify common misunderstandings, and distinguish related-but-different claims when relevant. Explicitly note uncertainty or missing data when applicable. Explanatory tone, assume good-faith curiosity. Do NOT restate the Summary or repeat the verdict label. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\"."
     },
     rationale: { type: "string", maxLength: 200 },
     evidenceSupport: {
@@ -158,6 +162,49 @@ export type ReasonerVerdictOutput = {
   rationale?: string;
   evidenceSupport: Array<{ claimId: string; supportingSources: string[] }>;
 };
+
+function cleanupTextBlock(text: string): string {
+  // Flatten whitespace/newlines to avoid accidental bullet formatting in UI.
+  return text.replace(/\s*\n+\s*/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function limitSentences(text: string, maxSentences: number): string {
+  const t = cleanupTextBlock(text);
+  const sentenceMatches = t.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
+  if (!sentenceMatches) return t;
+  if (sentenceMatches.length <= maxSentences) return t;
+  return sentenceMatches.slice(0, maxSentences).join("").trim();
+}
+
+function deAttribution(text: string): string {
+  // Keep meaning while removing "sources say / according to" framing and avoiding the words "true"/"false".
+  let t = cleanupTextBlock(text);
+
+  // Preserve a leading verdict prefix if present (we'll reattach it unchanged).
+  const verdictPrefixMatch = t.match(
+    /^Verdict:\s*(Verified|Mostly Accurate|Partially Accurate|False|Unverified)\s*[—-]\s*/i
+  );
+  const preservedPrefix = verdictPrefixMatch?.[0] ?? "";
+  if (preservedPrefix) t = t.slice(preservedPrefix.length);
+
+  // Remove common attribution phrases.
+  t = t.replace(/\baccording to\b/gi, "");
+  t = t.replace(/\bexperts say\b/gi, "");
+  t = t.replace(/\bsources say\b/gi, "");
+  t = t.replace(/\breports(?:\s+say)?\b/gi, "the available information");
+  t = t.replace(/\bstudies (?:say|show)\b/gi, "the available information indicates");
+  t = t.replace(/\bmultiple sources\b/gi, "the available information");
+  t = t.replace(/\bsources\b/gi, "the available information");
+  t = t.replace(/\bevidence\b/gi, "the available information");
+
+  // Replace "true/false" usages outside the verdict label with neutral wording.
+  t = t.replace(/\b(this claim is|the claim is)\s+false\b/gi, "$1 not supported");
+  t = t.replace(/\b(this claim is|the claim is)\s+true\b/gi, "$1 supported");
+  t = t.replace(/\bnot true\b/gi, "not supported");
+  t = t.replace(/\bnot false\b/gi, "supported");
+
+  return cleanupTextBlock(preservedPrefix + t);
+}
 
 export async function reasonVerdict(
   claims: PipelineClaim[],
@@ -212,7 +259,23 @@ export async function reasonVerdict(
     }
 
     const parsed = await parseJsonContent<ReasonerVerdictOutput>(firstContent, "verdict_reasoning");
-    return parsed;
+    if (!parsed) return null;
+    // Enforce strict UX copy rules for the Summary/Context cards.
+    const cleanedSummaryRaw = deAttribution(parsed.summary);
+    const summaryBody = cleanupTextBlock(
+      cleanedSummaryRaw.replace(
+        /^Verdict:\s*(Verified|Mostly Accurate|Partially Accurate|False|Unverified)\s*[—-]\s*/i,
+        ""
+      )
+    );
+    const cleanedSummary = limitSentences(`Verdict: ${parsed.verdict} — ${summaryBody}`, 3);
+    const cleanedContext = limitSentences(deAttribution(parsed.recommendation), 5);
+
+    return {
+      ...parsed,
+      summary: cleanedSummary,
+      recommendation: cleanedContext
+    };
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("Verdict reasoning failed:", error);

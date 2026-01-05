@@ -16,8 +16,7 @@ import {
   Penalty,
   ScoringResult,
   ExplanationOutput,
-  SCORE_BANDS,
-  PENALTY_RANGES
+  SCORE_BANDS
 } from "./types.js";
 
 export interface ExplanationInput {
@@ -264,7 +263,7 @@ function generateExplanationText(
   scoringResult: ScoringResult,
   evidence: EvidenceGraph,
   topPenalties: Array<{ name: string; weight: number; rationale: string }>,
-  claims: TypedClaim[]
+  _claims: TypedClaim[]
 ): string {
   const { finalScore } = scoringResult;
   const stats = evidence.stats;

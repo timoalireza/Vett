@@ -66,8 +66,6 @@ function detectTemporalMismatch(
   claims: TypedClaim[],
   evidence: EvidenceGraph
 ): Penalty | null {
-  const penalties: Penalty[] = [];
-
   for (const claim of claims) {
     // Check for future claims (predictive) with only past evidence
     if (claim.primaryType === "predictive" || claim.timeframe.type === "future") {

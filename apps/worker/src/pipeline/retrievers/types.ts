@@ -18,6 +18,11 @@ export type RetrieverOptions = {
   topic: string;
   claimText: string;
   maxResults: number;
+  /**
+   * Optional overall timeout per retriever call.
+   * If unset, the retriever layer will use its default.
+   */
+  timeoutMs?: number;
 };
 
 export interface Retriever {
