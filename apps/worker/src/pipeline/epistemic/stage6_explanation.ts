@@ -150,12 +150,12 @@ function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], 
   }
 
   // If we haven't provided enough context yet, add clarifying info
-  if (parts.length < 3) {
-    const oldestDate = stats.oldestEvidenceDate ? new Date(stats.oldestEvidenceDate) : null;
-    const newestDate = stats.newestEvidenceDate ? new Date(stats.newestEvidenceDate) : null;
+  if (parts.length < 3 && stats.newestEvidenceDate) {
+    const newestDate = new Date(stats.newestEvidenceDate);
     const now = new Date();
+    const oneYearAgo = now.getTime() - 365 * 24 * 60 * 60 * 1000;
     
-    if (newestDate && (now.getTime() - newestDate.getTime()) > 365 * 24 * 60 * 60 * 1000) {
+    if (newestDate.getTime() < oneYearAgo) {
       parts.push("The most recent evidence is over a year old and may not reflect current information.");
     }
   }
