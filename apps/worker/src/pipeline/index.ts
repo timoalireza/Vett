@@ -612,41 +612,6 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     reasoned.verdict = validateVerdict(reasoned.verdict) as ReasonerVerdictOutput["verdict"];
   }
   
-  // Post-process: If image-derived claims have low evidence match, reduce confidence
-  if (reasoned && imageDerivedClaims.length > 0) {
-    const evidenceSupportMap = new Map(
-      reasoned.evidenceSupport.map((es) => [es.claimId, es.supportingSources])
-    );
-    
-    // Check all image-derived claims: missing from evidenceSupport OR have empty supportingSources
-    const unsupportedImageClaims = imageDerivedClaims.filter((claim) => {
-      const supportingSources = evidenceSupportMap.get(claim.id);
-      return !supportingSources || supportingSources.length === 0;
-    });
-    
-    if (unsupportedImageClaims.length > 0 && reasoned.score !== null) {
-      // Store original values before modification for accurate logging
-      const originalScore = reasoned.score;
-      const originalConfidence = reasoned.confidence;
-      
-      // Reduce score and confidence for unsupported image identifications
-      // Only apply penalty if verdict is not already "Unverified" (which has null score)
-      reasoned.score = Math.max(0, reasoned.score - 30);
-      // Ensure confidence is reduced, not increased (use 0 as minimum, not 0.3)
-      reasoned.confidence = Math.max(0, reasoned.confidence - 0.2);
-      // Round score before calling verdictFromScore to match behavior at line 313
-      const roundedScore = Math.round(Math.min(100, Math.max(0, reasoned.score)));
-      // Validate the verdict after modification
-      reasoned.verdict = validateVerdict(verdictFromScore(roundedScore)) as ReasonerVerdictOutput["verdict"];
-      
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[pipeline] Image-derived claims lack supporting evidence. Reduced score from ${originalScore} to ${reasoned.score}, confidence from ${originalConfidence.toFixed(2)} to ${reasoned.confidence.toFixed(2)}.`,
-        { analysisId: payload.analysisId, unsupportedClaims: unsupportedImageClaims.length }
-      );
-    }
-  }
-  
   const explanationSteps = reasoned
     ? buildExplanationStepsFromReasoner(claims, reasoned)
     : buildExplanationSteps(claims);
@@ -770,6 +735,53 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       adjustedVerdictData.summary = "The available evidence is too limited or unreliable to assess this claim.";
       adjustedVerdictData.recommendation =
         "The sources found do not provide sufficient quality or confidence for a reliable conclusion.";
+    }
+  }
+
+  // Apply image-derived claim penalty consistently for both epistemic + legacy paths.
+  // Image-derived claims lacking supporting evidence should have reduced scores and confidence.
+  if (imageDerivedClaims.length > 0 && adjustedVerdictData.score !== null) {
+    // Determine which image-derived claims lack supporting evidence
+    let unsupportedImageClaims: typeof imageDerivedClaims = [];
+    
+    if (reasoned) {
+      // Legacy path: use evidenceSupport from reasoned verdict
+      const evidenceSupportMap = new Map(
+        reasoned.evidenceSupport.map((es) => [es.claimId, es.supportingSources])
+      );
+      unsupportedImageClaims = imageDerivedClaims.filter((claim) => {
+        const supportingSources = evidenceSupportMap.get(claim.id);
+        return !supportingSources || supportingSources.length === 0;
+      });
+    } else {
+      // Epistemic path: check claimEvidenceMap for supporting sources
+      unsupportedImageClaims = imageDerivedClaims.filter((claim) => {
+        const evidence = claimEvidenceMap.get(claim.id) || [];
+        // Consider a claim unsupported if it has no evidence or all evidence is irrelevant/refutes
+        const hasSupportingEvidence = evidence.some(
+          (ev) => ev.evaluation?.stance === "supports" && (ev.evaluation?.relevance ?? 0) > 0.3
+        );
+        return !hasSupportingEvidence;
+      });
+    }
+    
+    if (unsupportedImageClaims.length > 0) {
+      // Store original values before modification for accurate logging
+      const originalScore = adjustedVerdictData.score;
+      const originalConfidence = adjustedVerdictData.confidence;
+      
+      // Reduce score and confidence for unsupported image identifications
+      adjustedVerdictData.score = Math.max(0, adjustedVerdictData.score - 30);
+      adjustedVerdictData.confidence = Math.max(0, adjustedVerdictData.confidence - 0.2);
+      // Round score before calling verdictFromScore to match behavior elsewhere
+      const roundedScore = Math.round(Math.min(100, Math.max(0, adjustedVerdictData.score)));
+      adjustedVerdictData.verdict = validateVerdict(verdictFromScore(roundedScore));
+      
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[pipeline] Image-derived claims lack supporting evidence. Reduced score from ${originalScore} to ${adjustedVerdictData.score}, confidence from ${originalConfidence.toFixed(2)} to ${adjustedVerdictData.confidence.toFixed(2)}.`,
+        { analysisId: payload.analysisId, unsupportedClaims: unsupportedImageClaims.length }
+      );
     }
   }
 

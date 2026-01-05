@@ -24,19 +24,27 @@ async function runWithRetry(
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       // Add timeout wrapper to prevent slow retrievers from blocking
+      let timeoutHandle: NodeJS.Timeout | undefined;
       const timeoutPromise = new Promise<EvidenceResult[]>((_, reject) => {
-        setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+        timeoutHandle = setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
       });
       
-      const results = await Promise.race([
-        retriever.fetchEvidence(options),
-        timeoutPromise
-      ]);
-      
-      if (attempt > 1) {
-        console.info(`[retrievers] ${retriever.name} succeeded on retry ${attempt}.`);
+      try {
+        const results = await Promise.race([
+          retriever.fetchEvidence(options),
+          timeoutPromise
+        ]);
+        
+        if (attempt > 1) {
+          console.info(`[retrievers] ${retriever.name} succeeded on retry ${attempt}.`);
+        }
+        return results;
+      } finally {
+        // Clear timeout to prevent resource leak
+        if (timeoutHandle !== undefined) {
+          clearTimeout(timeoutHandle);
+        }
       }
-      return results;
     } catch (error) {
       lastError = error;
       // Only log timeout errors, not all failures (reduce noise)
