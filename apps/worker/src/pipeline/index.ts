@@ -699,7 +699,11 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ? rankedSources.reduce((sum, s) => sum + (s.reliability ?? 0), 0) / rankedSources.length
     : 0;
   const hasLowReliabilitySources = avgSourceReliability < 0.3;
-  const hasVeryLowConfidence = verdictData.confidence < 0.3;
+  // Use epistemic confidence if available, otherwise use verdictData (heuristic) confidence.
+  const effectiveConfidence = epistemicResult && epistemicResult.confidenceInterval
+    ? ((epistemicResult.confidenceInterval.low + epistemicResult.confidenceInterval.high) / 2) / 100
+    : verdictData.confidence;
+  const hasVeryLowConfidence = effectiveConfidence < 0.3;
   const insufficientEvidence = !hasRealSources || (hasLowReliabilitySources && hasVeryLowConfidence);
 
   // Adjust scores: False with high confidence gets 0, Verified (facts) always gets 100

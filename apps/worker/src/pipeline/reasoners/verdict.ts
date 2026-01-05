@@ -188,14 +188,20 @@ function deAttribution(text: string): string {
   if (preservedPrefix) t = t.slice(preservedPrefix.length);
 
   // Remove common attribution phrases.
+  // For replacements that introduce "the available information", strip any preceding article to avoid "the the available information".
   t = t.replace(/\baccording to\b/gi, "");
   t = t.replace(/\bexperts say\b/gi, "");
   t = t.replace(/\bsources say\b/gi, "");
-  t = t.replace(/\breports(?:\s+say)?\b/gi, "the available information");
-  t = t.replace(/\bstudies (?:say|show)\b/gi, "the available information indicates");
-  t = t.replace(/\bmultiple sources\b/gi, "the available information");
-  t = t.replace(/\bsources\b/gi, "the available information");
-  t = t.replace(/\bevidence\b/gi, "the available information");
+  t = t.replace(/\b(?:the|a|an)\s+reports(?:\s+say)?\b/gi, "the available information");
+  t = t.replace(/\breports(?:\s+say)?\b/gi, "available information");
+  t = t.replace(/\b(?:the|a|an)\s+studies\s+(?:say|show)\b/gi, "the available information indicates");
+  t = t.replace(/\bstudies\s+(?:say|show)\b/gi, "available information indicates");
+  t = t.replace(/\b(?:the|a|an)\s+multiple\s+sources\b/gi, "the available information");
+  t = t.replace(/\bmultiple\s+sources\b/gi, "available information");
+  t = t.replace(/\b(?:the|a|an)\s+sources\b/gi, "the available information");
+  t = t.replace(/\bsources\b/gi, "available information");
+  t = t.replace(/\b(?:the|a|an)\s+evidence\b/gi, "the available information");
+  t = t.replace(/\bevidence\b/gi, "available information");
 
   // Replace "true/false" usages outside the verdict label with neutral wording.
   t = t.replace(/\b(this claim is|the claim is)\s+false\b/gi, "$1 not supported");
