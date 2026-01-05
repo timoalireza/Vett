@@ -94,6 +94,10 @@ export default function AnalyzeScreen() {
   const actionRowOpacity = useSharedValue(0);
   const actionRowTranslateY = useSharedValue(20);
 
+  // Header elements animation (logo, upgrade pill, back button)
+  const headerElementsOpacity = useSharedValue(1);
+  const backButtonOpacity = useSharedValue(0);
+
   // Video source state - track which video should be active
   const [activeVideoSource, setActiveVideoSource] = useState(VIDEO_IDLE);
   // Track loaded state for each video to know when they're ready
@@ -111,6 +115,19 @@ export default function AnalyzeScreen() {
     isAnimatingRef.current = false;
     animationTargetRef.current = null;
   }, []);
+
+  // Animate header elements (logo, upgrade pill) and back button based on loading state
+  useEffect(() => {
+    if (lensState === 'loading') {
+      // Fade out header elements, fade in back button
+      headerElementsOpacity.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) });
+      backButtonOpacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+    } else {
+      // Fade in header elements, fade out back button
+      headerElementsOpacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+      backButtonOpacity.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) });
+    }
+  }, [lensState, headerElementsOpacity, backButtonOpacity]);
 
   useEffect(() => {
     let newSource = VIDEO_IDLE;
@@ -265,6 +282,15 @@ export default function AnalyzeScreen() {
 
   const loadingVideoStyle = useAnimatedStyle(() => ({
     opacity: loadingOpacity.value,
+  }));
+
+  // Header elements animated styles
+  const headerElementsStyle = useAnimatedStyle(() => ({
+    opacity: headerElementsOpacity.value,
+  }));
+
+  const backButtonStyle = useAnimatedStyle(() => ({
+    opacity: backButtonOpacity.value,
   }));
 
   useFocusEffect(
@@ -482,34 +508,57 @@ export default function AnalyzeScreen() {
   return (
     <View style={styles.container}>
       {/* Logo - Top Left */}
-      <SafeAreaView style={styles.logoContainer} edges={["top"]} pointerEvents="none">
-        <Image 
-          source={VETT_LOGO} 
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </SafeAreaView>
+      <Animated.View style={[styles.logoContainer, headerElementsStyle]} pointerEvents="none">
+        <SafeAreaView edges={["top"]} pointerEvents="none">
+          <Image 
+            source={VETT_LOGO} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </SafeAreaView>
+      </Animated.View>
 
       {/* Upgrade Pill - Top Right */}
       {showUpgradePill && (
-        <SafeAreaView style={styles.upgradeContainer} edges={["top"]} pointerEvents="box-none">
-          <TouchableOpacity
-            onPress={() => router.push("/modals/subscription?plan=PRO")}
-            activeOpacity={0.8}
-            style={styles.upgradePill}
-          >
-            <LinearGradient
-              colors={["#9D7FEF", "#E89CDA", "#FFC58F"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.upgradePillGradient}
+        <Animated.View style={[styles.upgradeContainer, headerElementsStyle]} pointerEvents="box-none">
+          <SafeAreaView edges={["top"]} pointerEvents="box-none">
+            <TouchableOpacity
+              onPress={() => router.push("/modals/subscription?plan=PRO")}
+              activeOpacity={0.8}
+              style={styles.upgradePill}
             >
-              <Text style={styles.upgradePillText}>{upgradePillText}</Text>
-              <Ionicons name="arrow-up-circle" size={16} color="#FFFFFF" />
-            </LinearGradient>
+              <LinearGradient
+                colors={["#9D7FEF", "#E89CDA", "#FFC58F"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.upgradePillGradient}
+              >
+                <Text style={styles.upgradePillText}>{upgradePillText}</Text>
+                <Ionicons name="arrow-up-circle" size={16} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </Animated.View>
+      )}
+
+      {/* Back Button - appears during loading */}
+      <Animated.View style={[styles.backButtonContainer, backButtonStyle]} pointerEvents={lensState === 'loading' ? 'auto' : 'none'}>
+        <SafeAreaView edges={["top"]} pointerEvents="box-none">
+          <TouchableOpacity
+            onPress={() => {
+              reset();
+              setInput("");
+              setSelectedImage(null);
+              setIsInputFocused(false);
+            }}
+            activeOpacity={0.7}
+            style={styles.backButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </SafeAreaView>
-      )}
+      </Animated.View>
 
       {/* Video Background - Full Screen */}
       {!videoError && (
@@ -783,7 +832,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     zIndex: 100,
-    paddingHorizontal: 16,
+    paddingLeft: 16,
   },
   logo: {
     width: 80,
@@ -794,10 +843,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
+    zIndex: 100,
+    paddingRight: 16,
+  },
+  backButtonContainer: {
+    position: 'absolute',
+    top: 0,
     left: 0,
     zIndex: 100,
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   upgradePill: {
     borderRadius: 20,

@@ -279,23 +279,23 @@ function NavigationGate() {
     fullScreenGestureEnabled: Platform.OS === "ios",
   };
 
-  // Options for result screens with backwards swipe animation
+  // Options for result screens - fade transition for seamless loading-to-result
   const resultScreenOptions = {
-    animation: "slide_from_right" as const,
+    animation: "fade" as const,
     gestureEnabled: true,
     gestureDirection: "horizontal" as const,
     transitionSpec: {
       open: {
         animation: "timing" as const,
         config: {
-          duration: 300,
+          duration: 200,
           useNativeDriver: true,
         },
       },
       close: {
         animation: "timing" as const,
         config: {
-          duration: 300,
+          duration: 200,
           useNativeDriver: true,
         },
       },

@@ -72,25 +72,13 @@ interface TrustOptionProps {
 function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) {
   const theme = useTheme();
   const scale = useSharedValue(1);
-  const glowOpacity = useSharedValue(0);
-  const bgOpacity = useSharedValue(0);
   
   useEffect(() => {
     scale.value = withSpring(isSelected ? 1.08 : 1, { damping: 15, stiffness: 200 });
-    glowOpacity.value = withTiming(isSelected ? 1 : 0, { duration: 300 });
-    bgOpacity.value = withTiming(isSelected ? 1 : 0, { duration: 300 });
   }, [isSelected]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-  }));
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-  }));
-
-  const bgGlowStyle = useAnimatedStyle(() => ({
-    opacity: bgOpacity.value * 0.6,
   }));
 
   const handlePress = () => {
@@ -103,15 +91,6 @@ function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) 
       entering={FadeInUp.duration(500).delay(300 + index * 100)}
       style={[styles.optionWrapper, containerStyle]}
     >
-      {/* Background glow effect */}
-      <Animated.View 
-        style={[
-          styles.optionBgGlow,
-          { backgroundColor: option.bgGlow },
-          bgGlowStyle,
-        ]} 
-      />
-      
       <Animated.View
         style={[
           styles.optionContainer,
@@ -125,16 +104,6 @@ function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) 
           onPress={handlePress}
           style={styles.optionPressable}
         >
-          {/* Gradient glow behind emoji when selected */}
-          <Animated.View style={[styles.emojiGlowContainer, glowStyle]}>
-            <LinearGradient
-              colors={option.gradient}
-              style={styles.emojiGlow}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-          </Animated.View>
-          
           {/* Emoji container with gradient bg when selected */}
           <View style={styles.emojiWrapper}>
             {isSelected && (

@@ -1,10 +1,33 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, RadialGradient, Stop, Circle } from "react-native-svg";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from "react-native-reanimated";
+import { useVideoAnimationState } from "../Video/VideoAnimationProvider";
 
 export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
+  const { currentVideo } = useVideoAnimationState();
+  const tabBarOpacity = useSharedValue(1);
+  const tabBarTranslateY = useSharedValue(0);
+
+  // Animate tab bar visibility based on loading state
+  useEffect(() => {
+    if (currentVideo === 'loading') {
+      // Fade out and slide down
+      tabBarOpacity.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) });
+      tabBarTranslateY.value = withTiming(20, { duration: 300, easing: Easing.out(Easing.ease) });
+    } else {
+      // Fade in and slide up
+      tabBarOpacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+      tabBarTranslateY.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) });
+    }
+  }, [currentVideo, tabBarOpacity, tabBarTranslateY]);
+
+  const tabBarAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: tabBarOpacity.value,
+    transform: [{ translateY: tabBarTranslateY.value }],
+  }));
   const id = React.useId();
   
   const tabs = [
@@ -15,7 +38,10 @@ export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, naviga
   ] as const;
 
   return (
-    <View style={styles.wrapper}>
+    <Animated.View 
+      style={[styles.wrapper, tabBarAnimatedStyle]} 
+      pointerEvents={currentVideo === 'loading' ? 'none' : 'auto'}
+    >
       <View style={styles.container}>
         {tabs.map((tab) => {
         // Find corresponding route
@@ -81,7 +107,7 @@ export const TabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, naviga
         );
       })}
       </View>
-    </View>
+    </Animated.View>
   );
 };
 

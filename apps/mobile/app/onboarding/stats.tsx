@@ -226,8 +226,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   heroSection: {
-    marginTop: 20,
-    marginBottom: 32,
+    marginTop: 0,
+    marginBottom: 52,
   },
   title: {
     fontFamily: "Inter_700Bold",
