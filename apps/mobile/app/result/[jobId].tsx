@@ -246,7 +246,8 @@ export default function ResultScreen() {
   const isFailed = analysis?.status === "FAILED";
   const isQueued = analysis?.status === "QUEUED";
   const isProcessing = analysis?.status === "PROCESSING";
-  const score = analysis?.score || 0;
+  const score = typeof analysis?.score === "number" ? analysis.score : 0;
+  const hasScore = typeof analysis?.score === "number";
   const verdict = analysis?.verdict;
   const isUnverified = verdict === "Unverified";
   const scoreColor = getScoreColor(score, verdict);
@@ -602,7 +603,7 @@ export default function ResultScreen() {
             <>
               {/* Verdict and Score side-by-side boxes */}
               <View style={[styles.verdictScoreRow, { marginTop: -140 }]}>
-                <Animated.View style={[card1AnimatedStyle, styles.verdictBox, isUnverified && { width: '100%' }]}>
+                <Animated.View style={[card1AnimatedStyle, styles.verdictBox]}>
                   <Text style={styles.verdictScoreLabel}>Verdict:</Text>
                   <View style={styles.verdictValueContainer}>
                     <Text style={[styles.verdictScoreValue, { color: scoreColor }]}>
@@ -610,14 +611,12 @@ export default function ResultScreen() {
                     </Text>
                   </View>
                 </Animated.View>
-                {!isUnverified && (
-                  <Animated.View style={[card1AnimatedStyle, styles.scoreBox]}>
-                    <Text style={styles.verdictScoreLabel}>Score:</Text>
-                    <Text style={[styles.verdictScoreValue, { color: scoreColor, fontSize: 36, textAlign: 'center' }]}>
-                      {score}
-                    </Text>
-                  </Animated.View>
-                )}
+                <Animated.View style={[card1AnimatedStyle, styles.scoreBox]}>
+                  <Text style={styles.verdictScoreLabel}>Score:</Text>
+                  <Text style={[styles.verdictScoreValue, { color: scoreColor, fontSize: 36, textAlign: "center" }]}>
+                    {hasScore && !isUnverified ? score : "N/A"}
+                  </Text>
+                </Animated.View>
               </View>
 
               {/* Summary Card */}

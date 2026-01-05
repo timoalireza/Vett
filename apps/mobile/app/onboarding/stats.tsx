@@ -190,20 +190,21 @@ export default function StatsScreen() {
         </View>
 
         {/* Continue button */}
-        <Animated.View
+        <View
           style={[
             styles.ctaContainer,
             { paddingBottom: insets.bottom + 20 },
-            buttonStyle,
           ]}
         >
-          <AnimatedPressable
-            onPress={handleContinue}
-            style={styles.continueButton}
-          >
-            <Text style={styles.continueButtonText}>Continue</Text>
-          </AnimatedPressable>
-        </Animated.View>
+          <Animated.View style={buttonStyle}>
+            <AnimatedPressable
+              onPress={handleContinue}
+              style={styles.continueButton}
+            >
+              <Text style={styles.continueButtonText}>Continue</Text>
+            </AnimatedPressable>
+          </Animated.View>
+        </View>
       </View>
     </GradientBackground>
   );

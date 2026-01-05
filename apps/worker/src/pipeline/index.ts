@@ -19,6 +19,7 @@ import { adjustReliability, extractHostname } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
 import { openai } from "../clients/openai.js";
 import { runEpistemicPipeline, EpistemicResult } from "./epistemic/index.js";
+import { normalizeContext, normalizeSummary } from "./utils/uxCopy.js";
 
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
 const LEGACY_EVIDENCE_CONCURRENCY = Number(process.env.LEGACY_EVIDENCE_CONCURRENCY ?? 2);
@@ -728,13 +729,13 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     // Always update summary when changing verdict to "Unverified" due to insufficient evidence,
     // regardless of whether low-quality sources exist or not.
     if (!hasRealSources) {
-      adjustedVerdictData.summary = "Insufficient evidence was found to assess this claim.";
+      adjustedVerdictData.summary = "There isn’t enough solid information to assess this claim.";
       adjustedVerdictData.recommendation =
-        "The available information is too limited to draw a reliable conclusion.";
+        "Key details are missing or unclear, so a reliable conclusion isn’t possible yet.";
     } else {
-      adjustedVerdictData.summary = "The available evidence is too limited or unreliable to assess this claim.";
+      adjustedVerdictData.summary = "There isn’t enough solid information to assess this claim.";
       adjustedVerdictData.recommendation =
-        "The sources found do not provide sufficient quality or confidence for a reliable conclusion.";
+        "The details available are too thin or inconsistent to make a confident call.";
     }
   }
 
@@ -797,12 +798,15 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       adjustedVerdictData.verdict = validateVerdict("Unverified");
       adjustedVerdictData.score = null;
       adjustedVerdictData.confidence = Math.min(adjustedVerdictData.confidence, 0.55);
-      adjustedVerdictData.summary =
-        `The retrieved sources discuss this, but corroboration is limited (${uniqueHosts.size} independent source${uniqueHosts.size === 1 ? "" : "s"}).`;
+      adjustedVerdictData.summary = "This claim can’t be confirmed from the available information.";
       adjustedVerdictData.recommendation =
-        "Reporting exists, but the current evidence set is too narrow to confidently label this as verified.";
+        "The details are not clear enough to support a high-certainty verdict.";
     }
   }
+
+  // Final UX copy normalization (applies to epistemic + legacy + guardrails).
+  adjustedVerdictData.summary = normalizeSummary(adjustedVerdictData.verdict, adjustedVerdictData.summary);
+  adjustedVerdictData.recommendation = normalizeContext(adjustedVerdictData.recommendation);
 
   // Image generation removed - no longer using DALL-E 3 or Unsplash
 

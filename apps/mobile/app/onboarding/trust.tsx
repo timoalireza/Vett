@@ -89,47 +89,49 @@ function TrustOption({ option, isSelected, onSelect, index }: TrustOptionProps) 
   return (
     <Animated.View
       entering={FadeInUp.duration(500).delay(300 + index * 100)}
-      style={[styles.optionWrapper, containerStyle]}
+      style={styles.optionWrapper}
     >
-      <Animated.View
-        style={[
-          styles.optionContainer,
-          {
-            borderColor: isSelected ? option.gradient[0] : "rgba(255, 255, 255, 0.08)",
-            backgroundColor: isSelected ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.03)",
-          },
-        ]}
-      >
-        <Pressable
-          onPress={handlePress}
-          style={styles.optionPressable}
+      <Animated.View style={containerStyle}>
+        <Animated.View
+          style={[
+            styles.optionContainer,
+            {
+              borderColor: isSelected ? option.gradient[0] : "rgba(255, 255, 255, 0.08)",
+              backgroundColor: isSelected ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.03)",
+            },
+          ]}
         >
-          {/* Emoji container with gradient bg when selected */}
-          <View style={styles.emojiWrapper}>
-            {isSelected && (
-              <LinearGradient
-                colors={option.gradient}
-                style={styles.selectedEmojiBg}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              />
-            )}
-            <Text style={styles.emoji}>{option.emoji}</Text>
-          </View>
-          
-          {/* Label */}
-          <Text
-            style={[
-              styles.optionLabel,
-              {
-                color: isSelected ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)",
-                fontFamily: isSelected ? "Inter_600SemiBold" : "Inter_400Regular",
-              },
-            ]}
+          <Pressable
+            onPress={handlePress}
+            style={styles.optionPressable}
           >
-            {option.label}
-          </Text>
-        </Pressable>
+            {/* Emoji container with gradient bg when selected */}
+            <View style={styles.emojiWrapper}>
+              {isSelected && (
+                <LinearGradient
+                  colors={option.gradient}
+                  style={styles.selectedEmojiBg}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+              )}
+              <Text style={styles.emoji}>{option.emoji}</Text>
+            </View>
+            
+            {/* Label */}
+            <Text
+              style={[
+                styles.optionLabel,
+                {
+                  color: isSelected ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)",
+                  fontFamily: isSelected ? "Inter_600SemiBold" : "Inter_400Regular",
+                },
+              ]}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        </Animated.View>
       </Animated.View>
     </Animated.View>
   );
@@ -218,45 +220,46 @@ export default function TrustScreen() {
         </View>
 
         {/* Continue button - fixed at bottom */}
-        <Animated.View 
+        <View 
           style={[
             styles.ctaContainer, 
             { paddingBottom: insets.bottom + 20 },
-            buttonStyle,
           ]}
         >
-          <Pressable
-            onPress={handleContinue}
-            disabled={!isButtonEnabled}
-            style={[
-              styles.continueButton,
-              {
-                backgroundColor: isButtonEnabled ? "#FFFFFF" : "rgba(255, 255, 255, 0.1)",
-              },
-            ]}
-          >
-            <Text
+          <Animated.View style={buttonStyle}>
+            <Pressable
+              onPress={handleContinue}
+              disabled={!isButtonEnabled}
               style={[
-                styles.continueButtonText,
+                styles.continueButton,
                 {
-                  color: isButtonEnabled ? "#000000" : "rgba(255, 255, 255, 0.3)",
+                  backgroundColor: isButtonEnabled ? "#FFFFFF" : "rgba(255, 255, 255, 0.1)",
                 },
               ]}
             >
-              Continue
-            </Text>
-          </Pressable>
-          
-          {/* Subtle hint */}
-          {!isButtonEnabled && (
-            <Animated.Text
-              entering={FadeIn.duration(300).delay(1000)}
-              style={styles.hint}
-            >
-              Select an option to continue
-            </Animated.Text>
-          )}
-        </Animated.View>
+              <Text
+                style={[
+                  styles.continueButtonText,
+                  {
+                    color: isButtonEnabled ? "#000000" : "rgba(255, 255, 255, 0.3)",
+                  },
+                ]}
+              >
+                Continue
+              </Text>
+            </Pressable>
+            
+            {/* Subtle hint */}
+            {!isButtonEnabled && (
+              <Animated.Text
+                entering={FadeIn.duration(300).delay(1000)}
+                style={styles.hint}
+              >
+                Select an option to continue
+              </Animated.Text>
+            )}
+          </Animated.View>
+        </View>
       </View>
     </GradientBackground>
   );

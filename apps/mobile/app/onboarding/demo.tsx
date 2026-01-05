@@ -398,22 +398,23 @@ export default function DemoScreen() {
 
             {/* Actions - positioned just below the lens (roughly mid-screen) */}
             {demoStep === "input" && (
-              <Animated.View 
+              <View 
                 style={[
                   styles.analyzeButtonContainer,
                   { marginTop: ANALYZE_BUTTON_TOP_SPACING },
-                  actionRowStyle
                 ]}
               >
-                <TouchableOpacity
-                  onPress={handleAnalyze}
-                  style={styles.pillButton}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.pillButtonText}>Analyze</Text>
-                  <Ionicons name="arrow-forward" size={20} color="#000" />
-                </TouchableOpacity>
-              </Animated.View>
+                <Animated.View style={actionRowStyle}>
+                  <TouchableOpacity
+                    onPress={handleAnalyze}
+                    style={styles.pillButton}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.pillButtonText}>Analyze</Text>
+                    <Ionicons name="arrow-forward" size={20} color="#000" />
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
             )}
           </View>
         )}

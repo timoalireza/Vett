@@ -1,6 +1,7 @@
 import { openai } from "../../clients/openai.js";
 import type { PipelineClaim, PipelineSource } from "../types.js";
 import { parseJsonContent } from "../utils/openai.js";
+import { normalizeContext, normalizeSummary } from "../utils/uxCopy.js";
 
 export const VERDICT_MODEL = "gpt-5.2";
 
@@ -163,55 +164,6 @@ export type ReasonerVerdictOutput = {
   evidenceSupport: Array<{ claimId: string; supportingSources: string[] }>;
 };
 
-function cleanupTextBlock(text: string): string {
-  // Flatten whitespace/newlines to avoid accidental bullet formatting in UI.
-  return text.replace(/\s*\n+\s*/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function limitSentences(text: string, maxSentences: number): string {
-  const t = cleanupTextBlock(text);
-  const sentenceMatches = t.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
-  if (!sentenceMatches) return t;
-  if (sentenceMatches.length <= maxSentences) return t;
-  return sentenceMatches.slice(0, maxSentences).join("").trim();
-}
-
-function deAttribution(text: string): string {
-  // Keep meaning while removing "sources say / according to" framing and avoiding the words "true"/"false".
-  let t = cleanupTextBlock(text);
-
-  // Preserve a leading verdict prefix if present (we'll reattach it unchanged).
-  const verdictPrefixMatch = t.match(
-    /^Verdict:\s*(Verified|Mostly Accurate|Partially Accurate|False|Unverified)\s*[—-]\s*/i
-  );
-  const preservedPrefix = verdictPrefixMatch?.[0] ?? "";
-  if (preservedPrefix) t = t.slice(preservedPrefix.length);
-
-  // Remove common attribution phrases.
-  // For replacements that introduce "the available information", strip any preceding article to avoid "the the available information".
-  t = t.replace(/\baccording to\b/gi, "");
-  t = t.replace(/\bexperts say\b/gi, "");
-  t = t.replace(/\bsources say\b/gi, "");
-  t = t.replace(/\b(?:the|a|an)\s+reports(?:\s+say)?\b/gi, "the available information");
-  t = t.replace(/\breports(?:\s+say)?\b/gi, "available information");
-  t = t.replace(/\b(?:the|a|an)\s+studies\s+(?:say|show)\b/gi, "the available information indicates");
-  t = t.replace(/\bstudies\s+(?:say|show)\b/gi, "available information indicates");
-  t = t.replace(/\b(?:the|a|an)\s+multiple\s+sources\b/gi, "the available information");
-  t = t.replace(/\bmultiple\s+sources\b/gi, "available information");
-  t = t.replace(/\b(?:the|a|an)\s+sources\b/gi, "the available information");
-  t = t.replace(/\bsources\b/gi, "available information");
-  t = t.replace(/\b(?:the|a|an)\s+evidence\b/gi, "the available information");
-  t = t.replace(/\bevidence\b/gi, "available information");
-
-  // Replace "true/false" usages outside the verdict label with neutral wording.
-  t = t.replace(/\b(this claim is|the claim is)\s+false\b/gi, "$1 not supported");
-  t = t.replace(/\b(this claim is|the claim is)\s+true\b/gi, "$1 supported");
-  t = t.replace(/\bnot true\b/gi, "not supported");
-  t = t.replace(/\bnot false\b/gi, "supported");
-
-  return cleanupTextBlock(preservedPrefix + t);
-}
-
 export async function reasonVerdict(
   claims: PipelineClaim[],
   sources: PipelineSource[],
@@ -266,16 +218,8 @@ export async function reasonVerdict(
 
     const parsed = await parseJsonContent<ReasonerVerdictOutput>(firstContent, "verdict_reasoning");
     if (!parsed) return null;
-    // Enforce strict UX copy rules for the Summary/Context cards.
-    const cleanedSummaryRaw = deAttribution(parsed.summary);
-    const summaryBody = cleanupTextBlock(
-      cleanedSummaryRaw.replace(
-        /^Verdict:\s*(Verified|Mostly Accurate|Partially Accurate|False|Unverified)\s*[—-]\s*/i,
-        ""
-      )
-    );
-    const cleanedSummary = limitSentences(`Verdict: ${parsed.verdict} — ${summaryBody}`, 3);
-    const cleanedContext = limitSentences(deAttribution(parsed.recommendation), 5);
+    const cleanedSummary = normalizeSummary(parsed.verdict, parsed.summary);
+    const cleanedContext = normalizeContext(parsed.recommendation);
 
     return {
       ...parsed,
