@@ -118,7 +118,8 @@ function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], 
 
   // Note uncertainty or disagreement
   const hasDisagreement = stats.supportingCount > 0 && stats.refutingCount > 0;
-  const hasStrongDisagreement = stats.refutingCount >= stats.supportingCount * 0.75;
+  const totalStancedSources = stats.supportingCount + stats.refutingCount;
+  const hasStrongDisagreement = totalStancedSources >= 3 && stats.refutingCount >= totalStancedSources * 0.75;
   
   if (hasStrongDisagreement) {
     parts.push("The available evidence largely contradicts the specific details or framing of this claim.");
@@ -317,9 +318,15 @@ function generateExplanationText(
       // Extract source counts from rationale if present (e.g., "9 out of 11 sources refute...")
       const refuteMatch = primaryPenalty.rationale.match(/(\d+)\s+out of\s+(\d+)\s+sources.*refute/i);
       if (refuteMatch) {
-        const refuting = refuteMatch[1];
-        const total = refuteMatch[2];
-        parts.push(`Multiple independent sources refute this claim.`);
+        const refuting = parseInt(refuteMatch[1], 10);
+        const total = parseInt(refuteMatch[2], 10);
+        // Use extracted counts to determine strength of language
+        const refutingRatio = refuting / total;
+        if (refutingRatio >= 0.8 && total >= 5) {
+          parts.push("Available evidence overwhelmingly contradicts this claim.");
+        } else {
+          parts.push("Multiple independent sources refute this claim.");
+        }
       } else {
         parts.push("Available evidence contradicts this claim.");
       }
