@@ -276,8 +276,8 @@ function generateExplanationText(
   // Sentence 1: Verdict + core reason (be specific using penalty rationale when available)
   if (finalScore >= 75) {
     // Strongly Supported / Supported
-    const ratio = stats.supportingCount / Math.max(1, stats.supportingCount + stats.refutingCount);
-    if (ratio > 0.75) {
+    // Use original threshold: supporting > refuting * 2 (roughly 67% when many sources)
+    if (stats.supportingCount > stats.refutingCount * 2) {
       parts.push("Multiple independent sources support this claim.");
     } else {
       parts.push("Available evidence generally supports this claim.");
@@ -306,9 +306,9 @@ function generateExplanationText(
     }
   } else if (finalScore >= 30) {
     // Weakly Supported / Mostly False
-    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction" && primaryPenalty.rationale) {
-      // Use the specific contradiction information
-      parts.push(`Multiple sources contradict this claim. ${primaryPenalty.rationale}`);
+    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction") {
+      // Use general contradiction language without embedding full rationale
+      parts.push("Multiple sources contradict key aspects of this claim.");
     } else {
       parts.push("Available evidence contradicts key aspects of this claim.");
     }
