@@ -159,12 +159,23 @@ function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], 
     }
   }
 
+  // If nothing specific to note, provide neutral evidence-based context
+  if (parts.length === 0) {
+    if (stats.refutingCount > stats.supportingCount) {
+      parts.push("Available evidence predominantly contradicts the claim as stated.");
+    } else if (stats.supportingCount > stats.refutingCount) {
+      parts.push("Available evidence generally supports the claim.");
+    } else {
+      parts.push("Evidence for this claim is mixed or inconclusive.");
+    }
+  }
+
   // Limit to 3-5 sentences and clean up
   const result = parts.slice(0, 5).join(" ").replace(/\s+/g, " ").trim();
   
-  // Fallback if we somehow generated nothing meaningful
-  if (result.length < 50) {
-    return "This claim covers a topic with limited available documentation. Additional context would help in understanding its full scope and accuracy.";
+  // Final fallback only if we truly have nothing (shouldn't happen with logic above)
+  if (result.length < 20) {
+    return "This claim covers a topic with limited available documentation.";
   }
   
   return result;
