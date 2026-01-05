@@ -509,6 +509,60 @@ function detectOutdatedEvidence(
   return null;
 }
 
+function detectEvidenceContradiction(
+  claims: TypedClaim[],
+  evidence: EvidenceGraph
+): Penalty | null {
+  const stats = evidence.stats;
+  
+  // Check if we have enough evidence to make a determination
+  if (stats.totalSources < 2) {
+    return null;
+  }
+
+  const totalStancedSources = stats.supportingCount + stats.refutingCount;
+  
+  // If we don't have clear stances, can't determine contradiction
+  if (totalStancedSources === 0) {
+    return null;
+  }
+
+  const refutingRatio = stats.refutingCount / totalStancedSources;
+  
+  // CRITICAL: If majority of evidence refutes the claim, this is a major problem
+  if (refutingRatio >= 0.75) {
+    // 75%+ of evidence refutes the claim
+    return createPenalty(
+      "evidence_contradiction",
+      "high",
+      `${stats.refutingCount} out of ${totalStancedSources} sources with clear stances refute the claim, indicating it is likely false.`,
+      claims.map((c) => c.id)
+    );
+  }
+  
+  if (refutingRatio >= 0.5) {
+    // 50-75% of evidence refutes the claim
+    return createPenalty(
+      "evidence_contradiction",
+      "high",
+      `${stats.refutingCount} out of ${totalStancedSources} sources refute the claim, while only ${stats.supportingCount} support it.`,
+      claims.map((c) => c.id)
+    );
+  }
+  
+  if (refutingRatio >= 0.3 && stats.refutingCount >= 2) {
+    // Significant minority refutes (30%+)
+    return createPenalty(
+      "evidence_contradiction",
+      "medium",
+      `${stats.refutingCount} out of ${totalStancedSources} sources refute the claim, indicating significant contradictory evidence.`,
+      claims.map((c) => c.id)
+    );
+  }
+
+  return null;
+}
+
 // ============================================================================
 // Main Detection Function
 // ============================================================================
@@ -522,6 +576,7 @@ export async function detectFailureModes(
 
   // Run all detectors
   const detectors = [
+    () => detectEvidenceContradiction(input.typedClaims, input.evidenceGraph), // Check this FIRST - most critical
     () => detectTemporalMismatch(input.typedClaims, input.evidenceGraph),
     () => detectContextOmission(input.typedClaims, input.evidenceGraph),
     () => detectModelDependence(input.typedClaims, input.evidenceGraph),

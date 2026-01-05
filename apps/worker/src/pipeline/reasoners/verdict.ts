@@ -121,12 +121,12 @@ const JSON_SCHEMA = {
     summary: { 
       type: "string", 
       maxLength: 500,
-      description: "A brief, conversational summary of what the evidence shows. Use simple, everyday language like you're explaining to a friend. Skip formal or academic phrasing entirely."
+      description: "SUMMARY (What's the answer?) - 2-3 sentences max. State the verdict clearly and why. Use calm, neutral, factual tone. NO citations by name, NO bullet points, NO percentages, NO emojis, NO 'experts say'. Structure: Sentence 1 = verdict + core reason. Optional sentence 2 = key limitation. Optional sentence 3 = scope clarification."
     },
     recommendation: { 
       type: "string", 
       maxLength: 500,
-      description: "Factual background context only. NO advice, commands, or directives. Explain the claim's context, origin, or key details in plain, conversational language. FORBIDDEN: 'should', 'must', 'do not', 'reject', 'accept', 'verify', 'share', and formal academic phrases."
+      description: "CONTEXT (How to understand this claim) - 3-5 sentences max. Explain relevant background to interpret the claim correctly. Clarify common misunderstandings or misleading framings. Note uncertainty or missing data when applicable. Explanatory tone, assume good-faith curiosity. DO NOT restate summary, argue with user, mention Vett/models/analysis, or speculate beyond evidence. NO citations, links, or references."
     },
     rationale: { type: "string", maxLength: 200 },
     evidenceSupport: {

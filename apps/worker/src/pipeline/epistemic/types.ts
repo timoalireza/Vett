@@ -181,7 +181,8 @@ export type PenaltyName =
   | "ambiguous_quantifiers"
   // Data Integrity
   | "selective_citation"
-  | "outdated_evidence";
+  | "outdated_evidence"
+  | "evidence_contradiction";
 
 export type PenaltySeverity = "low" | "medium" | "high";
 
@@ -210,7 +211,8 @@ export const PENALTY_RANGES: Record<PenaltyName, { min: number; max: number }> =
   ambiguous_quantifiers: { min: 5, max: 10 },
   // Data Integrity
   selective_citation: { min: 10, max: 20 },
-  outdated_evidence: { min: 10, max: 20 }
+  outdated_evidence: { min: 10, max: 20 },
+  evidence_contradiction: { min: 30, max: 70 } // CRITICAL: When evidence refutes claim
 };
 
 export interface FailureModeDetectionArtifact {

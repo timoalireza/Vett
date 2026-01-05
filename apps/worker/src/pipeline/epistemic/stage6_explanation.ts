@@ -43,7 +43,8 @@ const PENALTY_DESCRIPTIONS: Record<string, string> = {
   rhetorical_certainty: "Rhetorical certainty",
   ambiguous_quantifiers: "Ambiguous quantifiers",
   selective_citation: "Selective citation",
-  outdated_evidence: "Outdated evidence"
+  outdated_evidence: "Outdated evidence",
+  evidence_contradiction: "Evidence contradiction"
 };
 
 // What would help for each penalty type
@@ -58,57 +59,82 @@ const IMPROVEMENT_SUGGESTIONS: Record<string, string> = {
   rhetorical_certainty: "More measured language aligned with evidence certainty would be appropriate.",
   ambiguous_quantifiers: "Specific figures instead of vague quantifiers would add precision.",
   selective_citation: "A broader range of independent sources would reduce bias concerns.",
-  outdated_evidence: "More recent evidence would better reflect current knowledge."
+  outdated_evidence: "More recent evidence would better reflect current knowledge.",
+  evidence_contradiction: "Revising the claim to align with available evidence would be necessary."
 };
 
-function generateEvidenceSummary(evidence: EvidenceGraph): string {
+/**
+ * CONTEXT (How to understand this claim)
+ * 
+ * Goal: Place the claim in its proper factual and conceptual frame.
+ * 3-5 sentences maximum.
+ * 
+ * - Explain relevant background needed to interpret the claim correctly
+ * - Clarify common misunderstandings or misleading framings  
+ * - Distinguish between related but different claims if relevant
+ * - Explicitly note uncertainty, disagreement, or missing data when applicable
+ * 
+ * Tone: Explanatory, not corrective. Assume good-faith curiosity.
+ * DO NOT: Restate the summary, argue with user, mention pipeline/models, over-educate
+ */
+function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[]): string {
   const stats = evidence.stats;
-
-  if (stats.totalSources === 0) {
-    return "No external evidence was found to evaluate this claim.";
-  }
-
   const parts: string[] = [];
 
-  // Source count and diversity
-  parts.push(`Evaluated ${stats.totalSources} source${stats.totalSources !== 1 ? "s" : ""}`);
+  if (stats.totalSources === 0) {
+    return "Insufficient evidence was available to verify or refute this claim.";
+  }
+
+  // Note uncertainty or disagreement when applicable
+  const hasDisagreement = stats.supportingCount > 0 && stats.refutingCount > 0;
+  const hasLowReliability = stats.averageReliability < 0.5;
+  const hasLimitedSources = stats.totalSources < 3;
+
+  if (hasDisagreement) {
+    parts.push("Available evidence shows disagreement on this claim.");
+  }
+
+  if (hasLowReliability) {
+    parts.push("The reliability of available sources is limited.");
+  } else if (hasLimitedSources) {
+    parts.push("The evidence base for this claim is narrow.");
+  }
+
+  // Clarify scope or common misunderstandings based on claim type
+  const hasPredictiveClaim = claims.some((c) => c.primaryType === "predictive");
+  const hasCausalClaim = claims.some((c) => c.primaryType === "causal");
+  const hasUniversalQuantifier = claims.some((c) => c.quantifiers.includes("universal"));
   
-  if (stats.uniqueHostnames > 1) {
-    parts[0] += ` from ${stats.uniqueHostnames} independent outlets`;
+  if (hasPredictiveClaim && stats.modelBasedCount > stats.totalSources * 0.5) {
+    parts.push("This claim involves future projections based primarily on models rather than observed outcomes.");
+  }
+  
+  if (hasCausalClaim) {
+    const hasCorrelationEvidence = evidence.nodes.some((n) => 
+      /correlat|associat|linked|related/i.test(n.summary)
+    );
+    if (hasCorrelationEvidence) {
+      parts.push("Evidence shows correlation but establishing causation requires additional support.");
+    }
   }
 
-  // Quality indicators
-  const qualityParts: string[] = [];
-  if (stats.peerReviewedCount > 0) {
-    qualityParts.push(`${stats.peerReviewedCount} peer-reviewed`);
-  }
-  if (stats.sourceTypeDistribution.institutional_consensus > 0) {
-    qualityParts.push(`${stats.sourceTypeDistribution.institutional_consensus} institutional`);
-  }
-  if (qualityParts.length > 0) {
-    parts.push(`including ${qualityParts.join(" and ")} source${qualityParts.length > 1 || parseInt(qualityParts[0]) > 1 ? "s" : ""}`);
+  if (hasUniversalQuantifier && stats.totalSources < 5) {
+    parts.push("The claim uses absolute language but evidence coverage is limited in scope.");
   }
 
-  // Stance summary
-  const stanceParts: string[] = [];
-  if (stats.supportingCount > 0) {
-    stanceParts.push(`${stats.supportingCount} supporting`);
-  }
-  if (stats.refutingCount > 0) {
-    stanceParts.push(`${stats.refutingCount} refuting`);
-  }
-  if (stanceParts.length > 0) {
-    parts.push(`(${stanceParts.join(", ")} the claim)`);
-  }
-
-  // Average reliability
-  if (stats.averageReliability > 0) {
-    const reliabilityLevel = stats.averageReliability >= 0.8 ? "high" :
-      stats.averageReliability >= 0.6 ? "moderate" : "limited";
-    parts.push(`with ${reliabilityLevel} overall reliability`);
+  // If nothing specific to note, provide neutral context
+  if (parts.length === 0) {
+    if (stats.refutingCount > stats.supportingCount) {
+      parts.push("Available evidence predominantly contradicts the claim as stated.");
+    } else if (stats.supportingCount > stats.refutingCount) {
+      parts.push("Available evidence generally supports the claim.");
+    } else {
+      parts.push("Evidence for this claim is mixed or inconclusive.");
+    }
   }
 
-  return parts.join(". ") + ".";
+  // Limit to 3-5 sentences
+  return parts.slice(0, 5).join(" ");
 }
 
 function generateUncertaintyStatement(
@@ -174,48 +200,96 @@ function generateImprovementSuggestions(penalties: Penalty[]): string[] {
   return suggestions;
 }
 
+/**
+ * SUMMARY (What's the answer?)
+ * 
+ * Goal: Give the user a fast, neutral understanding of the verdict.
+ * 2-3 sentences maximum.
+ * 
+ * Structure:
+ * - Sentence 1: Verdict + core reason
+ * - Sentence 2 (optional): Key limitation or uncertainty
+ * - Sentence 3 (optional): Scope clarification
+ * 
+ * Tone: Calm, neutral, factual. No confidence theater. No exaggeration or minimization.
+ * DO NOT: Cite sources by name, use bullet points, use percentages, use emojis, 
+ *         introduce new claims, or use "true"/"false" unless part of verdict label
+ */
 function generateExplanationText(
   scoringResult: ScoringResult,
   evidence: EvidenceGraph,
-  topPenalties: Array<{ name: string; weight: number; rationale: string }>
+  topPenalties: Array<{ name: string; weight: number; rationale: string }>,
+  claims: TypedClaim[]
 ): string {
   const { finalScore, scoreBandLabel } = scoringResult;
   const stats = evidence.stats;
-
   const parts: string[] = [];
 
-  // Opening statement about the score
-  parts.push(`This claim received a score of ${finalScore} out of 100, placing it in the "${scoreBandLabel}" band.`);
-
-  // Evidence overview
-  if (stats.totalSources > 0) {
-    const sourceQuality = stats.averageReliability >= 0.75 ? "reliable" :
-      stats.averageReliability >= 0.5 ? "moderately reliable" : "mixed reliability";
-    parts.push(`The assessment is based on ${stats.totalSources} ${sourceQuality} source${stats.totalSources !== 1 ? "s" : ""}.`);
-  } else {
-    parts.push("No external sources were found to verify this claim.");
-  }
-
-  // Penalty summary
-  if (topPenalties.length > 0) {
-    const penaltyNames = topPenalties.map((p) => PENALTY_DESCRIPTIONS[p.name] || p.name);
-    if (penaltyNames.length === 1) {
-      parts.push(`The primary issue identified was ${penaltyNames[0].toLowerCase()}.`);
+  // Sentence 1: Verdict + core reason
+  if (finalScore >= 75) {
+    // Strongly Supported / Supported
+    if (stats.supportingCount > stats.refutingCount * 2) {
+      parts.push("Available evidence supports this claim.");
     } else {
-      const lastPenalty = penaltyNames.pop();
-      parts.push(`Key issues identified include ${penaltyNames.join(", ").toLowerCase()}, and ${lastPenalty!.toLowerCase()}.`);
+      parts.push("The claim is generally consistent with available evidence.");
+    }
+  } else if (finalScore >= 60) {
+    // Plausible
+    parts.push("Evidence partially supports this claim but with notable limitations.");
+  } else if (finalScore >= 45) {
+    // Mixed
+    if (stats.supportingCount > 0 && stats.refutingCount > 0) {
+      parts.push("Available evidence is mixed on this claim.");
+    } else {
+      parts.push("Evidence for this claim is inconclusive.");
+    }
+  } else if (finalScore >= 30) {
+    // Weakly Supported / Mostly False
+    parts.push("Available evidence contradicts significant aspects of this claim.");
+  } else {
+    // False
+    if (stats.refutingCount > stats.supportingCount * 2) {
+      parts.push("Available evidence contradicts this claim.");
+    } else {
+      parts.push("This claim lacks credible supporting evidence.");
     }
   }
 
-  // Safeguard notes
-  if (scoringResult.floorApplied) {
-    parts.push("A minimum score was applied due to credible supporting evidence.");
-  }
-  if (scoringResult.ceilingApplied) {
-    parts.push("A maximum score cap was applied due to reliance on projections.");
+  // Sentence 2: Key limitation or uncertainty (if applicable)
+  if (topPenalties.length > 0) {
+    const primaryPenalty = topPenalties[0];
+    
+    // Translate penalty into user-facing limitation
+    if (primaryPenalty.name === "Evidence contradiction") {
+      // Already covered in sentence 1, skip
+    } else if (primaryPenalty.name === "Model dependence") {
+      parts.push("The claim relies heavily on projections rather than observed data.");
+    } else if (primaryPenalty.name === "Temporal mismatch") {
+      parts.push("Evidence does not align with the timeframe specified in the claim.");
+    } else if (primaryPenalty.name === "Missing context") {
+      parts.push("The claim omits important context that affects its accuracy.");
+    } else if (primaryPenalty.name === "Causal overreach") {
+      parts.push("Evidence shows correlation but does not establish the causal relationship claimed.");
+    } else if (primaryPenalty.name === "Scope exaggeration") {
+      parts.push("Evidence does not support the broad scope implied by the claim.");
+    } else if (primaryPenalty.name === "Low expert consensus") {
+      parts.push("Expert sources disagree on this claim.");
+    } else if (primaryPenalty.name === "Outdated evidence") {
+      parts.push("Available evidence may be outdated for the current state of knowledge.");
+    } else if (primaryPenalty.name === "Selective citation") {
+      parts.push("Evidence sources are concentrated or potentially selective.");
+    }
   }
 
-  return parts.join(" ");
+  // Sentence 3: Scope clarification (if needed)
+  if (stats.totalSources === 0) {
+    parts.push("Insufficient evidence was available for verification.");
+  } else if (stats.totalSources < 3) {
+    parts.push("The evidence base is limited.");
+  }
+
+  // Limit to 2-3 sentences
+  return parts.slice(0, 3).join(" ");
 }
 
 export function generateEpistemicExplanation(
@@ -234,10 +308,10 @@ export function generateEpistemicExplanation(
   }));
 
   // Generate each component
-  const evidenceSummary = generateEvidenceSummary(evidenceGraph);
+  const evidenceSummary = generateEvidenceSummary(evidenceGraph, input.typedClaims);
   const uncertaintyStatement = generateUncertaintyStatement(scoringResult, evidenceGraph);
   const improvementSuggestions = generateImprovementSuggestions(scoringResult.penaltiesApplied);
-  const explanationText = generateExplanationText(scoringResult, evidenceGraph, topPenalties);
+  const explanationText = generateExplanationText(scoringResult, evidenceGraph, topPenalties, input.typedClaims);
 
   // Get band description
   const bandKey = scoringResult.scoreBand;
