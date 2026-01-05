@@ -307,8 +307,8 @@ function generateExplanationText(
     }
   } else if (finalScore >= 30) {
     // Weakly Supported / Mostly False
-    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction") {
-      // Use general contradiction language without embedding full rationale
+    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction" && stats.refutingCount >= 2) {
+      // Only use "Multiple" when there are actually 2+ refuting sources
       parts.push("Multiple sources contradict key aspects of this claim.");
     } else {
       parts.push("Available evidence contradicts key aspects of this claim.");
