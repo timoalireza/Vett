@@ -751,6 +751,18 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
                 : verdictData.score
       };
 
+  // Apply insufficient-evidence guardrail consistently for both epistemic + legacy paths.
+  if (insufficientEvidence && adjustedVerdictData.verdict !== "Unverified") {
+    adjustedVerdictData.verdict = validateVerdict("Unverified");
+    adjustedVerdictData.score = null;
+    adjustedVerdictData.confidence = Math.min(adjustedVerdictData.confidence, 0.55);
+    if (!hasRealSources) {
+      adjustedVerdictData.summary = "Insufficient evidence was found to assess this claim.";
+      adjustedVerdictData.recommendation =
+        "The available information is too limited to draw a reliable conclusion.";
+    }
+  }
+
   // Guardrail: require corroboration across multiple independent sources for high-certainty verdicts.
   // This prevents "looks plausible" conclusions when only one outlet is retrieved, and encourages multi-perspective grounding.
   if (adjustedVerdictData.verdict === "Verified" || adjustedVerdictData.verdict === "Mostly Accurate") {
