@@ -77,64 +77,97 @@ const IMPROVEMENT_SUGGESTIONS: Record<string, string> = {
  * Tone: Explanatory, not corrective. Assume good-faith curiosity.
  * DO NOT: Restate the summary, argue with user, mention pipeline/models, over-educate
  */
-function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[]): string {
+function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], penalties: Penalty[]): string {
   const stats = evidence.stats;
   const parts: string[] = [];
 
   if (stats.totalSources === 0) {
-    return "Insufficient evidence was available to verify or refute this claim.";
+    return "No reliable sources were available to assess this claim. The topic may be too specific, too recent, or not well-documented.";
   }
 
-  // Note uncertainty or disagreement when applicable
-  const hasDisagreement = stats.supportingCount > 0 && stats.refutingCount > 0;
-  const hasLowReliability = stats.averageReliability < 0.5;
-  const hasLimitedSources = stats.totalSources < 3;
-
-  if (hasDisagreement) {
-    parts.push("Available evidence shows disagreement on this claim.");
-  }
-
-  if (hasLowReliability) {
-    parts.push("The reliability of available sources is limited.");
-  } else if (hasLimitedSources) {
-    parts.push("The evidence base for this claim is narrow.");
-  }
-
-  // Clarify scope or common misunderstandings based on claim type
+  // Provide context about what kind of claim this is
   const hasPredictiveClaim = claims.some((c) => c.primaryType === "predictive");
   const hasCausalClaim = claims.some((c) => c.primaryType === "causal");
+  const hasComparativeClaim = claims.some((c) => c.primaryType === "comparative");
   const hasUniversalQuantifier = claims.some((c) => c.quantifiers.includes("universal"));
-  
-  if (hasPredictiveClaim && stats.modelBasedCount > stats.totalSources * 0.5) {
-    parts.push("This claim involves future projections based primarily on models rather than observed outcomes.");
-  }
-  
-  if (hasCausalClaim) {
+  const hasVagueQuantifier = claims.some((c) => c.quantifiers.includes("vague"));
+
+  // Start with claim type context if relevant
+  if (hasPredictiveClaim) {
+    parts.push("This claim makes a prediction about future events or outcomes.");
+    if (stats.modelBasedCount > stats.totalSources * 0.5) {
+      parts.push("Predictions of this kind typically rely on models and assumptions that may not hold.");
+    }
+  } else if (hasCausalClaim) {
     const hasCorrelationEvidence = evidence.nodes.some((n) => 
       /correlat|associat|linked|related/i.test(n.summary)
     );
     if (hasCorrelationEvidence) {
-      parts.push("Evidence shows correlation but establishing causation requires additional support.");
-    }
-  }
-
-  if (hasUniversalQuantifier && stats.totalSources < 5) {
-    parts.push("The claim uses absolute language but evidence coverage is limited in scope.");
-  }
-
-  // If nothing specific to note, provide neutral context
-  if (parts.length === 0) {
-    if (stats.refutingCount > stats.supportingCount) {
-      parts.push("Available evidence predominantly contradicts the claim as stated.");
-    } else if (stats.supportingCount > stats.refutingCount) {
-      parts.push("Available evidence generally supports the claim.");
+      parts.push("This claim asserts a cause-and-effect relationship.");
+      parts.push("Correlation between two things does not necessarily mean one causes the other.");
     } else {
-      parts.push("Evidence for this claim is mixed or inconclusive.");
+      parts.push("This claim involves a causal relationship between events or factors.");
+    }
+  } else if (hasComparativeClaim) {
+    parts.push("This claim makes a comparison between two or more things.");
+    const hasMethodologyIssue = penalties.some((p) => p.name === "comparative_distortion");
+    if (hasMethodologyIssue) {
+      parts.push("Comparisons can be sensitive to how measurements are made or what is being compared.");
     }
   }
 
-  // Limit to 3-5 sentences
-  return parts.slice(0, 5).join(" ");
+  // Note uncertainty or disagreement
+  const hasDisagreement = stats.supportingCount > 0 && stats.refutingCount > 0;
+  const hasStrongDisagreement = stats.refutingCount >= stats.supportingCount * 0.75;
+  
+  if (hasStrongDisagreement) {
+    parts.push("The available evidence largely contradicts the specific details or framing of this claim.");
+  } else if (hasDisagreement) {
+    parts.push("Sources disagree on aspects of this claim, suggesting it may be contested or context-dependent.");
+  }
+
+  // Clarify issues with claim framing
+  if (hasUniversalQuantifier) {
+    parts.push("Claims using absolute terms like 'always,' 'never,' or 'all' are difficult to verify comprehensively.");
+  } else if (hasVagueQuantifier) {
+    parts.push("The claim uses imprecise language that makes verification difficult.");
+  }
+
+  // Note missing context if relevant
+  const hasContextIssue = penalties.some((p) => 
+    p.name === "context_omission" || p.name === "scope_exaggeration"
+  );
+  if (hasContextIssue && parts.length < 4) {
+    parts.push("The claim may be accurate in specific circumstances but not as broadly as stated.");
+  }
+
+  // Note data limitations
+  if (stats.totalSources < 3 && parts.length < 3) {
+    parts.push("Limited documentation exists on this specific claim.");
+  } else if (stats.averageReliability < 0.5 && parts.length < 3) {
+    parts.push("The available sources have mixed reliability.");
+  }
+
+  // If we haven't provided enough context yet, add clarifying info
+  if (parts.length < 3) {
+    const oldestDate = stats.oldestEvidenceDate ? new Date(stats.oldestEvidenceDate) : null;
+    const newestDate = stats.newestEvidenceDate ? new Date(stats.newestEvidenceDate) : null;
+    const now = new Date();
+    
+    if (newestDate && (now.getTime() - newestDate.getTime()) > 365 * 24 * 60 * 60 * 1000) {
+      parts.push("The most recent evidence is over a year old and may not reflect current information.");
+    }
+  }
+
+  // Limit to 3-5 sentences and clean up
+  const result = parts.slice(0, 5).join(" ").replace(/\s+/g, " ").trim();
+  
+  // Fallback if we somehow generated nothing meaningful
+  if (result.length < 50) {
+    return "This claim covers a topic with limited available documentation. Additional context would help in understanding its full scope and accuracy.";
+  }
+  
+  return result;
 }
 
 function generateUncertaintyStatement(
@@ -221,75 +254,100 @@ function generateExplanationText(
   topPenalties: Array<{ name: string; weight: number; rationale: string }>,
   claims: TypedClaim[]
 ): string {
-  const { finalScore, scoreBandLabel } = scoringResult;
+  const { finalScore } = scoringResult;
   const stats = evidence.stats;
   const parts: string[] = [];
+  
+  // Get the primary penalty with its specific rationale
+  const primaryPenalty = topPenalties.length > 0 ? topPenalties[0] : null;
 
-  // Sentence 1: Verdict + core reason
+  // Sentence 1: Verdict + core reason (be specific using penalty rationale when available)
   if (finalScore >= 75) {
     // Strongly Supported / Supported
-    if (stats.supportingCount > stats.refutingCount * 2) {
-      parts.push("Available evidence supports this claim.");
+    const ratio = stats.supportingCount / Math.max(1, stats.supportingCount + stats.refutingCount);
+    if (ratio > 0.75) {
+      parts.push("Multiple independent sources support this claim.");
     } else {
-      parts.push("The claim is generally consistent with available evidence.");
+      parts.push("Available evidence generally supports this claim.");
     }
   } else if (finalScore >= 60) {
     // Plausible
-    parts.push("Evidence partially supports this claim but with notable limitations.");
+    if (primaryPenalty && primaryPenalty.rationale) {
+      // Extract the key issue from rationale
+      const rationale = primaryPenalty.rationale.toLowerCase();
+      if (rationale.includes("specific") || rationale.includes("details")) {
+        parts.push("The core claim is supported but lacks specificity in key details.");
+      } else if (rationale.includes("scope") || rationale.includes("broad")) {
+        parts.push("Evidence supports a narrower version of this claim.");
+      } else {
+        parts.push("Evidence partially supports this claim with some limitations.");
+      }
+    } else {
+      parts.push("Evidence partially supports this claim with some limitations.");
+    }
   } else if (finalScore >= 45) {
     // Mixed
     if (stats.supportingCount > 0 && stats.refutingCount > 0) {
-      parts.push("Available evidence is mixed on this claim.");
+      parts.push("Evidence is divided on this claim, with sources both supporting and contradicting it.");
     } else {
-      parts.push("Evidence for this claim is inconclusive.");
+      parts.push("Available evidence is inconclusive on this claim.");
     }
   } else if (finalScore >= 30) {
     // Weakly Supported / Mostly False
-    parts.push("Available evidence contradicts significant aspects of this claim.");
+    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction" && primaryPenalty.rationale) {
+      // Use the specific contradiction information
+      parts.push(`Multiple sources contradict this claim. ${primaryPenalty.rationale}`);
+    } else {
+      parts.push("Available evidence contradicts key aspects of this claim.");
+    }
   } else {
     // False
-    if (stats.refutingCount > stats.supportingCount * 2) {
+    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction" && primaryPenalty.rationale) {
+      // Extract source counts from rationale if present (e.g., "9 out of 11 sources refute...")
+      const refuteMatch = primaryPenalty.rationale.match(/(\d+)\s+out of\s+(\d+)\s+sources.*refute/i);
+      if (refuteMatch) {
+        const refuting = refuteMatch[1];
+        const total = refuteMatch[2];
+        parts.push(`Multiple independent sources refute this claim.`);
+      } else {
+        parts.push("Available evidence contradicts this claim.");
+      }
+    } else if (stats.refutingCount > stats.supportingCount * 2) {
       parts.push("Available evidence contradicts this claim.");
     } else {
-      parts.push("This claim lacks credible supporting evidence.");
+      parts.push("No credible evidence supports this claim.");
     }
   }
 
-  // Sentence 2: Key limitation or uncertainty (if applicable)
-  if (topPenalties.length > 0) {
-    const primaryPenalty = topPenalties[0];
-    
-    // Translate penalty into user-facing limitation
-    if (primaryPenalty.name === "Evidence contradiction") {
-      // Already covered in sentence 1, skip
-    } else if (primaryPenalty.name === "Model dependence") {
-      parts.push("The claim relies heavily on projections rather than observed data.");
-    } else if (primaryPenalty.name === "Temporal mismatch") {
-      parts.push("Evidence does not align with the timeframe specified in the claim.");
-    } else if (primaryPenalty.name === "Missing context") {
-      parts.push("The claim omits important context that affects its accuracy.");
-    } else if (primaryPenalty.name === "Causal overreach") {
-      parts.push("Evidence shows correlation but does not establish the causal relationship claimed.");
-    } else if (primaryPenalty.name === "Scope exaggeration") {
-      parts.push("Evidence does not support the broad scope implied by the claim.");
-    } else if (primaryPenalty.name === "Low expert consensus") {
-      parts.push("Expert sources disagree on this claim.");
-    } else if (primaryPenalty.name === "Outdated evidence") {
-      parts.push("Available evidence may be outdated for the current state of knowledge.");
-    } else if (primaryPenalty.name === "Selective citation") {
-      parts.push("Evidence sources are concentrated or potentially selective.");
+  // Sentence 2: Add specific limitation from secondary penalty or provide context
+  if (topPenalties.length > 1) {
+    const secondaryPenalty = topPenalties[1];
+    if (secondaryPenalty.name === "Model dependence") {
+      parts.push("The claim involves future projections rather than established facts.");
+    } else if (secondaryPenalty.name === "Temporal mismatch") {
+      parts.push("The timeframe referenced in the claim does not match the evidence.");
+    } else if (secondaryPenalty.name === "Missing context") {
+      parts.push("Important qualifying context is missing from the claim.");
+    } else if (secondaryPenalty.name === "Causal overreach") {
+      parts.push("The evidence shows association but not the causal link stated.");
+    } else if (secondaryPenalty.name === "Scope exaggeration") {
+      parts.push("The claim overgeneralizes from more limited evidence.");
+    } else if (secondaryPenalty.name === "Low expert consensus") {
+      parts.push("Expert sources show disagreement on this topic.");
+    } else if (secondaryPenalty.name === "Outdated evidence") {
+      parts.push("The available evidence may not reflect current knowledge.");
     }
   }
 
-  // Sentence 3: Scope clarification (if needed)
+  // Sentence 3: Scope clarification (only if truly needed)
   if (stats.totalSources === 0) {
-    parts.push("Insufficient evidence was available for verification.");
-  } else if (stats.totalSources < 3) {
-    parts.push("The evidence base is limited.");
+    parts.push("No reliable sources were found to verify this claim.");
+  } else if (stats.totalSources < 3 && finalScore < 60) {
+    parts.push("The evidence base for assessment is limited.");
   }
 
-  // Limit to 2-3 sentences
-  return parts.slice(0, 3).join(" ");
+  // Limit to 2-3 sentences and clean up
+  return parts.slice(0, 3).join(" ").replace(/\s+/g, " ").trim();
 }
 
 export function generateEpistemicExplanation(
@@ -308,7 +366,7 @@ export function generateEpistemicExplanation(
   }));
 
   // Generate each component
-  const evidenceSummary = generateEvidenceSummary(evidenceGraph, input.typedClaims);
+  const evidenceSummary = generateEvidenceSummary(evidenceGraph, input.typedClaims, scoringResult.penaltiesApplied);
   const uncertaintyStatement = generateUncertaintyStatement(scoringResult, evidenceGraph);
   const improvementSuggestions = generateImprovementSuggestions(scoringResult.penaltiesApplied);
   const explanationText = generateExplanationText(scoringResult, evidenceGraph, topPenalties, input.typedClaims);
@@ -333,4 +391,5 @@ export function generateEpistemicExplanation(
     durationMs: Date.now() - startTime
   };
 }
+
 
