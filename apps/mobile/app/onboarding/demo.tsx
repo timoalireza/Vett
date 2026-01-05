@@ -329,18 +329,20 @@ export default function DemoScreen() {
             ]}
           >
             {demoStep === "input" ? (
-              <Animated.View
-                entering={FadeInDown.duration(400).delay(200)}
-                exiting={FadeOut.duration(200)}
-                style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING, transform: [{ translateY: -25 }] }]}
-              >
-                <Text style={styles.instructionTitle} maxFontSizeMultiplier={1.15}>
-                  {instructionTitle}
-                </Text>
-                <Text style={styles.instructionSubtitle} maxFontSizeMultiplier={1.2}>
-                  {instructionSubtitle}
-                </Text>
-              </Animated.View>
+              <View style={{ transform: [{ translateY: -25 }] }}>
+                <Animated.View
+                  entering={FadeInDown.duration(400).delay(200)}
+                  exiting={FadeOut.duration(200)}
+                  style={[styles.instructionContainerInline, { marginBottom: INSTRUCTION_BOTTOM_SPACING }]}
+                >
+                  <Text style={styles.instructionTitle} maxFontSizeMultiplier={1.15}>
+                    {instructionTitle}
+                  </Text>
+                  <Text style={styles.instructionSubtitle} maxFontSizeMultiplier={1.2}>
+                    {instructionSubtitle}
+                  </Text>
+                </Animated.View>
+              </View>
             ) : null}
 
             <View
