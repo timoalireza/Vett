@@ -205,9 +205,9 @@ export default function ResultScreen() {
 
   const analysis = isDemo ? demoAnalysis : apiAnalysis;
   
-  // Check if user has Vett Chat access (Plus or Pro plan)
-  // Note: Both PLUS and PRO plans have chat access (PLUS has limited, PRO has unlimited)
-  const hasVettChatAccess = subscription?.plan === "PLUS" || subscription?.plan === "PRO";
+  // Check if user has Vett Chat access based on subscription limits
+  // The backend sets hasVettChat: true for users with chat access
+  const hasVettChatAccess = subscription?.limits?.hasVettChat === true;
 
   // Back handler
   useEffect(() => {

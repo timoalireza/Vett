@@ -17,11 +17,11 @@ function isAuthError(errors: Array<{ message?: string; extensions?: any }> | und
   if (!errors?.length) return false;
   return errors.some((e: any) => {
     const msg = typeof e?.message === "string" ? e.message.toLowerCase() : "";
-    const code = typeof e?.extensions?.code === "string" ? e.extensions.code : "";
+    const code = typeof e?.extensions?.code === "string" ? e.extensions.code.toLowerCase() : "";
     return (
       msg.includes("authentication required") ||
       msg.includes("unauthorized") ||
-      code === "UNAUTHENTICATED"
+      code === "unauthenticated"
     );
   });
 }
