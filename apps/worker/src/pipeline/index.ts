@@ -760,10 +760,16 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     adjustedVerdictData.verdict = validateVerdict("Unverified");
     adjustedVerdictData.score = null;
     adjustedVerdictData.confidence = Math.min(adjustedVerdictData.confidence, 0.55);
+    // Always update summary when changing verdict to "Unverified" due to insufficient evidence,
+    // regardless of whether low-quality sources exist or not.
     if (!hasRealSources) {
       adjustedVerdictData.summary = "Insufficient evidence was found to assess this claim.";
       adjustedVerdictData.recommendation =
         "The available information is too limited to draw a reliable conclusion.";
+    } else {
+      adjustedVerdictData.summary = "The available evidence is too limited or unreliable to assess this claim.";
+      adjustedVerdictData.recommendation =
+        "The sources found do not provide sufficient quality or confidence for a reliable conclusion.";
     }
   }
 
