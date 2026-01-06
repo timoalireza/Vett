@@ -10,12 +10,19 @@ interface HistoryItemProps {
     title?: string | null;
     claims?: Array<{ text: string }>;
     createdAt: string;
+    epistemic?: {
+      finalScore: number;
+      scoreBand: string;
+    } | null;
   };
   onPress: () => void;
 }
 
 export const HistoryItem: React.FC<HistoryItemProps> = ({ item, onPress }) => {
-  const scoreColor = getScoreColor(item.score || 0);
+  // Prefer epistemic score over legacy score
+  const score = item.epistemic?.finalScore ?? item.score ?? 0;
+  const scoreBand = item.epistemic?.scoreBand ?? null;
+  const scoreColor = getScoreColor(score, null, scoreBand);
   const date = new Date(item.createdAt);
   const timeAgo = getTimeAgo(date);
   // Use title if available, otherwise fall back to first claim text
@@ -26,7 +33,7 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ item, onPress }) => {
       {/* Mini score indicator */}
       <View style={[styles.scoreBadge, { borderColor: scoreColor }]}>
         <Text style={[styles.scoreText, { color: scoreColor }]}>
-          {Math.round(item.score || 0)}
+          {Math.round(score)}
         </Text>
       </View>
 

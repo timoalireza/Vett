@@ -246,11 +246,14 @@ export default function ResultScreen() {
   const isFailed = analysis?.status === "FAILED";
   const isQueued = analysis?.status === "QUEUED";
   const isProcessing = analysis?.status === "PROCESSING";
-  const score = typeof analysis?.score === "number" ? analysis.score : 0;
-  const hasScore = typeof analysis?.score === "number";
+  // Prefer epistemic score over legacy score
+  const score = analysis?.epistemic?.finalScore ?? (typeof analysis?.score === "number" ? analysis.score : 0);
+  const hasScore = analysis?.epistemic?.finalScore != null || typeof analysis?.score === "number";
   const verdict = analysis?.verdict;
+  const scoreBand = analysis?.epistemic?.scoreBand ?? null;
   const isUnverified = verdict === "Unverified";
-  const scoreColor = getScoreColor(score, verdict);
+  // Pass scoreBand to get correct color based on epistemic bands
+  const scoreColor = getScoreColor(score, verdict, scoreBand);
 
   // Get loading text based on analysis status
   const getLoadingText = (): string => {
@@ -270,14 +273,14 @@ export default function ResultScreen() {
     return "Analyzing...";
   };
 
-  // Update current video state
+  // Update current video state based on epistemic score bands
   useEffect(() => {
     if (isCompleted) {
       if (isUnverified) {
         registerVideo('result-amber');
-      } else if (score >= 85) {
+      } else if (score >= 75) {
         registerVideo('result-green');
-      } else if (score >= 40) {
+      } else if (score >= 45) {
         registerVideo('result-amber');
       } else {
         registerVideo('result-red');
@@ -371,25 +374,26 @@ export default function ResultScreen() {
     transform: [{ rotate: `${sourcesChevronRotation.value}deg` }],
   }));
 
-  const getVerdictLabel = (s: number, v: string | null | undefined) => {
-    // Map server verdicts to mobile display labels
-    // Server can return: "Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion", "Unverified"
+  const getVerdictLabel = (s: number, v: string | null | undefined, band: string | null | undefined) => {
+    // If we have an epistemic score band, use it directly
+    // Score bands: "Strongly Supported", "Supported", "Plausible", "Mixed", "Weakly Supported", "Mostly False", "False"
+    if (band) return band;
     
-    // Direct mappings
+    // Legacy verdict mappings (fallback for older analyses)
     if (v === "Unverified") return 'Unverified';
-    if (v === "Verified") return 'Verified';
+    if (v === "Verified") return 'Strongly Supported';
     if (v === "False") return 'False';
+    if (v === "Mostly Accurate") return 'Supported';
+    if (v === "Partially Accurate") return 'Plausible';
+    if (v === "Opinion") return 'Mixed';
     
-    // Map "Mostly Accurate" and "Partially Accurate" to "Disputed"
-    // These indicate mixed or partial truth, which aligns with the "Disputed" concept
-    if (v === "Mostly Accurate" || v === "Partially Accurate") return 'Disputed';
-    
-    // Map "Opinion" to "Disputed" (opinions are subjective, can't be verified/false)
-    if (v === "Opinion") return 'Disputed';
-    
-    // Fallback to score-based logic only if verdict is null/undefined
-    if (s >= 85) return 'Verified';
-    if (s >= 40) return 'Disputed';
+    // Fallback to score-based logic using epistemic bands
+    if (s >= 90) return 'Strongly Supported';
+    if (s >= 75) return 'Supported';
+    if (s >= 60) return 'Plausible';
+    if (s >= 45) return 'Mixed';
+    if (s >= 30) return 'Weakly Supported';
+    if (s >= 15) return 'Mostly False';
     return 'False';
   };
 
@@ -459,11 +463,14 @@ export default function ResultScreen() {
   // IMPORTANT: Never truncate UI text. We auto-scale the font so the full title always fits.
   const claimMaxFontSize = 52;
 
-  // Video selection matches color mapping: Unverified=amber, ≥85=green, 40-84=amber, <40=red
+  // Video selection matches epistemic score bands:
+  // 75+ (Strongly Supported/Supported) = green
+  // 45-74 (Plausible/Mixed) = amber  
+  // Below 45 (Weakly Supported/Mostly False/False) = red
   const getResultVideo = (s: number, v: string | null | undefined) => {
     if (v === "Unverified") return VIDEO_ASSETS.resultAmber;
-    if (s >= 85) return VIDEO_ASSETS.resultGreen;
-    if (s >= 40) return VIDEO_ASSETS.resultAmber;
+    if (s >= 75) return VIDEO_ASSETS.resultGreen;
+    if (s >= 45) return VIDEO_ASSETS.resultAmber;
     return VIDEO_ASSETS.resultRed;
   };
 
@@ -613,7 +620,7 @@ export default function ResultScreen() {
                   <Text style={styles.verdictScoreLabel}>Verdict:</Text>
                   <View style={styles.verdictValueContainer}>
                     <Text style={[styles.verdictScoreValue, { color: scoreColor }]}>
-                      {getVerdictLabel(score, verdict)}
+                      {getVerdictLabel(score, verdict, scoreBand)}
                     </Text>
                   </View>
                 </Animated.View>
