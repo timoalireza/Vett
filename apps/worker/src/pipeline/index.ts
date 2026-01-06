@@ -119,7 +119,11 @@ function recencyBonus(publishedAt?: string): number {
 function isCorroboratingSource(source: PipelineSource): boolean {
   const rel = typeof source.evaluation?.relevance === "number" ? source.evaluation.relevance : 0;
   const stance = source.evaluation?.stance ?? "unclear";
-  return (source.reliability ?? 0) >= 0.75 && rel >= 0.55 && stance !== "irrelevant";
+  // Lowered reliability threshold from 0.75 to 0.60 to allow typical news sources (0.65-0.70) 
+  // to count as corroborating. The epistemic pipeline already penalizes low-reliability sources.
+  // Lowered relevance threshold from 0.55 to 0.45 since default relevance is 0.5 when evaluation
+  // times out, and we don't want to discard sources that are clearly about the claim.
+  return (source.reliability ?? 0) >= 0.55 && rel >= 0.40 && stance !== "irrelevant";
 }
 
 function normalizeInput(payload: AnalysisJobPayload): PipelineContext {
