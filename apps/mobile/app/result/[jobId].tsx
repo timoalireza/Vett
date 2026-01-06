@@ -509,9 +509,9 @@ export default function ResultScreen() {
                 <VideoAnimation
                   source={getResultVideo(score, verdict)}
                   shouldPlay={true}
-                  loopFromSeconds={4}
+                  // Play the first 5s once (transition), then loop the remainder so the transition never repeats.
+                  loopFromSeconds={5}
                   isLooping={false}
-                  freezeAtSeconds={5}
                   style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
                   resizeMode={ResizeMode.COVER}
                   onError={() => setVideoError(true)}

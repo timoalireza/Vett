@@ -306,7 +306,8 @@ export default function DemoScreen() {
             style={[StyleSheet.absoluteFill, { width: screenWidth, height: screenHeight }]}
             resizeMode={ResizeMode.COVER}
             isLooping={false}
-            freezeAtSeconds={5}
+            // Play the first 5s once (transition), then loop the remainder so the transition never repeats.
+            loopFromSeconds={5}
           />
         </Animated.View>
       </Animated.View>

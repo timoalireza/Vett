@@ -11,11 +11,20 @@ Respond in English JSON ONLY, matching the schema.
 If evidence contradicts a claim, LOWER the numeric score. If evidence strongly supports it, raise the score.
 
 GROUNDING RULES (CRITICAL):
-- You MUST base the verdict, score, summary, and rationale ONLY on the provided evidence payload.
+- You MUST base the verdict, score, rationale, and evidenceSupport ONLY on the provided evidence payload.
 - Do NOT use outside knowledge, training data, or assumptions. If a detail is not present in evidence summaries, treat it as unknown.
 - If evidence is mainly about a different topic (stance=irrelevant or very low relevance), you MUST use "Unverified" (score=null).
 - Prefer conclusions corroborated by MULTIPLE independent sources (different hostnames/providers). If only one source supports a claim, be conservative (often "Unverified" unless it is an official/primary source and highly relevant).
 - Be aware of potential source bias: if evidence comes from a narrow set of aligned outlets, reflect that uncertainty in the verdict/score (do not overstate certainty).
+
+SUMMARY + CONTEXT SCOPE (IMPORTANT):
+- The Summary and Context are user-facing explanation. They MAY include general background/definitions/common misunderstandings using your general knowledge.
+- However, you MUST NOT introduce new specific factual claims about the real-world subject of the claim unless that detail is present in the evidence payload.
+- Keep Summary/Context consistent with the evidence-grounded verdict + score. If details are uncertain, say so plainly (without mentioning sources).
+
+OPTIONAL HINTS:
+- The payload may include a top-level "hints" object with a precomputed verdict/score (e.g., from a deterministic scorer).
+- If hints are present, you MUST keep your verdict + score aligned with the hints unless the evidence is clearly insufficient/irrelevant, in which case you MUST output "Unverified" (score=null).
 
 RECENCY RULES:
 - Consider \`publishedAt\` when present. For breaking-news claims (today/this morning/last night), prioritize the most recent high-reliability, high-relevance evidence.
@@ -125,13 +134,13 @@ const JSON_SCHEMA = {
       type: "string", 
       maxLength: 500,
       description:
-        "SUMMARY (What's the answer?) - 2–3 sentences max. Must describe the claim itself, not what sources are saying. Sentence 1 MUST be exactly: \"Verdict: <LABEL> — <core reason>.\" Sentence 2 (optional): key limitation/uncertainty. Sentence 3 (optional): scope clarification. Calm, neutral, factual. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\" except as part of the verdict label in the required \"Verdict: <LABEL>\" phrase."
+        "SUMMARY (What's the answer?) - 2–3 sentences max. Must describe the claim itself, not what sources are saying. Sentence 1 MUST be exactly: \"Verdict: <LABEL> — <core reason>.\" Sentence 2 (optional): key limitation/uncertainty. Sentence 3 (optional): scope clarification. Calm, neutral, factual. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\" except as part of the verdict label in the required \"Verdict: <LABEL>\" phrase. You may include general background/definitions, but do NOT add new specific facts unless present in evidence."
     },
     recommendation: { 
       type: "string", 
       maxLength: 500,
       description:
-        "CONTEXT (How to understand this claim) - 3–5 sentences max. Must describe the claim itself (background/framing), not what sources are saying. Explain relevant background needed to interpret the claim correctly, clarify common misunderstandings, and distinguish related-but-different claims when relevant. Explicitly note uncertainty or missing data when applicable. Explanatory tone, assume good-faith curiosity. Do NOT restate the Summary or repeat the verdict label. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\"."
+        "CONTEXT (How to understand this claim) - 3–5 sentences max. Must describe the claim itself (background/framing), not what sources are saying. Explain relevant background needed to interpret the claim correctly, clarify common misunderstandings, and distinguish related-but-different claims when relevant. Explicitly note uncertainty or missing data when applicable. Explanatory tone, assume good-faith curiosity. Do NOT restate the Summary or repeat the verdict label. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\". You may include general background/definitions, but do NOT add new specific facts unless present in evidence."
     },
     rationale: { type: "string", maxLength: 200 },
     evidenceSupport: {
@@ -167,13 +176,15 @@ export type ReasonerVerdictOutput = {
 export async function reasonVerdict(
   claims: PipelineClaim[],
   sources: PipelineSource[],
-  imageDerivedClaimIds?: Set<string>
+  imageDerivedClaimIds?: Set<string>,
+  hints?: { verdict?: ReasonerVerdictOutput["verdict"]; score?: number | null }
 ): Promise<ReasonerVerdictOutput | null> {
   if (claims.length === 0 || sources.length === 0) {
     return null;
   }
 
   const payload = {
+    hints: hints ?? null,
     claims: claims.map((claim) => ({
       id: claim.id,
       text: claim.text,

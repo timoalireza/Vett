@@ -333,6 +333,25 @@ function verdictFromScore(score: number): PipelineResult["verdict"] {
   return "False";
 }
 
+// Map epistemic score bands to legacy verdict labels for backward compatibility (and UX copy alignment).
+function epistemicToLegacyVerdict(scoreBand: string): ReasonerVerdictOutput["verdict"] {
+  switch (scoreBand) {
+    case "Strongly Supported":
+      return "Verified";
+    case "Supported":
+      return "Mostly Accurate";
+    case "Plausible":
+    case "Mixed":
+      return "Partially Accurate";
+    case "Weakly Supported":
+    case "Mostly False":
+    case "False":
+      return "False";
+    default:
+      return "Unverified";
+  }
+}
+
 // Validate verdicts match database enum before saving
 const VALID_VERDICTS = ["Verified", "Mostly Accurate", "Partially Accurate", "False", "Opinion", "Unverified"] as const;
 
@@ -605,7 +624,12 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   
   // Legacy reasoning (kept for backward compatibility, will be phased out)
   const reasonStart = Date.now();
-  let reasoned = epistemicResult ? null : await reasonVerdict(claims, rankedSources, imageDerivedClaimIds);
+  const reasonerHints = epistemicResult
+    ? { score: epistemicResult.finalScore, verdict: epistemicToLegacyVerdict(epistemicResult.scoreBand) }
+    : undefined;
+  // Even when the epistemic scorer is used, we still run the reasoner to generate claim-specific UX copy.
+  // The reasoner is guided by hints so its verdict/score stays aligned with the epistemic outcome.
+  let reasoned = hasRealSources ? await reasonVerdict(claims, rankedSources, imageDerivedClaimIds, reasonerHints) : null;
   timings.reasoning = Date.now() - reasonStart;
   
   // Validate reasoned verdict immediately after receiving it
@@ -680,33 +704,16 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   
   // Use epistemic score as the primary score if available
   // Map epistemic score band to legacy verdict for backward compatibility
-  const epistemicToLegacyVerdict = (scoreBand: string): PipelineResult["verdict"] => {
-    switch (scoreBand) {
-      case "Strongly Supported":
-        return "Verified";
-      case "Supported":
-        return "Mostly Accurate";
-      case "Plausible":
-      case "Mixed":
-        return "Partially Accurate";
-      case "Weakly Supported":
-      case "Mostly False":
-      case "False":
-        return "False";
-      default:
-        return "Unverified";
-    }
-  };
-
   const adjustedVerdictData = epistemicResult
     ? {
         score: epistemicResult.finalScore,
-        verdict: epistemicToLegacyVerdict(epistemicResult.scoreBand),
+        verdict: validateVerdict(epistemicToLegacyVerdict(epistemicResult.scoreBand)),
         confidence: epistemicResult.confidenceInterval 
           ? ((epistemicResult.confidenceInterval.low + epistemicResult.confidenceInterval.high) / 2) / 100
           : verdictData.confidence,
-        summary: epistemicResult.explanationText,
-        recommendation: epistemicResult.evidenceSummary
+        // Prefer claim-specific, user-facing copy from the reasoner; fall back to deterministic epistemic explanation.
+        summary: reasoned?.summary ?? epistemicResult.explanationText,
+        recommendation: reasoned?.recommendation ?? epistemicResult.evidenceSummary
       }
     : {
         ...verdictData,
