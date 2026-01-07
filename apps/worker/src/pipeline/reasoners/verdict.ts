@@ -30,12 +30,34 @@ RECENCY RULES:
 - Consider \`publishedAt\` when present. For breaking-news claims (today/this morning/last night), prioritize the most recent high-reliability, high-relevance evidence.
 - Do not let older sources outweigh multiple newer credible sources for time-sensitive claims.
 
-SCORING GUIDELINES:
-- For claims that are ACCURATE and well-supported by evidence, assign scores in the 76-100 range ("Verified")
+SCORING GUIDELINES (CRITICAL - MUST ALIGN WITH SUMMARY LANGUAGE):
+- For claims that are ACCURATE and well-supported by INDEPENDENT evidence from MULTIPLE sources, assign scores in the 76-100 range ("Verified")
+  * Summary MUST affirm strong corroboration, e.g., "Multiple independent sources confirm...", "Independently verified by..."
+  * Do NOT use hedging language ("alleged", "claimed", "asserted", "unsubstantiated", "purported") in the summary for scores ≥76
+  
 - For claims that are MOSTLY ACCURATE with minor nuances or limitations, assign scores in the 61-75 range ("Mostly Accurate")
-- For claims that are PARTIALLY ACCURATE with significant limitations or mixed evidence, assign scores in the 41-60 range ("Partially Accurate")
-- For claims that are FALSE or contradicted by evidence, assign scores in the 0-40 range ("False")
+  * Summary should affirm general support with minor caveats, e.g., "Evidence generally supports this with minor details differing..."
+  * Use measured language, not hedging language suggesting lack of verification
+  
+- For claims that are PARTIALLY ACCURATE or MIX verified facts with unverified assertions, assign scores in the 41-60 range ("Partially Accurate")
+  * Summary MUST distinguish what is verified vs. unverified
+  * Appropriate to use language like "Core event confirmed but details unsubstantiated..."
+  
+- For claims that rely on SELF-ASSERTION, ALLEGATIONS, or CLAIMS without independent corroboration, assign scores in the 30-44 range ("Weakly Supported")
+  * Summary MUST make clear the lack of independent verification
+  * Use language like "alleged", "claimed without independent confirmation", "rests on assertions"
+  
+- For claims that are FALSE or contradicted by evidence, assign scores in the 0-29 range ("Mostly False" 15-29, "False" 0-14)
+  * Summary MUST clearly state the contradiction
+  
 - For claims with INSUFFICIENT EVIDENCE (not enough information to verify or contradict), use "Unverified" (set score to null)
+
+ALIGNMENT RULE (MANDATORY):
+Before finalizing output, check: Does the summary language match the score range?
+- Scores ≥75 → Summary must affirm strong/independent support
+- Scores 45-74 → Summary can note limitations but should not suggest unverified allegations
+- Scores 30-44 → Summary MUST acknowledge lack of independent verification
+- If summary contains "alleged", "unsubstantiated", "assertion", "claim by X without proof" → score MUST be ≤44
 
 NUMBERS / AMOUNTS / ATTRIBUTION (IMPORTANT):
 - Do NOT mark a claim as "False" solely because a number/amount is wrong if the core event is supported by evidence.
@@ -104,13 +126,20 @@ SUMMARY (What's the answer?) RULES:
 - Sentence 1 MUST be: "Verdict: <LABEL> — <core reason>."
 - Sentence 2 (optional): key limitation or uncertainty.
 - Sentence 3 (optional): scope clarification (what the claim does not cover).
+- CRITICAL: The language MUST match the score:
+  * Scores ≥75: Affirm strong support ("independently confirmed", "multiple sources verify")
+  * Scores 45-74: Balanced with caveats ("generally supported", "core claim holds")
+  * Scores 30-44: Acknowledge lack of verification ("alleged", "claimed without independent confirmation", "rests on assertions")
+  * Scores <30: State contradiction or falseness clearly
 
 CONTEXT (How to understand this claim) RULES:
 - 3–5 sentences maximum.
-- Provide background needed to interpret the claim correctly.
-- Clarify common misunderstandings or misleading framings.
-- Distinguish related-but-different claims when relevant.
+- MUST be purely factual: answer WHO made the claim, WHAT was claimed, WHEN, WHERE.
+- Provide neutral background needed to interpret the claim correctly (definitions, common confusions).
+- Do NOT evaluate evidence, Do NOT use judgmental language ("alleged", "unsubstantiated").
+- Do NOT analyze or weigh evidence - save that for the Summary.
 - Do NOT restate the Summary or repeat the verdict label.
+- Think of this as a neutral encyclopedia entry setting up the claim, not evaluating it.
 
 EVIDENCE SUPPORT RULES:
 - The \`evidenceSupport\` field must cite evidence using the provided \`key\` values (strings).
@@ -140,7 +169,7 @@ const JSON_SCHEMA = {
       type: "string", 
       maxLength: 500,
       description:
-        "CONTEXT (How to understand this claim) - 3–5 sentences max. Must describe the claim itself (background/framing), not what sources are saying. Explain relevant background needed to interpret the claim correctly, clarify common misunderstandings, and distinguish related-but-different claims when relevant. Explicitly note uncertainty or missing data when applicable. Explanatory tone, assume good-faith curiosity. Do NOT restate the Summary or repeat the verdict label. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\". You may include general background/definitions, but do NOT add new specific facts unless present in evidence."
+        "CONTEXT (How to understand this claim) - 3–5 sentences max. MUST be purely factual, answering: WHO made the claim? WHAT was claimed? WHEN? WHERE? Provide neutral background/definitions needed to interpret the claim correctly. Do NOT evaluate evidence quality. Do NOT use judgmental/evaluative language (\"alleged\", \"unsubstantiated\", \"disputed\", \"questionable\"). Do NOT analyze or weigh evidence - that belongs in Summary. Think of this as a neutral encyclopedia entry setting up the claim factually, not judging it. Do NOT restate the Summary or repeat the verdict label. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\"."
     },
     rationale: { type: "string", maxLength: 200 },
     evidenceSupport: {
@@ -172,6 +201,92 @@ export type ReasonerVerdictOutput = {
   rationale?: string;
   evidenceSupport: Array<{ claimId: string; supportingSources: string[] }>;
 };
+
+/**
+ * Check if summary language contradicts the score/verdict
+ * Returns an adjusted result if inconsistency detected
+ */
+function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutput {
+  const score = result.score;
+  const summary = result.summary.toLowerCase();
+  
+  // Unverified verdicts should have null score
+  if (result.verdict === "Unverified" && score !== null) {
+    return { ...result, score: null };
+  }
+  
+  // Skip consistency check for Unverified (no score to check)
+  if (score === null || result.verdict === "Unverified") {
+    return result;
+  }
+  
+  // Check for hedging language that suggests lack of verification
+  const hasHedgingLanguage = /\b(alleged|allegation|allege|claim(?:ed|s) (?:by|that)|assert(?:ed|s|ion)|purported|unsubstantiated|unverified|not (?:independently )?(?:confirmed|verified|corroborated)|without (?:independent )?(?:confirmation|verification|corroboration|proof)|rest(?:s|ing) on assertions?)\b/i.test(summary);
+  
+  // Check for language suggesting strong support
+  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|multiple (?:independent )?sources (?:confirm|verify|corroborate)|well[- ]documented|extensively verified|conclusive|definitively)\b/i.test(summary);
+  
+  // RULE 1: Score ≥75 (Supported) but summary has hedging language → DOWNGRADE
+  if (score >= 75 && hasHedgingLanguage) {
+    console.warn(`[Consistency Check] Score ${score} (≥75) but summary contains hedging language. Downgrading to 42 (Mixed).`);
+    return {
+      ...result,
+      score: 42,
+      verdict: "Partially Accurate",
+      confidence: Math.min(result.confidence, 0.6)
+    };
+  }
+  
+  // RULE 2: Score ≥75 (Supported) but no strong affirmative language → DOWNGRADE to upper Mostly Accurate
+  if (score >= 75 && !hasStrongLanguage && !summary.includes("generally support") && !summary.includes("evidence supports")) {
+    console.warn(`[Consistency Check] Score ${score} (≥75) but summary lacks strong affirmative language. Downgrading to 68 (Mostly Accurate).`);
+    return {
+      ...result,
+      score: 68,
+      verdict: "Mostly Accurate",
+      confidence: Math.min(result.confidence, 0.75)
+    };
+  }
+  
+  // RULE 3: Score 45-74 but summary has strong hedging → DOWNGRADE
+  if (score >= 45 && score < 75 && hasHedgingLanguage) {
+    console.warn(`[Consistency Check] Score ${score} (45-74) but summary contains strong hedging language. Downgrading to 38 (Weakly Supported).`);
+    return {
+      ...result,
+      score: 38,
+      verdict: "Partially Accurate",
+      confidence: Math.min(result.confidence, 0.55)
+    };
+  }
+  
+  // RULE 4: Score <45 but summary has strong support language → UPGRADE
+  if (score < 45 && hasStrongLanguage) {
+    console.warn(`[Consistency Check] Score ${score} (<45) but summary contains strong support language. Upgrading to 65 (Mostly Accurate).`);
+    return {
+      ...result,
+      score: 65,
+      verdict: "Mostly Accurate",
+      confidence: Math.min(result.confidence, 0.75)
+    };
+  }
+  
+  // RULE 5: Ensure verdict matches score range
+  let expectedVerdict: ReasonerVerdictOutput["verdict"];
+  if (score >= 76) expectedVerdict = "Verified";
+  else if (score >= 61) expectedVerdict = "Mostly Accurate";
+  else if (score >= 41) expectedVerdict = "Partially Accurate";
+  else expectedVerdict = "False";
+  
+  if (result.verdict !== expectedVerdict) {
+    console.warn(`[Consistency Check] Verdict "${result.verdict}" doesn't match score ${score}. Correcting to "${expectedVerdict}".`);
+    return {
+      ...result,
+      verdict: expectedVerdict
+    };
+  }
+  
+  return result;
+}
 
 export async function reasonVerdict(
   claims: PipelineClaim[],
@@ -229,14 +344,20 @@ export async function reasonVerdict(
 
     const parsed = await parseJsonContent<ReasonerVerdictOutput>(firstContent, "verdict_reasoning");
     if (!parsed) return null;
+    
     const cleanedSummary = normalizeSummary(parsed.verdict, parsed.summary);
     const cleanedContext = normalizeContext(parsed.recommendation);
 
-    return {
+    const cleanedResult = {
       ...parsed,
       summary: cleanedSummary,
       recommendation: cleanedContext
     };
+    
+    // Enforce consistency between score, verdict, and summary language
+    const consistentResult = enforceConsistency(cleanedResult);
+    
+    return consistentResult;
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("Verdict reasoning failed:", error);

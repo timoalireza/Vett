@@ -65,16 +65,17 @@ const IMPROVEMENT_SUGGESTIONS: Record<string, string> = {
 /**
  * CONTEXT (How to understand this claim)
  * 
- * Goal: Place the claim in its proper factual and conceptual frame.
+ * Goal: Provide purely factual background - WHO, WHAT, WHEN, WHERE.
  * 3-5 sentences maximum.
  * 
- * - Explain relevant background needed to interpret the claim correctly
- * - Clarify common misunderstandings or misleading framings  
- * - Distinguish between related but different claims if relevant
- * - Explicitly note uncertainty, disagreement, or missing data when applicable
+ * - State what was claimed and by whom (if known from claim structure)
+ * - Provide neutral definitions or background concepts
+ * - Clarify what type of claim this is (predictive, causal, comparative, etc.)
+ * - Note structural features (uses absolute language, makes comparisons, etc.)
  * 
- * Tone: Explanatory, not corrective. Assume good-faith curiosity.
- * DO NOT: Restate the summary, argue with user, mention pipeline/models, over-educate
+ * Tone: Neutral, encyclopedic. Like setting up a problem statement.
+ * DO NOT: Evaluate evidence quality, use judgmental language ("alleged", "unsubstantiated"),
+ *         analyze or weigh evidence (save for Summary), restate the verdict/summary
  */
 function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], penalties: Penalty[]): string {
   const stats = evidence.stats;
@@ -84,89 +85,51 @@ function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], 
     return "No reliable sources were available to assess this claim. The topic may be too specific, too recent, or not well-documented.";
   }
 
-  // Provide context about what kind of claim this is
+  // Describe what kind of claim this is (factual, neutral description)
   const hasPredictiveClaim = claims.some((c) => c.primaryType === "predictive");
   const hasCausalClaim = claims.some((c) => c.primaryType === "causal");
   const hasComparativeClaim = claims.some((c) => c.primaryType === "comparative");
   const hasUniversalQuantifier = claims.some((c) => c.quantifiers.includes("universal"));
   const hasVagueQuantifier = claims.some((c) => c.quantifiers.includes("vague"));
 
-  // Start with claim type context if relevant
+  // Start with neutral claim type description
   if (hasPredictiveClaim) {
     parts.push("This claim makes a prediction about future events or outcomes.");
-    if (stats.modelBasedCount > stats.totalSources * 0.5) {
-      parts.push("Predictions of this kind typically rely on models and assumptions that may not hold.");
-    }
+    parts.push("Predictions typically involve projections based on current data and assumptions.");
   } else if (hasCausalClaim) {
-    const hasCorrelationEvidence = evidence.nodes.some((n) => 
-      /correlat|associat|linked|related/i.test(n.summary)
-    );
-    if (hasCorrelationEvidence) {
-      parts.push("This claim asserts a cause-and-effect relationship.");
-      parts.push("Correlation between two things does not necessarily mean one causes the other.");
-    } else {
-      parts.push("This claim involves a causal relationship between events or factors.");
-    }
+    parts.push("This claim asserts a cause-and-effect relationship between events or factors.");
+    parts.push("Causal claims require evidence showing that one thing directly causes another, not just correlation.");
   } else if (hasComparativeClaim) {
     parts.push("This claim makes a comparison between two or more things.");
-    const hasMethodologyIssue = penalties.some((p) => p.name === "comparative_distortion");
-    if (hasMethodologyIssue) {
-      parts.push("Comparisons can be sensitive to how measurements are made or what is being compared.");
-    }
+    parts.push("Comparisons depend on the methodology and criteria used for measurement.");
   }
 
-  // Note uncertainty or disagreement
-  const hasDisagreement = stats.supportingCount > 0 && stats.refutingCount > 0;
-  const totalStancedSources = stats.supportingCount + stats.refutingCount;
-  const hasStrongDisagreement = totalStancedSources >= 3 && stats.refutingCount >= totalStancedSources * 0.75;
-  
-  if (hasStrongDisagreement) {
-    parts.push("The available evidence largely contradicts the specific details or framing of this claim.");
-  } else if (hasDisagreement) {
-    parts.push("Sources disagree on aspects of this claim, suggesting it may be contested or context-dependent.");
-  }
-
-  // Clarify issues with claim framing
+  // Describe claim structure (neutral, factual)
   if (hasUniversalQuantifier) {
-    parts.push("Claims using absolute terms like 'always,' 'never,' or 'all' are difficult to verify comprehensively.");
+    parts.push("The claim uses absolute terms like 'always,' 'never,' or 'all.'");
   } else if (hasVagueQuantifier) {
-    parts.push("The claim uses imprecise language that makes verification difficult.");
+    parts.push("The claim uses imprecise quantifiers that lack specific numbers.");
   }
 
-  // Note missing context if relevant
+  // Note scope or framing (neutral description, not evaluation)
   const hasContextIssue = penalties.some((p) => 
     p.name === "context_omission" || p.name === "scope_exaggeration"
   );
   if (hasContextIssue && parts.length < 4) {
-    parts.push("The claim may be accurate in specific circumstances but not as broadly as stated.");
+    parts.push("The claim's scope or applicable conditions are not fully specified.");
   }
 
-  // Note data limitations
-  if (stats.totalSources < 3 && parts.length < 3) {
-    parts.push("Limited documentation exists on this specific claim.");
-  } else if (stats.averageReliability < 0.5 && parts.length < 3) {
-    parts.push("The available sources have mixed reliability.");
-  }
-
-  // If we haven't provided enough context yet, add clarifying info
-  if (parts.length < 3 && stats.newestEvidenceDate) {
-    const newestDate = new Date(stats.newestEvidenceDate);
-    const now = new Date();
-    const oneYearAgo = now.getTime() - 365 * 24 * 60 * 60 * 1000;
-    
-    if (newestDate.getTime() < oneYearAgo) {
-      parts.push("The most recent evidence is over a year old and may not reflect current information.");
-    }
-  }
-
-  // If nothing specific to note, provide neutral evidence-based context
+  // Provide general background if nothing else to say
   if (parts.length === 0) {
-    if (stats.refutingCount > stats.supportingCount) {
-      parts.push("Available evidence predominantly contradicts the claim as stated.");
-    } else if (stats.supportingCount > stats.refutingCount) {
-      parts.push("Available evidence generally supports the claim.");
+    parts.push("This claim makes a factual assertion about a specific topic.");
+  }
+  
+  // Add a second neutral sentence if we only have one
+  if (parts.length === 1) {
+    if (claims.length > 1) {
+      parts.push("Multiple related assertions are bundled in this claim.");
     } else {
-      parts.push("Evidence for this claim is mixed or inconclusive.");
+      parts.push("Understanding this claim requires considering its specific context and scope.");
     }
   }
 
@@ -247,13 +210,19 @@ function generateImprovementSuggestions(penalties: Penalty[]): string[] {
 /**
  * SUMMARY (What's the answer?)
  * 
- * Goal: Give the user a fast, neutral understanding of the verdict.
+ * Goal: Evaluate the claim's accuracy based on evidence.
  * 2-3 sentences maximum.
  * 
  * Structure:
- * - Sentence 1: Verdict + core reason
+ * - Sentence 1: State what is verified vs. unverified
  * - Sentence 2 (optional): Key limitation or uncertainty
  * - Sentence 3 (optional): Scope clarification
+ * 
+ * CRITICAL: Language MUST align with score band:
+ * - 75+: Affirm strong independent corroboration ("independently confirmed", "multiple sources verify")
+ * - 45-74: Balanced ("generally supported", "partially verified")
+ * - 30-44: Acknowledge lack of verification ("alleged", "claimed without independent confirmation")
+ * - <30: State contradiction clearly
  * 
  * Tone: Calm, neutral, factual. No confidence theater. No exaggeration or minimization.
  * DO NOT: Cite sources by name, use bullet points, use percentages, use emojis, 
@@ -272,15 +241,15 @@ function generateExplanationText(
   // Get the primary penalty with its specific rationale
   const primaryPenalty = topPenalties.length > 0 ? topPenalties[0] : null;
 
-  // Sentence 1: Verdict + core reason (be specific using penalty rationale when available)
+  // Sentence 1: Verdict + core reason - MUST align with score band
   if (finalScore >= 75) {
-    // Strongly Supported / Supported
-    // Use original threshold: supporting > refuting * 2 (roughly 67% when many sources)
-    // Only use "multiple" when there are actually 2+ supporting sources
+    // Strongly Supported / Supported - MUST affirm strong corroboration
     if (stats.supportingCount > stats.refutingCount * 2 && stats.supportingCount >= 2) {
-      parts.push("Multiple independent sources support this claim.");
+      parts.push("Multiple independent sources confirm this claim.");
+    } else if (stats.supportingCount >= 2) {
+      parts.push("Independent sources verify this claim.");
     } else {
-      parts.push("Available evidence generally supports this claim.");
+      parts.push("Available evidence strongly supports this claim.");
     }
   } else if (finalScore >= 60) {
     // Plausible
@@ -298,19 +267,23 @@ function generateExplanationText(
       parts.push("Evidence partially supports this claim with some limitations.");
     }
   } else if (finalScore >= 45) {
-    // Mixed
+    // Mixed - balanced language
     if (stats.supportingCount > 0 && stats.refutingCount > 0) {
       parts.push("Evidence is divided on this claim, with sources both supporting and contradicting it.");
     } else {
       parts.push("Available evidence is inconclusive on this claim.");
     }
   } else if (finalScore >= 30) {
-    // Weakly Supported / Mostly False
-    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction" && stats.refutingCount >= 2) {
-      // Only use "Multiple" when there are actually 2+ refuting sources
+    // Weakly Supported - MUST acknowledge lack of independent verification
+    const hasLowConsensus = penalties.some((p) => p.name === "low_expert_consensus");
+    const hasSelectiveCitation = penalties.some((p) => p.name === "selective_citation");
+    
+    if (hasLowConsensus || hasSelectiveCitation) {
+      parts.push("This claim rests primarily on assertions without broad independent corroboration.");
+    } else if (stats.refutingCount >= 2) {
       parts.push("Multiple sources contradict key aspects of this claim.");
     } else {
-      parts.push("Available evidence contradicts key aspects of this claim.");
+      parts.push("Key elements of this claim lack independent verification.");
     }
   } else {
     // False
