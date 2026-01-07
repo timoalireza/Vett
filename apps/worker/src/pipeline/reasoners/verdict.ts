@@ -345,19 +345,17 @@ export async function reasonVerdict(
     const parsed = await parseJsonContent<ReasonerVerdictOutput>(firstContent, "verdict_reasoning");
     if (!parsed) return null;
     
-    const cleanedSummary = normalizeSummary(parsed.verdict, parsed.summary);
-    const cleanedContext = normalizeContext(parsed.recommendation);
+    // Enforce consistency BEFORE normalization to avoid pattern detection issues
+    const consistentResult = enforceConsistency(parsed);
+    
+    const cleanedSummary = normalizeSummary(consistentResult.verdict, consistentResult.summary);
+    const cleanedContext = normalizeContext(consistentResult.recommendation);
 
-    const cleanedResult = {
-      ...parsed,
+    return {
+      ...consistentResult,
       summary: cleanedSummary,
       recommendation: cleanedContext
     };
-    
-    // Enforce consistency between score, verdict, and summary language
-    const consistentResult = enforceConsistency(cleanedResult);
-    
-    return consistentResult;
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("Verdict reasoning failed:", error);

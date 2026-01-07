@@ -232,7 +232,8 @@ function generateExplanationText(
   scoringResult: ScoringResult,
   evidence: EvidenceGraph,
   topPenalties: Array<{ name: string; weight: number; rationale: string }>,
-  _claims: TypedClaim[]
+  _claims: TypedClaim[],
+  originalPenalties: Penalty[]
 ): string {
   const { finalScore } = scoringResult;
   const stats = evidence.stats;
@@ -275,8 +276,8 @@ function generateExplanationText(
     }
   } else if (finalScore >= 30) {
     // Weakly Supported - MUST acknowledge lack of independent verification
-    const hasLowConsensus = topPenalties.some((p) => p.name === "Low expert consensus");
-    const hasSelectiveCitation = topPenalties.some((p) => p.name === "Selective citation");
+    const hasLowConsensus = originalPenalties.some((p) => p.name === "low_expert_consensus");
+    const hasSelectiveCitation = originalPenalties.some((p) => p.name === "selective_citation");
     
     if (hasLowConsensus || hasSelectiveCitation) {
       parts.push("This claim rests primarily on assertions without broad independent corroboration.");
@@ -287,7 +288,9 @@ function generateExplanationText(
     }
   } else {
     // False
-    if (primaryPenalty && primaryPenalty.name === "Evidence contradiction" && primaryPenalty.rationale) {
+    const hasEvidenceContradiction = originalPenalties.length > 0 && 
+      originalPenalties[0].name === "evidence_contradiction";
+    if (hasEvidenceContradiction && primaryPenalty && primaryPenalty.rationale) {
       // Extract source counts from rationale if present (e.g., "9 out of 11 sources refute...")
       const refuteMatch = primaryPenalty.rationale.match(/(\d+)\s+out of\s+(\d+)\s+sources.*refute/i);
       if (refuteMatch) {
@@ -319,7 +322,8 @@ function generateExplanationText(
     // Determine which penalty to use for sentence 2
     // If primary penalty was "Evidence contradiction" and used in sentence 1, try secondary
     const primaryWasUsedInSentence1 = primaryPenalty && 
-      primaryPenalty.name === "Evidence contradiction" && 
+      originalPenalties.length > 0 &&
+      originalPenalties[0].name === "evidence_contradiction" && 
       finalScore < 45;
     
     const penaltyForSentence2 = primaryWasUsedInSentence1 && topPenalties.length > 1
@@ -327,6 +331,7 @@ function generateExplanationText(
       : primaryPenalty;
     
     // Add context if the penalty wasn't already extensively covered in sentence 1
+    // Check against the transformed name since penaltyForSentence2 comes from topPenalties
     if (penaltyForSentence2 && penaltyForSentence2.name !== "Evidence contradiction") {
       if (penaltyForSentence2.name === "Model dependence") {
         parts.push("The claim involves future projections rather than established facts.");
@@ -384,7 +389,7 @@ export function generateEpistemicExplanation(
   const evidenceSummary = generateEvidenceSummary(evidenceGraph, input.typedClaims, scoringResult.penaltiesApplied);
   const uncertaintyStatement = generateUncertaintyStatement(scoringResult, evidenceGraph);
   const improvementSuggestions = generateImprovementSuggestions(scoringResult.penaltiesApplied);
-  const explanationText = generateExplanationText(scoringResult, evidenceGraph, topPenalties, input.typedClaims);
+  const explanationText = generateExplanationText(scoringResult, evidenceGraph, topPenalties, input.typedClaims, scoringResult.penaltiesApplied);
 
   // Get band description
   const bandKey = scoringResult.scoreBand;
