@@ -263,7 +263,7 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   
   // Check for language suggesting strong support
   // Matches: "independently verified", "multiple sources confirm", "strongly supports", "well-supported", "confirmed", "proven", etc.
-  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirms?|verif(?:y|ies)|corroborates?)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirms?(?:\s+this)?|verified?(?:\s+this)?|verif(?:y|ies)(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
+  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirms?|verif(?:y|ies|ied)|corroborates?)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirms?(?:\s+this)?|verif(?:y|ies|ied)(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
   
   let adjustedResult = { ...result };
   

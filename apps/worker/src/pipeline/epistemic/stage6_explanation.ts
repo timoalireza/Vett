@@ -246,9 +246,9 @@ function generateExplanationText(
   const sortedOriginalPenalties = [...originalPenalties].sort((a, b) => b.weight - a.weight);
   const primaryOriginalPenalty = sortedOriginalPenalties.length > 0 ? sortedOriginalPenalties[0] : null;
 
-  // Sentence 1: Verdict + core reason - MUST align with score band
-  if (finalScore >= 76) {
-    // Verified (76-100) - MUST affirm strong corroboration
+  // Sentence 1: Verdict + core reason - MUST align with SCORE_BANDS thresholds (90, 75, 60, 45, 30, 15, 0)
+  if (finalScore >= 90) {
+    // STRONGLY_SUPPORTED (90-100) - MUST affirm strong corroboration
     if (stats.supportingCount > stats.refutingCount * 2 && stats.supportingCount >= 2) {
       parts.push("Multiple independent sources confirm this claim.");
     } else if (stats.supportingCount >= 2) {
@@ -256,8 +256,15 @@ function generateExplanationText(
     } else {
       parts.push("Available evidence strongly supports this claim.");
     }
-  } else if (finalScore >= 61) {
-    // Mostly Accurate (61-75)
+  } else if (finalScore >= 75) {
+    // SUPPORTED (75-89) - Strong support with minor caveats
+    if (stats.supportingCount > stats.refutingCount * 2 && stats.supportingCount >= 2) {
+      parts.push("Multiple sources support this claim.");
+    } else {
+      parts.push("Available evidence generally supports this claim.");
+    }
+  } else if (finalScore >= 60) {
+    // PLAUSIBLE (60-74) - Plausible but conditional
     if (primaryPenalty && primaryPenalty.rationale) {
       // Extract the key issue from rationale
       const rationale = primaryPenalty.rationale.toLowerCase();
@@ -272,14 +279,14 @@ function generateExplanationText(
       parts.push("Evidence partially supports this claim with some limitations.");
     }
   } else if (finalScore >= 45) {
-    // Mixed - balanced language
+    // MIXED (45-59) - Mixed or contested
     if (stats.supportingCount > 0 && stats.refutingCount > 0) {
       parts.push("Evidence is divided on this claim, with sources both supporting and contradicting it.");
     } else {
       parts.push("Available evidence is inconclusive on this claim.");
     }
   } else if (finalScore >= 30) {
-    // Weakly Supported (30-44) - MUST acknowledge lack of independent verification
+    // WEAKLY_SUPPORTED (30-44) - MUST acknowledge lack of independent verification
     // Check if PRIMARY penalty is about lack of verification (not just any penalty in the list)
     const isPrimaryLowConsensus = primaryOriginalPenalty?.name === "low_expert_consensus";
     const isPrimarySelectiveCitation = primaryOriginalPenalty?.name === "selective_citation";
@@ -291,8 +298,8 @@ function generateExplanationText(
     } else {
       parts.push("Key elements of this claim lack independent verification.");
     }
-  } else {
-    // False
+  } else if (finalScore >= 15) {
+    // MOSTLY_FALSE (15-29) - Mostly false
     const hasEvidenceContradiction = primaryOriginalPenalty?.name === "evidence_contradiction";
     if (hasEvidenceContradiction && primaryPenalty && primaryPenalty.rationale) {
       // Extract source counts from rationale if present (e.g., "9 out of 11 sources refute...")
@@ -313,9 +320,34 @@ function generateExplanationText(
       } else {
         parts.push("Available evidence contradicts this claim.");
       }
-    } else if (stats.refutingCount > stats.supportingCount * 2 && stats.refutingCount >= 2) {
-      // Only use strong language when there are actually 2+ refuting sources
+    } else if (stats.refutingCount >= 2) {
+      parts.push("Multiple sources contradict this claim.");
+    } else {
       parts.push("Available evidence contradicts this claim.");
+    }
+  } else {
+    // FALSE (0-14) - False or deceptive
+    const hasEvidenceContradiction = primaryOriginalPenalty?.name === "evidence_contradiction";
+    if (hasEvidenceContradiction && primaryPenalty && primaryPenalty.rationale) {
+      // Extract source counts from rationale if present (e.g., "9 out of 11 sources refute...")
+      const refuteMatch = primaryPenalty.rationale.match(/(\d+)\s+out of\s+(\d+)\s+sources.*refute/i);
+      if (refuteMatch) {
+        const refuting = parseInt(refuteMatch[1], 10);
+        const total = parseInt(refuteMatch[2], 10);
+        // Use extracted counts to determine strength of language
+        const refutingRatio = refuting / total;
+        if (refutingRatio >= 0.8 && total >= 5) {
+          parts.push("Available evidence overwhelmingly refutes this claim.");
+        } else if (refuting >= 2) {
+          parts.push("Multiple independent sources refute this claim.");
+        } else {
+          parts.push("Available evidence refutes this claim.");
+        }
+      } else {
+        parts.push("Available evidence refutes this claim.");
+      }
+    } else if (stats.refutingCount >= 2) {
+      parts.push("Multiple sources refute this claim.");
     } else {
       parts.push("No credible evidence supports this claim.");
     }
