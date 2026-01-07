@@ -247,8 +247,8 @@ function generateExplanationText(
   const primaryOriginalPenalty = sortedOriginalPenalties.length > 0 ? sortedOriginalPenalties[0] : null;
 
   // Sentence 1: Verdict + core reason - MUST align with score band
-  if (finalScore >= 75) {
-    // Strongly Supported / Supported - MUST affirm strong corroboration
+  if (finalScore >= 76) {
+    // Verified (76-100) - MUST affirm strong corroboration
     if (stats.supportingCount > stats.refutingCount * 2 && stats.supportingCount >= 2) {
       parts.push("Multiple independent sources confirm this claim.");
     } else if (stats.supportingCount >= 2) {
@@ -279,11 +279,12 @@ function generateExplanationText(
       parts.push("Available evidence is inconclusive on this claim.");
     }
   } else if (finalScore >= 30) {
-    // Weakly Supported - MUST acknowledge lack of independent verification
-    const hasLowConsensus = originalPenalties.some((p) => p.name === "low_expert_consensus");
-    const hasSelectiveCitation = originalPenalties.some((p) => p.name === "selective_citation");
+    // Weakly Supported (30-44) - MUST acknowledge lack of independent verification
+    // Check if PRIMARY penalty is about lack of verification (not just any penalty in the list)
+    const isPrimaryLowConsensus = primaryOriginalPenalty?.name === "low_expert_consensus";
+    const isPrimarySelectiveCitation = primaryOriginalPenalty?.name === "selective_citation";
     
-    if (hasLowConsensus || hasSelectiveCitation) {
+    if (isPrimaryLowConsensus || isPrimarySelectiveCitation) {
       parts.push("This claim rests primarily on assertions without broad independent corroboration.");
     } else if (stats.refutingCount >= 2) {
       parts.push("Multiple sources contradict key aspects of this claim.");
