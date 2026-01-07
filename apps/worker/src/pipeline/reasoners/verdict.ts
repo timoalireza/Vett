@@ -230,10 +230,10 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   
   // RULE 1: Score ≥76 (Verified) but summary has hedging language → DOWNGRADE
   if (score >= 76 && hasHedgingLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (≥76) but summary contains hedging language. Downgrading to 42 (Partially Accurate).`);
+    console.warn(`[Consistency Check] Score ${score} (≥76) but summary contains hedging language. Downgrading to 40 (Partially Accurate).`);
     return {
       ...result,
-      score: 42,
+      score: 40,
       verdict: "Partially Accurate",
       confidence: Math.min(result.confidence, 0.6)
     };
@@ -250,13 +250,13 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
     };
   }
   
-  // RULE 3: Score 45-60 (Partially Accurate) but summary has strong hedging → DOWNGRADE to 41 (lower Partially Accurate boundary)
+  // RULE 3: Score 45-60 (Partially Accurate) but summary has strong hedging → DOWNGRADE to 40 (lower Partially Accurate boundary)
   // Note: We don't downgrade 61-75 (Mostly Accurate) here to avoid crossing verdict categories
   if (score >= 45 && score < 61 && hasHedgingLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (45-60) but summary contains strong hedging language. Downgrading to 41 (lower Partially Accurate).`);
+    console.warn(`[Consistency Check] Score ${score} (45-60) but summary contains strong hedging language. Downgrading to 40 (lower Partially Accurate).`);
     return {
       ...result,
-      score: 41,
+      score: 40,
       verdict: "Partially Accurate",
       confidence: Math.min(result.confidence, 0.55)
     };
