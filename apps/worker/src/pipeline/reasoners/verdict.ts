@@ -224,12 +224,12 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   const hasHedgingLanguage = /\b(alleged|allegation|allege|claim(?:ed|s) (?:by|that)|assert(?:ed|s|ion)|purported|unsubstantiated|unverified|not (?:independently )?(?:confirmed|verified|corroborated)|without (?:independent )?(?:confirmation|verification|corroboration|proof)|rest(?:s|ing) on assertions?)\b/i.test(summary);
   
   // Check for language suggesting strong support
-  // Matches: "independently verified", "multiple sources confirm", "independent sources verify", etc.
-  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|well[- ]documented|extensively verified|conclusive|definitively)\b/i.test(summary);
+  // Matches: "independently verified", "multiple sources confirm", "independent sources verify", "strongly supports", etc.
+  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|(?:strongly|generally) support(?:s|ed)?|well[- ]documented|extensively verified|conclusive|definitively)\b/i.test(summary);
   
   // RULE 1: Score ≥75 (Supported) but summary has hedging language → DOWNGRADE
   if (score >= 75 && hasHedgingLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (≥75) but summary contains hedging language. Downgrading to 42 (Mixed).`);
+    console.warn(`[Consistency Check] Score ${score} (≥75) but summary contains hedging language. Downgrading to 42 (Partially Accurate).`);
     return {
       ...result,
       score: 42,
@@ -239,7 +239,7 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   }
   
   // RULE 2: Score ≥75 (Supported) but no strong affirmative language → DOWNGRADE to upper Mostly Accurate
-  if (score >= 75 && !hasStrongLanguage && !summary.includes("generally support") && !summary.includes("evidence supports")) {
+  if (score >= 75 && !hasStrongLanguage && !summary.includes("evidence supports")) {
     console.warn(`[Consistency Check] Score ${score} (≥75) but summary lacks strong affirmative language. Downgrading to 68 (Mostly Accurate).`);
     return {
       ...result,
@@ -249,12 +249,12 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
     };
   }
   
-  // RULE 3: Score 45-74 but summary has strong hedging → DOWNGRADE
+  // RULE 3: Score 45-74 but summary has strong hedging → DOWNGRADE to 41 (lower Partially Accurate boundary)
   if (score >= 45 && score < 75 && hasHedgingLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (45-74) but summary contains strong hedging language. Downgrading to 38 (lower Partially Accurate).`);
+    console.warn(`[Consistency Check] Score ${score} (45-74) but summary contains strong hedging language. Downgrading to 41 (lower Partially Accurate).`);
     return {
       ...result,
-      score: 38,
+      score: 41,
       verdict: "Partially Accurate",
       confidence: Math.min(result.confidence, 0.55)
     };
