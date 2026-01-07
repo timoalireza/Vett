@@ -323,16 +323,16 @@ function generateExplanationText(
   // Sentence 2: Add specific limitation from penalties (if not already covered in sentence 1)
   if (topPenalties.length > 0) {
     // Determine which penalty to use for sentence 2
-    // If primary penalty was "Evidence contradiction" and used in sentence 1, try secondary
-    const primaryWasUsedInSentence1 = primaryPenalty && 
-      primaryOriginalPenalty?.name === "evidence_contradiction" && 
-      finalScore < 45;
+    // If primary penalty is "Evidence contradiction", use secondary penalty instead
+    // - For scores < 45: evidence_contradiction is heavily used in sentence 1, so avoid repeating
+    // - For scores >= 45: evidence_contradiction is not discussed in sentence 1, but it's not useful for sentence 2 either
+    const isPrimaryEvidenceContradiction = primaryOriginalPenalty?.name === "evidence_contradiction";
     
-    const penaltyForSentence2 = primaryWasUsedInSentence1 && topPenalties.length > 1
+    const penaltyForSentence2 = isPrimaryEvidenceContradiction && topPenalties.length > 1
       ? topPenalties[1]
       : primaryPenalty;
     
-    // Add context if the penalty wasn't already extensively covered in sentence 1
+    // Add context if the penalty is not evidence_contradiction
     // Check against the transformed name since penaltyForSentence2 comes from topPenalties
     if (penaltyForSentence2 && penaltyForSentence2.name !== "Evidence contradiction") {
       if (penaltyForSentence2.name === "Model dependence") {
