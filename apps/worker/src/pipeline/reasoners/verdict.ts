@@ -39,13 +39,13 @@ SCORING GUIDELINES (CRITICAL - MUST ALIGN WITH SUMMARY LANGUAGE):
   * Summary should affirm general support with minor caveats, e.g., "Evidence generally supports this with minor details differing..."
   * Use measured language, not hedging language suggesting lack of verification
   
-- For claims that are PARTIALLY ACCURATE or MIX verified facts with unverified assertions, assign scores in the 41-60 range ("Partially Accurate")
-  * Summary MUST distinguish what is verified vs. unverified
-  * Appropriate to use language like "Core event confirmed but details unsubstantiated..."
-  
-- For claims that rely on SELF-ASSERTION, ALLEGATIONS, or CLAIMS without independent corroboration, assign scores in the 30-40 range (lower "Partially Accurate" or upper "False")
-  * Summary MUST make clear the lack of independent verification
-  * Use language like "alleged", "claimed without independent confirmation", "rests on assertions"
+- For claims that are PARTIALLY ACCURATE or MIX verified facts with unverified assertions, assign scores in the 30-60 range ("Partially Accurate")
+  * For claims relying on SELF-ASSERTION, ALLEGATIONS, or CLAIMS without independent corroboration: use 30-40 (lower "Partially Accurate")
+    - Summary MUST make clear the lack of independent verification
+    - Use language like "alleged", "claimed without independent confirmation", "rests on assertions"
+  * For claims that MIX verified facts with unverified assertions: use 41-60 (mid-range "Partially Accurate")
+    - Summary MUST distinguish what is verified vs. unverified
+    - Appropriate to use language like "Core event confirmed but details unsubstantiated..."
   
 - For claims that are FALSE or contradicted by evidence, assign scores in the 0-29 range ("Mostly False" 15-29, "False" 0-14)
   * Summary MUST clearly state the contradiction
@@ -54,8 +54,9 @@ SCORING GUIDELINES (CRITICAL - MUST ALIGN WITH SUMMARY LANGUAGE):
 
 ALIGNMENT RULE (MANDATORY):
 Before finalizing output, check: Does the summary language match the score range?
-- Scores ≥75 → Summary must affirm strong/independent support
-- Scores 45-74 → Summary can note limitations but should not suggest unverified allegations
+- Scores ≥76 → Summary must affirm strong/independent support
+- Scores 61-75 → Summary can note limitations but should not suggest unverified allegations
+- Scores 45-60 → Summary can note partial verification or mixed evidence
 - Scores 30-40 → Summary MUST acknowledge lack of independent verification
 - If summary contains "alleged", "unsubstantiated", "assertion", "claim by X without proof" → score MUST be ≤40
 
@@ -249,9 +250,10 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
     };
   }
   
-  // RULE 3: Score 45-74 but summary has strong hedging → DOWNGRADE to 41 (lower Partially Accurate boundary)
-  if (score >= 45 && score < 75 && hasHedgingLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (45-74) but summary contains strong hedging language. Downgrading to 41 (lower Partially Accurate).`);
+  // RULE 3: Score 45-60 (Partially Accurate) but summary has strong hedging → DOWNGRADE to 41 (lower Partially Accurate boundary)
+  // Note: We don't downgrade 61-75 (Mostly Accurate) here to avoid crossing verdict categories
+  if (score >= 45 && score < 61 && hasHedgingLanguage) {
+    console.warn(`[Consistency Check] Score ${score} (45-60) but summary contains strong hedging language. Downgrading to 41 (lower Partially Accurate).`);
     return {
       ...result,
       score: 41,
