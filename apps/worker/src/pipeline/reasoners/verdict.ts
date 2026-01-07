@@ -227,9 +227,9 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   // Matches: "independently verified", "multiple sources confirm", "strongly supports", "well-supported", "confirmed", "proven", etc.
   const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirm(?:s|ed)?(?:\s+this)?|verified?(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
   
-  // RULE 1: Score ≥75 (Supported) but summary has hedging language → DOWNGRADE
-  if (score >= 75 && hasHedgingLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (≥75) but summary contains hedging language. Downgrading to 42 (Partially Accurate).`);
+  // RULE 1: Score ≥76 (Verified) but summary has hedging language → DOWNGRADE
+  if (score >= 76 && hasHedgingLanguage) {
+    console.warn(`[Consistency Check] Score ${score} (≥76) but summary contains hedging language. Downgrading to 42 (Partially Accurate).`);
     return {
       ...result,
       score: 42,
@@ -238,9 +238,9 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
     };
   }
   
-  // RULE 2: Score ≥75 (Supported) but no strong affirmative language → DOWNGRADE to upper Mostly Accurate
-  if (score >= 75 && !hasStrongLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (≥75) but summary lacks strong affirmative language. Downgrading to 68 (Mostly Accurate).`);
+  // RULE 2: Score ≥76 (Verified) but no strong affirmative language → DOWNGRADE to upper Mostly Accurate
+  if (score >= 76 && !hasStrongLanguage) {
+    console.warn(`[Consistency Check] Score ${score} (≥76) but summary lacks strong affirmative language. Downgrading to 68 (Mostly Accurate).`);
     return {
       ...result,
       score: 68,
