@@ -204,12 +204,47 @@ export type ReasonerVerdictOutput = {
 };
 
 /**
+ * Sanitize summary text to match the verdict level
+ * Removes language patterns that conflict with the assigned verdict
+ */
+function sanitizeSummaryForVerdict(summary: string, verdict: ReasonerVerdictOutput["verdict"]): string {
+  let sanitized = summary;
+  
+  // For "Partially Accurate" or "False" verdicts, remove strong affirmative language
+  if (verdict === "Partially Accurate" || verdict === "False") {
+    // Remove "multiple independent sources confirm/verify/corroborate"
+    sanitized = sanitized.replace(/\b(?:multiple\s+)?independent\s+sources?\s+(?:confirm|verify|verifies|corroborate|corroborates)\b/gi, "available information suggests");
+    // Remove "independently confirmed/verified/corroborated"
+    sanitized = sanitized.replace(/\bindependently\s+(?:confirmed|verified|corroborated)\b/gi, "indicated");
+    // Remove "strongly/well supports/supported"
+    sanitized = sanitized.replace(/\b(?:strongly|well)[- ]support(?:s|ed)\b/gi, "suggests");
+    // Remove "confirmed/verified/corroborated/proven/established" (standalone)
+    sanitized = sanitized.replace(/\b(?:confirmed|verified|corroborated|proven|established|establishes)\b/gi, "suggested");
+    // Remove "conclusive/definitively"
+    sanitized = sanitized.replace(/\b(?:conclusive|definitively)\b/gi, "indicated");
+  }
+  
+  // For "Mostly Accurate" or "Verified" verdicts, tone down extreme hedging language
+  if (verdict === "Mostly Accurate" || verdict === "Verified") {
+    // Replace "alleged/purported/unsubstantiated/unverified" with softer language
+    sanitized = sanitized.replace(/\b(?:alleged|purported|unsubstantiated|unverified)\b/gi, "reported");
+    // Replace "rests on assertions" with "based on available information"
+    sanitized = sanitized.replace(/\brests?\s+(?:primarily\s+)?on\s+assertions?\b/gi, "based on available information");
+    // Replace "without independent confirmation" with "with limited independent confirmation"
+    sanitized = sanitized.replace(/\bwithout\s+(?:independent\s+)?(?:confirmation|verification|corroboration)\b/gi, "with limited confirmation");
+  }
+  
+  return sanitized;
+}
+
+/**
  * Check if summary language contradicts the score/verdict
  * Returns an adjusted result if inconsistency detected
  */
 function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutput {
   const score = result.score;
   const summary = result.summary.toLowerCase();
+  const originalVerdict = result.verdict;
   
   // Unverified verdicts should have null score
   if (result.verdict === "Unverified" && score !== null) {
@@ -228,45 +263,44 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   // Matches: "independently verified", "multiple sources confirm", "strongly supports", "well-supported", "confirmed", "proven", etc.
   const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirm(?:s|ed)?(?:\s+this)?|verified?(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
   
+  let adjustedResult = { ...result };
+  
   // RULE 1: Score ≥76 (Verified) but summary has hedging language → DOWNGRADE
   if (score >= 76 && hasHedgingLanguage) {
     console.warn(`[Consistency Check] Score ${score} (≥76) but summary contains hedging language. Downgrading to 40 (Partially Accurate).`);
-    return {
+    adjustedResult = {
       ...result,
       score: 40,
       verdict: "Partially Accurate",
       confidence: Math.min(result.confidence, 0.6)
     };
   }
-  
   // RULE 2: Score ≥76 (Verified) but no strong affirmative language → DOWNGRADE to upper Mostly Accurate
-  if (score >= 76 && !hasStrongLanguage) {
+  else if (score >= 76 && !hasStrongLanguage) {
     console.warn(`[Consistency Check] Score ${score} (≥76) but summary lacks strong affirmative language. Downgrading to 68 (Mostly Accurate).`);
-    return {
+    adjustedResult = {
       ...result,
       score: 68,
       verdict: "Mostly Accurate",
       confidence: Math.min(result.confidence, 0.75)
     };
   }
-  
   // RULE 3: Score 45-60 (Partially Accurate) but summary has strong hedging → DOWNGRADE to 40 (lower Partially Accurate boundary)
   // Note: We don't downgrade 61-75 (Mostly Accurate) here to avoid crossing verdict categories
-  if (score >= 45 && score < 61 && hasHedgingLanguage) {
+  else if (score >= 45 && score < 61 && hasHedgingLanguage) {
     console.warn(`[Consistency Check] Score ${score} (45-60) but summary contains strong hedging language. Downgrading to 40 (lower Partially Accurate).`);
-    return {
+    adjustedResult = {
       ...result,
       score: 40,
       verdict: "Partially Accurate",
       confidence: Math.min(result.confidence, 0.55)
     };
   }
-  
   // RULE 4: Score 30-44 (lower Partially Accurate) but summary has strong support language → UPGRADE
   // Note: We don't upgrade scores < 30 (False) to avoid masking genuinely false claims
-  if (score >= 30 && score < 45 && hasStrongLanguage) {
+  else if (score >= 30 && score < 45 && hasStrongLanguage) {
     console.warn(`[Consistency Check] Score ${score} (30-44) but summary contains strong support language. Upgrading to 65 (Mostly Accurate).`);
-    return {
+    adjustedResult = {
       ...result,
       score: 65,
       verdict: "Mostly Accurate",
@@ -276,20 +310,26 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   
   // RULE 5: Ensure verdict matches score range
   let expectedVerdict: ReasonerVerdictOutput["verdict"];
-  if (score >= 76) expectedVerdict = "Verified";
-  else if (score >= 61) expectedVerdict = "Mostly Accurate";
-  else if (score >= 30) expectedVerdict = "Partially Accurate";
+  if (adjustedResult.score >= 76) expectedVerdict = "Verified";
+  else if (adjustedResult.score >= 61) expectedVerdict = "Mostly Accurate";
+  else if (adjustedResult.score >= 30) expectedVerdict = "Partially Accurate";
   else expectedVerdict = "False";
   
-  if (result.verdict !== expectedVerdict) {
-    console.warn(`[Consistency Check] Verdict "${result.verdict}" doesn't match score ${score}. Correcting to "${expectedVerdict}".`);
-    return {
-      ...result,
+  if (adjustedResult.verdict !== expectedVerdict) {
+    console.warn(`[Consistency Check] Verdict "${adjustedResult.verdict}" doesn't match score ${adjustedResult.score}. Correcting to "${expectedVerdict}".`);
+    adjustedResult = {
+      ...adjustedResult,
       verdict: expectedVerdict
     };
   }
   
-  return result;
+  // If verdict was changed, sanitize the summary text to match the new verdict
+  if (adjustedResult.verdict !== originalVerdict) {
+    adjustedResult.summary = sanitizeSummaryForVerdict(result.summary, adjustedResult.verdict);
+    console.warn(`[Consistency Check] Sanitized summary text to match new verdict "${adjustedResult.verdict}".`);
+  }
+  
+  return adjustedResult;
 }
 
 export async function reasonVerdict(
