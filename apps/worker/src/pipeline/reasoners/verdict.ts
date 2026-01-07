@@ -212,16 +212,18 @@ function sanitizeSummaryForVerdict(summary: string, verdict: ReasonerVerdictOutp
   
   // For "Partially Accurate" or "False" verdicts, remove strong affirmative language
   if (verdict === "Partially Accurate" || verdict === "False") {
-    // Remove "multiple independent sources confirm/verify/corroborate"
-    sanitized = sanitized.replace(/\b(?:multiple\s+)?independent\s+sources?\s+(?:confirms?|verif(?:y|ies)|corroborates?)\b/gi, "available information suggests");
-    // Remove "independently confirmed/verified/corroborated"
-    sanitized = sanitized.replace(/\bindependently\s+(?:confirmed|verified|corroborated)\b/gi, "indicated");
-    // Remove "strongly/well supports/supported"
-    sanitized = sanitized.replace(/\b(?:strongly|well)[- ]support(?:s|ed)\b/gi, "suggests");
-    // Remove "confirmed/verified/corroborated/proven/established" (standalone)
-    sanitized = sanitized.replace(/\b(?:confirmed|verified|corroborated|proven|established|establishes)\b/gi, "suggested");
-    // Remove "conclusive/definitively"
-    sanitized = sanitized.replace(/\b(?:conclusive|definitively)\b/gi, "indicated");
+    // Remove "multiple [independent/credible/reliable] sources confirm/verify/validate/corroborate"
+    sanitized = sanitized.replace(/\b(?:multiple\s+)?(?:independent|credible|reliable)\s+sources?\s+(?:confirms?|verif(?:y|ies|ied)|validates?|corroborates?|authenticates?|substantiates?)\b/gi, "available information suggests");
+    // Remove "fact-checkers/experts confirm/verify/validate"
+    sanitized = sanitized.replace(/\b(?:fact-checkers?|experts?)\s+(?:confirms?|verif(?:y|ies|ied)|validates?|corroborates?)\b/gi, "available information suggests");
+    // Remove "independently confirmed/verified/validated/corroborated/authenticated/substantiated"
+    sanitized = sanitized.replace(/\bindependently\s+(?:confirmed|verified|validated|corroborated|authenticated|substantiated)\b/gi, "indicated");
+    // Remove "strongly/well supports/supported/documented/substantiated"
+    sanitized = sanitized.replace(/\b(?:strongly|well|thoroughly)[- ](?:support(?:s|ed)?|documented|substantiated)\b/gi, "suggests");
+    // Remove "confirmed/verified/validated/corroborated/authenticated/substantiated/proven/established" (standalone)
+    sanitized = sanitized.replace(/\b(?:confirmed|verified|validated|corroborated|authenticated|substantiated|proven|established|establishes|attested|affirmed)\b/gi, "suggested");
+    // Remove "conclusive/conclusively/definitively"
+    sanitized = sanitized.replace(/\b(?:conclusive(?:ly)?|definitively)\b/gi, "indicated");
   }
   
   // For "Mostly Accurate" or "Verified" verdicts, tone down extreme hedging language
@@ -263,7 +265,8 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   
   // Check for language suggesting strong support
   // Matches: "independently verified", "multiple sources confirm", "strongly supports", "well-supported", "confirmed", "proven", etc.
-  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirms?|verif(?:y|ies|ied)|corroborates?)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirms?(?:\s+this)?|verif(?:y|ies|ied)(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
+  // Includes synonyms: validated, authenticated, substantiated, fact-checkers, experts, credible sources, etc.
+  const hasStrongLanguage = /\b(independently (?:confirmed|verified|validated|corroborated|authenticated|substantiated)|(?:multiple )?(?:independent|credible|reliable) sources (?:confirms?|verif(?:y|ies|ied)|validates?|corroborates?|authenticates?|substantiates?)|(?:fact-checkers?|experts?) (?:confirms?|verif(?:y|ies|ied)|validates?|corroborates?)|(?:strongly|generally|well)[- ](?:support(?:s|ed)?|documented|substantiated)|(?:well|extensively|thoroughly)[- ](?:documented|verified|validated|substantiated)|confirms?(?:\s+this)?|verif(?:y|ies|ied)(?:\s+this)?|validates?(?:\s+this)?|corroborated?|authenticated?|substantiated?|proven?|establishes?|established|conclusive(?:ly)?|definitively|attested|affirmed)\b/i.test(summary);
   
   let adjustedResult = { ...result };
   
