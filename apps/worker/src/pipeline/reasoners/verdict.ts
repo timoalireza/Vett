@@ -73,8 +73,8 @@ NUMBERS / AMOUNTS / ATTRIBUTION (IMPORTANT):
 Example: Claim says "Agency A seized $60M of X" but evidence shows "Agency B seized ~$40M of X and Agency A only shared photos" => usually "Partially Accurate" around ~50-60.
 
 Map scores to verdicts as follows (STRICTLY follow these ranges):
-- 0-40 => "False"
-- 41-60 => "Partially Accurate"
+- 0-29 => "False"
+- 30-60 => "Partially Accurate"
 - 61-75 => "Mostly Accurate"
 - 76-100 => "Verified"
 - INSUFFICIENT EVIDENCE => "Unverified" (score must be null, not 0)
@@ -275,7 +275,7 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   let expectedVerdict: ReasonerVerdictOutput["verdict"];
   if (score >= 76) expectedVerdict = "Verified";
   else if (score >= 61) expectedVerdict = "Mostly Accurate";
-  else if (score >= 41) expectedVerdict = "Partially Accurate";
+  else if (score >= 30) expectedVerdict = "Partially Accurate";
   else expectedVerdict = "False";
   
   if (result.verdict !== expectedVerdict) {
