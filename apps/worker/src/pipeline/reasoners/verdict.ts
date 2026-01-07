@@ -213,7 +213,7 @@ function sanitizeSummaryForVerdict(summary: string, verdict: ReasonerVerdictOutp
   // For "Partially Accurate" or "False" verdicts, remove strong affirmative language
   if (verdict === "Partially Accurate" || verdict === "False") {
     // Remove "multiple independent sources confirm/verify/corroborate"
-    sanitized = sanitized.replace(/\b(?:multiple\s+)?independent\s+sources?\s+(?:confirm|verify|verifies|corroborate|corroborates)\b/gi, "available information suggests");
+    sanitized = sanitized.replace(/\b(?:multiple\s+)?independent\s+sources?\s+(?:confirms?|verif(?:y|ies)|corroborates?)\b/gi, "available information suggests");
     // Remove "independently confirmed/verified/corroborated"
     sanitized = sanitized.replace(/\bindependently\s+(?:confirmed|verified|corroborated)\b/gi, "indicated");
     // Remove "strongly/well supports/supported"
@@ -230,8 +230,10 @@ function sanitizeSummaryForVerdict(summary: string, verdict: ReasonerVerdictOutp
     sanitized = sanitized.replace(/\b(?:alleged|purported|unsubstantiated|unverified)\b/gi, "reported");
     // Replace "rests on assertions" with "based on available information"
     sanitized = sanitized.replace(/\brests?\s+(?:primarily\s+)?on\s+assertions?\b/gi, "based on available information");
-    // Replace "without independent confirmation" with "with limited independent confirmation"
-    sanitized = sanitized.replace(/\bwithout\s+(?:independent\s+)?(?:confirmation|verification|corroboration)\b/gi, "with limited confirmation");
+    // Replace "without [independent] confirmation/verification/corroboration" with "with limited [independent] confirmation/verification/corroboration"
+    sanitized = sanitized.replace(/\bwithout\s+((?:independent\s+)?)(confirmation|verification|corroboration)\b/gi, (match, modifier, noun) => {
+      return `with limited ${modifier}${noun}`;
+    });
   }
   
   return sanitized;
@@ -261,7 +263,7 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   
   // Check for language suggesting strong support
   // Matches: "independently verified", "multiple sources confirm", "strongly supports", "well-supported", "confirmed", "proven", etc.
-  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirm(?:s|ed)?(?:\s+this)?|verified?(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
+  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirms?|verif(?:y|ies)|corroborates?)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirms?(?:\s+this)?|verified?(?:\s+this)?|verif(?:y|ies)(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
   
   let adjustedResult = { ...result };
   
