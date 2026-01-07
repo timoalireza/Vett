@@ -260,9 +260,10 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
     };
   }
   
-  // RULE 4: Score <45 but summary has strong support language → UPGRADE
-  if (score < 45 && hasStrongLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (<45) but summary contains strong support language. Upgrading to 65 (Mostly Accurate).`);
+  // RULE 4: Score 30-44 (lower Partially Accurate) but summary has strong support language → UPGRADE
+  // Note: We don't upgrade scores < 30 (False) to avoid masking genuinely false claims
+  if (score >= 30 && score < 45 && hasStrongLanguage) {
+    console.warn(`[Consistency Check] Score ${score} (30-44) but summary contains strong support language. Upgrading to 65 (Mostly Accurate).`);
     return {
       ...result,
       score: 65,

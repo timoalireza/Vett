@@ -256,8 +256,8 @@ function generateExplanationText(
     } else {
       parts.push("Available evidence strongly supports this claim.");
     }
-  } else if (finalScore >= 60) {
-    // Plausible
+  } else if (finalScore >= 61) {
+    // Mostly Accurate (61-75)
     if (primaryPenalty && primaryPenalty.rationale) {
       // Extract the key issue from rationale
       const rationale = primaryPenalty.rationale.toLowerCase();
