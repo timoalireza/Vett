@@ -221,7 +221,7 @@ function generateImprovementSuggestions(penalties: Penalty[]): string[] {
  * CRITICAL: Language MUST align with score band:
  * - 75+: Affirm strong independent corroboration ("independently confirmed", "multiple sources verify")
  * - 45-74: Balanced ("generally supported", "partially verified")
- * - 30-44: Acknowledge lack of verification ("alleged", "claimed without independent confirmation")
+ * - 30-40: Acknowledge lack of verification ("alleged", "claimed without independent confirmation")
  * - <30: State contradiction clearly
  * 
  * Tone: Calm, neutral, factual. No confidence theater. No exaggeration or minimization.
@@ -275,8 +275,8 @@ function generateExplanationText(
     }
   } else if (finalScore >= 30) {
     // Weakly Supported - MUST acknowledge lack of independent verification
-    const hasLowConsensus = penalties.some((p) => p.name === "low_expert_consensus");
-    const hasSelectiveCitation = penalties.some((p) => p.name === "selective_citation");
+    const hasLowConsensus = topPenalties.some((p) => p.name === "Low expert consensus");
+    const hasSelectiveCitation = topPenalties.some((p) => p.name === "Selective citation");
     
     if (hasLowConsensus || hasSelectiveCitation) {
       parts.push("This claim rests primarily on assertions without broad independent corroboration.");

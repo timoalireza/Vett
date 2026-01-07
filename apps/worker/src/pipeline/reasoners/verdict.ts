@@ -43,7 +43,7 @@ SCORING GUIDELINES (CRITICAL - MUST ALIGN WITH SUMMARY LANGUAGE):
   * Summary MUST distinguish what is verified vs. unverified
   * Appropriate to use language like "Core event confirmed but details unsubstantiated..."
   
-- For claims that rely on SELF-ASSERTION, ALLEGATIONS, or CLAIMS without independent corroboration, assign scores in the 30-44 range ("Weakly Supported")
+- For claims that rely on SELF-ASSERTION, ALLEGATIONS, or CLAIMS without independent corroboration, assign scores in the 30-40 range (lower "Partially Accurate" or upper "False")
   * Summary MUST make clear the lack of independent verification
   * Use language like "alleged", "claimed without independent confirmation", "rests on assertions"
   
@@ -56,8 +56,8 @@ ALIGNMENT RULE (MANDATORY):
 Before finalizing output, check: Does the summary language match the score range?
 - Scores ≥75 → Summary must affirm strong/independent support
 - Scores 45-74 → Summary can note limitations but should not suggest unverified allegations
-- Scores 30-44 → Summary MUST acknowledge lack of independent verification
-- If summary contains "alleged", "unsubstantiated", "assertion", "claim by X without proof" → score MUST be ≤44
+- Scores 30-40 → Summary MUST acknowledge lack of independent verification
+- If summary contains "alleged", "unsubstantiated", "assertion", "claim by X without proof" → score MUST be ≤40
 
 NUMBERS / AMOUNTS / ATTRIBUTION (IMPORTANT):
 - Do NOT mark a claim as "False" solely because a number/amount is wrong if the core event is supported by evidence.
@@ -129,7 +129,7 @@ SUMMARY (What's the answer?) RULES:
 - CRITICAL: The language MUST match the score:
   * Scores ≥75: Affirm strong support ("independently confirmed", "multiple sources verify")
   * Scores 45-74: Balanced with caveats ("generally supported", "core claim holds")
-  * Scores 30-44: Acknowledge lack of verification ("alleged", "claimed without independent confirmation", "rests on assertions")
+  * Scores 30-40: Acknowledge lack of verification ("alleged", "claimed without independent confirmation", "rests on assertions")
   * Scores <30: State contradiction or falseness clearly
 
 CONTEXT (How to understand this claim) RULES:
@@ -250,7 +250,7 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   
   // RULE 3: Score 45-74 but summary has strong hedging → DOWNGRADE
   if (score >= 45 && score < 75 && hasHedgingLanguage) {
-    console.warn(`[Consistency Check] Score ${score} (45-74) but summary contains strong hedging language. Downgrading to 38 (Weakly Supported).`);
+    console.warn(`[Consistency Check] Score ${score} (45-74) but summary contains strong hedging language. Downgrading to 38 (lower Partially Accurate).`);
     return {
       ...result,
       score: 38,
