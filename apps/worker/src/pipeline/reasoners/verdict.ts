@@ -224,8 +224,8 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   const hasHedgingLanguage = /\b(alleged|allegation|allege|claim(?:ed|s) (?:by|that)|assert(?:ed|s|ion)|purported|unsubstantiated|unverified|not (?:independently )?(?:confirmed|verified|corroborated)|without (?:independent )?(?:confirmation|verification|corroboration|proof)|rest(?:s|ing) on assertions?)\b/i.test(summary);
   
   // Check for language suggesting strong support
-  // Matches: "independently verified", "multiple sources confirm", "independent sources verify", "strongly supports", etc.
-  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|(?:strongly|generally) support(?:s|ed)?|well[- ]documented|extensively verified|conclusive|definitively)\b/i.test(summary);
+  // Matches: "independently verified", "multiple sources confirm", "strongly supports", "well-supported", "confirmed", "proven", etc.
+  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|(?:strongly|generally|well)[- ]support(?:s|ed)?|(?:well|extensively)[- ](?:documented|verified)|confirm(?:s|ed)?(?:\s+this)?|verified?(?:\s+this)?|corroborated?|proven?|establishes?|established|conclusive|definitively)\b/i.test(summary);
   
   // RULE 1: Score ≥75 (Supported) but summary has hedging language → DOWNGRADE
   if (score >= 75 && hasHedgingLanguage) {
@@ -239,7 +239,7 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   }
   
   // RULE 2: Score ≥75 (Supported) but no strong affirmative language → DOWNGRADE to upper Mostly Accurate
-  if (score >= 75 && !hasStrongLanguage && !summary.includes("evidence supports")) {
+  if (score >= 75 && !hasStrongLanguage) {
     console.warn(`[Consistency Check] Score ${score} (≥75) but summary lacks strong affirmative language. Downgrading to 68 (Mostly Accurate).`);
     return {
       ...result,
