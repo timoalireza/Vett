@@ -224,7 +224,8 @@ function enforceConsistency(result: ReasonerVerdictOutput): ReasonerVerdictOutpu
   const hasHedgingLanguage = /\b(alleged|allegation|allege|claim(?:ed|s) (?:by|that)|assert(?:ed|s|ion)|purported|unsubstantiated|unverified|not (?:independently )?(?:confirmed|verified|corroborated)|without (?:independent )?(?:confirmation|verification|corroboration|proof)|rest(?:s|ing) on assertions?)\b/i.test(summary);
   
   // Check for language suggesting strong support
-  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|multiple (?:independent )?sources (?:confirm|verify|corroborate)|well[- ]documented|extensively verified|conclusive|definitively)\b/i.test(summary);
+  // Matches: "independently verified", "multiple sources confirm", "independent sources verify", etc.
+  const hasStrongLanguage = /\b(independently (?:confirmed|verified|corroborated)|(?:multiple )?independent sources (?:confirm|verify|corroborate)|well[- ]documented|extensively verified|conclusive|definitively)\b/i.test(summary);
   
   // RULE 1: Score ≥75 (Supported) but summary has hedging language → DOWNGRADE
   if (score >= 75 && hasHedgingLanguage) {

@@ -239,8 +239,12 @@ function generateExplanationText(
   const stats = evidence.stats;
   const parts: string[] = [];
   
-  // Get the primary penalty with its specific rationale
+  // Get the primary penalty with its specific rationale (highest weight)
   const primaryPenalty = topPenalties.length > 0 ? topPenalties[0] : null;
+  
+  // Sort originalPenalties by weight to find the true primary penalty for snake_case name checks
+  const sortedOriginalPenalties = [...originalPenalties].sort((a, b) => b.weight - a.weight);
+  const primaryOriginalPenalty = sortedOriginalPenalties.length > 0 ? sortedOriginalPenalties[0] : null;
 
   // Sentence 1: Verdict + core reason - MUST align with score band
   if (finalScore >= 75) {
@@ -288,8 +292,7 @@ function generateExplanationText(
     }
   } else {
     // False
-    const hasEvidenceContradiction = originalPenalties.length > 0 && 
-      originalPenalties[0].name === "evidence_contradiction";
+    const hasEvidenceContradiction = primaryOriginalPenalty?.name === "evidence_contradiction";
     if (hasEvidenceContradiction && primaryPenalty && primaryPenalty.rationale) {
       // Extract source counts from rationale if present (e.g., "9 out of 11 sources refute...")
       const refuteMatch = primaryPenalty.rationale.match(/(\d+)\s+out of\s+(\d+)\s+sources.*refute/i);
@@ -322,8 +325,7 @@ function generateExplanationText(
     // Determine which penalty to use for sentence 2
     // If primary penalty was "Evidence contradiction" and used in sentence 1, try secondary
     const primaryWasUsedInSentence1 = primaryPenalty && 
-      originalPenalties.length > 0 &&
-      originalPenalties[0].name === "evidence_contradiction" && 
+      primaryOriginalPenalty?.name === "evidence_contradiction" && 
       finalScore < 45;
     
     const penaltyForSentence2 = primaryWasUsedInSentence1 && topPenalties.length > 1
