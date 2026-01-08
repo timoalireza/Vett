@@ -561,10 +561,11 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       return null;
     }),
     // Background context generation via Perplexity
-    perplexity?.generateBackgroundContext(mainClaimText, classification.topic).catch((error) => {
+    // Note: Must apply ?? before .catch() to avoid calling .catch() on undefined when perplexity is null
+    (perplexity?.generateBackgroundContext(mainClaimText, classification.topic) ?? Promise.resolve("")).catch((error) => {
       console.warn("[Pipeline] Background context generation failed:", error);
       return "";
-    }) ?? Promise.resolve("")
+    })
   ]);
   
   if (epistemicOutput) {
@@ -1086,6 +1087,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
             evidenceSummary: epistemicResult.evidenceSummary,
             confidenceInterval: epistemicResult.confidenceInterval,
             explanationText: epistemicResult.explanationText,
+            keyReasons: epistemicResult.keyReasons,
             pipelineVersion: epistemicResult.pipelineVersion,
             processedAt: epistemicResult.processedAt,
             totalProcessingTimeMs: epistemicResult.totalProcessingTimeMs,
