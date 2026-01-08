@@ -147,7 +147,9 @@ export default function ResultScreen() {
             summary:
               "Some research links moderate coffee intake to improved health outcomes, but the claim of adding 10 years to lifespan is exaggerated and not supported by strong evidence.",
             recommendation:
-              "If you see a claim like this, look for the exact study being cited (sample size, duration, and outcomes). Most coffee research is observational and can’t prove causation. Treat large, specific lifespan numbers as a red flag unless multiple high-quality studies agree.",
+              "If you see a claim like this, look for the exact study being cited (sample size, duration, and outcomes). Most coffee research is observational and can't prove causation. Treat large, specific lifespan numbers as a red flag unless multiple high-quality studies agree.",
+            backgroundContext:
+              "Coffee is one of the most widely consumed beverages globally, with over 2 billion cups consumed daily. Research into coffee's health effects has intensified over the past two decades, with studies examining its impact on cardiovascular health, cognitive function, and longevity. While some large-scale observational studies have found associations between moderate coffee consumption and reduced mortality risk, establishing direct causation remains challenging due to confounding lifestyle factors.",
             sources: [
               {
                 id: "demo-source-1",
@@ -175,6 +177,24 @@ export default function ResultScreen() {
                 extractionConfidence: 0.95,
               },
             ],
+            epistemic: {
+              version: "1.0.0",
+              finalScore: 42,
+              scoreBand: "Mixed",
+              scoreBandDescription: "Mixed or contested",
+              penaltiesApplied: [],
+              evidenceSummary: "This claim makes a causal assertion about coffee and lifespan extension.",
+              explanationText: "Evidence partially supports moderate coffee consumption having health benefits, but the specific claim of 10 years is unsupported.",
+              keyReasons: [
+                "2 sources partially support the general health benefits of coffee.",
+                "The specific claim of 10 years lifespan extension lacks peer-reviewed support.",
+                "Correlation is presented as causation without sufficient evidence.",
+                "Most coffee research is observational and cannot establish causation.",
+              ],
+              pipelineVersion: "1.0.0",
+              processedAt: new Date().toISOString(),
+              totalProcessingTimeMs: 3200,
+            },
           };
         });
       }, 3200)
@@ -617,36 +637,32 @@ export default function ResultScreen() {
                 ]}
               >
                 <Animated.View style={[card1AnimatedStyle, styles.verdictBox, isUnverified && { width: "100%" }]}>
-                  <Text style={styles.verdictScoreLabel}>Verdict:</Text>
+                  <Text style={styles.verdictScoreLabel}>VERDICT:</Text>
                   <View style={styles.verdictValueContainer}>
-                    <Text style={[styles.verdictScoreValue, { color: scoreColor }]}>
+                    <Text 
+                      style={[styles.verdictScoreValue, { color: scoreColor }]}
+                      adjustsFontSizeToFit
+                      numberOfLines={1}
+                      minimumFontScale={0.5}
+                    >
                       {getVerdictLabel(score, verdict, scoreBand)}
                     </Text>
                   </View>
                 </Animated.View>
                 <Animated.View style={[card1AnimatedStyle, styles.scoreBox, isUnverified && { width: "100%" }]}>
-                  <Text style={styles.verdictScoreLabel}>Score:</Text>
+                  <Text style={styles.verdictScoreLabel}>SCORE:</Text>
                   <Text style={[styles.verdictScoreValue, { color: scoreColor, fontSize: 36, textAlign: "center" }]}>
                     {hasScore && !isUnverified ? score : "N/A"}
                   </Text>
                 </Animated.View>
               </View>
 
-              {/* Summary Card */}
+              {/* Context Card - Shows background information about the claim topic */}
               <Animated.View style={[card2AnimatedStyle, { marginTop: 16 }]}>
-                <Card label="Summary">
-                  <Text style={styles.cardText}>
-                    {analysis?.summary || "No summary available."}
-                  </Text>
-                </Card>
-              </Animated.View>
-
-              {/* Context Card */}
-              <Animated.View style={[card3AnimatedStyle, { marginTop: 16 }]}>
-                <Card label="Context">
+                <Card label="CONTEXT">
                   <Text style={styles.cardText}>
                     {(() => {
-                      const fullText = analysis?.recommendation || "No additional context available.";
+                      const fullText = analysis?.backgroundContext || analysis?.recommendation || "No additional context available.";
                       if (!contextExpanded) {
                         // Limit to 500 characters, but ensure we don't cut mid-sentence
                         const MAX_CHARS = 500;
@@ -680,7 +696,7 @@ export default function ResultScreen() {
                     })()}
                   </Text>
                   {(() => {
-                    const fullText = analysis?.recommendation || "No additional context available.";
+                    const fullText = analysis?.backgroundContext || analysis?.recommendation || "No additional context available.";
                     const MAX_CHARS = 500;
                     if (fullText.length > MAX_CHARS) {
                       return (
@@ -698,6 +714,22 @@ export default function ResultScreen() {
                   })()}
                 </Card>
               </Animated.View>
+
+              {/* Key Reasons Card */}
+              {analysis?.epistemic?.keyReasons && analysis.epistemic.keyReasons.length > 0 && (
+                <Animated.View style={[card3AnimatedStyle, { marginTop: 16 }]}>
+                  <Card label="KEY REASONS">
+                    <View style={styles.keyReasonsList}>
+                      {analysis.epistemic.keyReasons.map((reason: string, index: number) => (
+                        <View key={index} style={styles.keyReasonItem}>
+                          <View style={[styles.keyReasonBullet, { backgroundColor: scoreColor }]} />
+                          <Text style={styles.keyReasonText}>{reason}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </Card>
+                </Animated.View>
+              )}
 
               {/* Sources Card */}
               {analysis?.sources && analysis.sources.length > 0 && (
@@ -1043,5 +1075,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
     color: '#000000',
+  },
+  keyReasonsList: {
+    gap: 12,
+  },
+  keyReasonItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  keyReasonBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 7,
+    flexShrink: 0,
+  },
+  keyReasonText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    color: '#E5E5E5',
+    lineHeight: 22,
+    flex: 1,
   },
 });

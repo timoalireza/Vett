@@ -16,6 +16,7 @@ export const schema = `
     title: String
     summary: String
     recommendation: String
+    backgroundContext: String
     rawInput: String
     complexity: String
     hasWatermark: Boolean!
@@ -42,6 +43,7 @@ export const schema = `
     evidenceSummary: String!
     confidenceInterval: EpistemicConfidenceInterval
     explanationText: String!
+    keyReasons: [String!]!
     pipelineVersion: String!
     processedAt: String!
     totalProcessingTimeMs: Int!

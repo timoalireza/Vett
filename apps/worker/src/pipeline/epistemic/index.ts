@@ -101,6 +101,7 @@ export async function runEpistemicPipeline(
       penaltiesApplied: [],
       evidenceSummary: "No claims were provided for analysis.",
       explanationText: "Unable to perform epistemic analysis: no claims were extracted from the content.",
+      keyReasons: ["No verifiable claims were extracted from the provided content."],
       artifacts: {
         claimParsing: {
           version: EPISTEMIC_PIPELINE_VERSION,
@@ -445,6 +446,7 @@ export async function runEpistemicPipeline(
     evidenceSummary: explanationOutput.explanation.evidenceSummary,
     confidenceInterval,
     explanationText: explanationOutput.explanation.explanationText,
+    keyReasons: explanationOutput.explanation.keyReasons,
     artifacts,
     pipelineVersion: EPISTEMIC_PIPELINE_VERSION,
     processedAt: new Date().toISOString(),

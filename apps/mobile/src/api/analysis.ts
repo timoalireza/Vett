@@ -38,6 +38,7 @@ export interface EpistemicResult {
   evidenceSummary: string;
   confidenceInterval?: EpistemicConfidenceInterval | null;
   explanationText: string;
+  keyReasons: string[];
   pipelineVersion: string;
   processedAt: string;
   totalProcessingTimeMs: number;
@@ -54,6 +55,7 @@ export interface AnalysisResponse {
   title?: string | null; // Short title for display (max ~40 chars)
   summary?: string | null;
   recommendation?: string | null;
+  backgroundContext?: string | null; // Background information about the claim topic
   rawInput?: string | null;
   claims: Array<{
     id: string;
@@ -95,6 +97,7 @@ const ANALYSIS_QUERY = `
       title
       summary
       recommendation
+      backgroundContext
       claims {
         id
         text
@@ -127,6 +130,7 @@ const ANALYSIS_QUERY = `
           high
         }
         explanationText
+        keyReasons
         pipelineVersion
         processedAt
         totalProcessingTimeMs
@@ -211,6 +215,7 @@ const ANALYSES_QUERY = `
             }
             evidenceSummary
             explanationText
+            keyReasons
           }
         }
         cursor

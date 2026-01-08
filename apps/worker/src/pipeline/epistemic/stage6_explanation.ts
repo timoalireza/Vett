@@ -208,6 +208,141 @@ function generateImprovementSuggestions(penalties: Penalty[]): string[] {
 }
 
 /**
+ * Generate 3-5 concise key reasons summarizing main factors influencing the verdict.
+ * 
+ * Rules:
+ * - Each reason is one sentence max
+ * - Reference evidence, logic, or source alignment (not AI reasoning)
+ * - Neutral, analytical tone
+ * - No speculative language
+ */
+function generateKeyReasons(
+  scoringResult: ScoringResult,
+  evidence: EvidenceGraph,
+  topPenalties: Array<{ name: string; weight: number; rationale: string }>,
+  claims: TypedClaim[]
+): string[] {
+  const reasons: string[] = [];
+  const stats = evidence.stats;
+  const { finalScore } = scoringResult;
+
+  // Reason 1: Evidence alignment
+  if (stats.totalSources === 0) {
+    reasons.push("No verifiable sources were found to assess this claim.");
+  } else if (stats.supportingCount > stats.refutingCount && stats.supportingCount >= 2) {
+    if (finalScore >= 75) {
+      reasons.push(`${stats.supportingCount} independent sources align with the claim.`);
+    } else {
+      reasons.push(`${stats.supportingCount} source${stats.supportingCount > 1 ? "s" : ""} partially support${stats.supportingCount === 1 ? "s" : ""} the claim with caveats.`);
+    }
+  } else if (stats.refutingCount > stats.supportingCount && stats.refutingCount >= 1) {
+    reasons.push(`${stats.refutingCount} source${stats.refutingCount > 1 ? "s" : ""} contradict${stats.refutingCount === 1 ? "s" : ""} key aspects of the claim.`);
+  } else if (stats.supportingCount > 0 && stats.refutingCount > 0) {
+    reasons.push("Evidence is divided, with sources both supporting and contradicting the claim.");
+  } else if (stats.totalSources > 0) {
+    reasons.push(`${stats.totalSources} source${stats.totalSources > 1 ? "s" : ""} provided indirect context for this claim.`);
+  }
+
+  // Reason 2: Source quality/diversity
+  if (stats.peerReviewedCount >= 1 && finalScore >= 60) {
+    reasons.push(`Claim is supported by ${stats.peerReviewedCount} peer-reviewed source${stats.peerReviewedCount > 1 ? "s" : ""}.`);
+  } else if (stats.singleSourceDominance && stats.dominantHostname) {
+    reasons.push(`Evidence is concentrated from ${stats.dominantHostname}, limiting independent verification.`);
+  } else if (stats.uniqueHostnames >= 3) {
+    reasons.push(`Evidence gathered from ${stats.uniqueHostnames} distinct sources enhances reliability.`);
+  }
+
+  // Reason 3-5: Based on top penalties (converted to neutral observations)
+  for (const penalty of topPenalties.slice(0, 3)) {
+    if (reasons.length >= 5) break;
+    
+    const reason = convertPenaltyToReason(penalty.name, penalty.rationale, claims);
+    if (reason && !reasons.includes(reason)) {
+      reasons.push(reason);
+    }
+  }
+
+  // Add claim structure observation if we need more reasons
+  if (reasons.length < 3) {
+    const hasPredictive = claims.some(c => c.primaryType === "predictive");
+    const hasCausal = claims.some(c => c.primaryType === "causal");
+    const hasUniversal = claims.some(c => c.quantifiers.includes("universal"));
+    
+    if (hasPredictive) {
+      reasons.push("The claim involves future projections that cannot be empirically verified.");
+    } else if (hasCausal && finalScore < 75) {
+      reasons.push("The causal relationship asserted lacks sufficient empirical support.");
+    } else if (hasUniversal && finalScore < 75) {
+      reasons.push("Absolute language in the claim exceeds what evidence can support.");
+    }
+  }
+
+  // Ensure we have at least 3 reasons
+  if (reasons.length < 3 && stats.totalSources > 0) {
+    if (stats.averageReliability >= 0.7) {
+      reasons.push("Consulted sources have established credibility in this domain.");
+    } else if (stats.averageReliability < 0.5) {
+      reasons.push("Available sources have limited established reliability.");
+    }
+  }
+
+  // Final fallback
+  if (reasons.length < 3) {
+    if (finalScore >= 75) {
+      reasons.push("Evidence consistently aligns with the stated claim.");
+    } else if (finalScore >= 45) {
+      reasons.push("Evidence partially addresses the claim with notable gaps.");
+    } else {
+      reasons.push("Available evidence does not adequately support the claim.");
+    }
+  }
+
+  // Return 3-5 unique reasons
+  return reasons.slice(0, 5);
+}
+
+/**
+ * Convert a penalty name to a neutral, evidence-based reason.
+ */
+function convertPenaltyToReason(
+  penaltyName: string,
+  _rationale: string,
+  claims: TypedClaim[]
+): string | null {
+  switch (penaltyName) {
+    case "Evidence contradiction":
+      return "Available evidence contradicts central elements of the claim.";
+    case "Model dependence":
+      return "The claim relies on model-based projections rather than observed data.";
+    case "Temporal mismatch":
+      return "The timeframe referenced does not match available evidence.";
+    case "Missing context":
+      return "The claim omits important qualifying context.";
+    case "Causal overreach":
+      return "Correlation is presented as causation without sufficient evidence.";
+    case "Scope exaggeration":
+      return "The claim generalizes beyond what the evidence supports.";
+    case "Low expert consensus":
+      return "Expert sources show disagreement on this topic.";
+    case "Outdated evidence":
+      return "Available evidence may not reflect the most current information.";
+    case "Selective citation":
+      return "Evidence comes from a narrow range of sources.";
+    case "Rhetorical certainty":
+      const hasDefiniteMarkers = claims.some(c => c.certaintyLanguage === "definite");
+      return hasDefiniteMarkers 
+        ? "Definitive language overstates what evidence can confirm."
+        : "The claim's certainty exceeds what evidence supports.";
+    case "Ambiguous quantifiers":
+      return "Imprecise quantifiers make the claim difficult to verify.";
+    case "Comparative distortion":
+      return "The comparison methodology affects result interpretation.";
+    default:
+      return null;
+  }
+}
+
+/**
  * SUMMARY (What's the answer?)
  * 
  * Goal: Evaluate the claim's accuracy based on evidence.
@@ -425,6 +560,7 @@ export function generateEpistemicExplanation(
   const uncertaintyStatement = generateUncertaintyStatement(scoringResult, evidenceGraph);
   const improvementSuggestions = generateImprovementSuggestions(scoringResult.penaltiesApplied);
   const explanationText = generateExplanationText(scoringResult, evidenceGraph, topPenalties, input.typedClaims, scoringResult.penaltiesApplied);
+  const keyReasons = generateKeyReasons(scoringResult, evidenceGraph, topPenalties, input.typedClaims);
 
   // Get band description
   const bandKey = scoringResult.scoreBand;
@@ -438,7 +574,8 @@ export function generateEpistemicExplanation(
     improvementSuggestions,
     uncertaintyStatement,
     evidenceSummary,
-    explanationText
+    explanationText,
+    keyReasons
   };
 
   return {

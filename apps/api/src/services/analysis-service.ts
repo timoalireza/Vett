@@ -33,6 +33,7 @@ export interface AnalysisSummary {
   title?: string | null;
   summary?: string | null;
   recommendation?: string | null;
+  backgroundContext?: string | null;
   rawInput?: string | null;
   complexity?: string | null;
   hasWatermark: boolean;
@@ -163,6 +164,7 @@ export interface EpistemicResultSummary {
   evidenceSummary: string;
   confidenceInterval?: EpistemicConfidenceIntervalSummary | null;
   explanationText: string;
+  keyReasons: string[];
   pipelineVersion: string;
   processedAt: string;
   totalProcessingTimeMs: number;
@@ -701,6 +703,7 @@ class AnalysisService {
       title: record.title ?? null,
       summary: record.summary ?? null,
       recommendation: record.recommendation ?? null,
+      backgroundContext: record.backgroundContext ?? null,
       rawInput: rawInputText,
       complexity: record.complexity ?? null,
       hasWatermark,

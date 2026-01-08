@@ -152,6 +152,53 @@ Provide a concise summary of what you found, citing specific sources. Focus on:
       response
     };
   }
+
+  /**
+   * Generate background context about a claim topic
+   * Returns 3-4 sentences providing contextual information about the subject matter
+   * without rephrasing or evaluating the claim itself
+   */
+  async generateBackgroundContext(
+    claim: string,
+    topic: string
+  ): Promise<string> {
+    const systemPrompt = `You are a knowledgeable context provider. Your task is to provide brief background information about the subject matter of a claim, NOT to verify or rephrase the claim.
+
+Guidelines:
+- Provide 3-4 sentences of factual background information about the topic/subject
+- Focus on relevant context that helps understand the topic (history, key facts, recent developments)
+- Do NOT evaluate whether the claim is true or false
+- Do NOT rephrase or repeat the claim
+- Do NOT use phrases like "the claim states" or "this claim suggests"
+- Write as if explaining the topic to someone unfamiliar with it
+- Use neutral, objective language`;
+
+    const userPrompt = `Topic: ${topic}
+
+Claim being analyzed: "${claim}"
+
+Provide 3-4 sentences of background context about the subject matter to help the reader understand the topic. Do not evaluate or rephrase the claim.`;
+
+    try {
+      const response = await this.chat({
+        model: "llama-3.1-sonar-large-128k-online",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        max_tokens: 400,
+        temperature: 0.3,
+        return_citations: false,
+        search_recency_filter: "month"
+      });
+
+      const context = response.choices[0]?.message?.content?.trim() || "";
+      return context;
+    } catch (error: any) {
+      console.error("[perplexity] Background context generation failed:", error.message);
+      return "";
+    }
+  }
 }
 
 // Create and export the client instance (only if API key is configured)

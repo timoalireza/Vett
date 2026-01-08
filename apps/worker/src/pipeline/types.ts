@@ -95,6 +95,7 @@ export type PipelineResult = {
   title: string; // 3-10 word summary title for history display
   summary: string;
   recommendation: string;
+  backgroundContext?: string; // Background information about the claim topic
   complexity: "simple" | "medium" | "complex"; // Analysis complexity level
   sources: PipelineSource[];
   claims: PipelineClaim[];

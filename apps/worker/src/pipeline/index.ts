@@ -18,6 +18,7 @@ import { reasonVerdict, VERDICT_MODEL, type ReasonerVerdictOutput } from "./reas
 import { adjustReliability, extractHostname } from "./retrievers/trust.js";
 import { ingestAttachments } from "./ingestion/index.js";
 import { openai } from "../clients/openai.js";
+import { perplexity } from "../clients/perplexity.js";
 import { runEpistemicPipeline, EpistemicResult } from "./epistemic/index.js";
 import { normalizeContext, normalizeSummary } from "./utils/uxCopy.js";
 
@@ -537,27 +538,47 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const imageDerivedClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
   
   // ============================================================================
-  // Run Epistemic Pipeline (new graded evaluator)
-  // This produces the deterministic, penalty-based score
+  // Run Epistemic Pipeline + Background Context Generation in parallel
   // ============================================================================
   const epistemicStart = Date.now();
   let epistemicResult: EpistemicResult | null = null;
-  try {
-    const epistemicOutput = await runEpistemicPipeline({
+  let backgroundContext: string | undefined;
+  
+  // Generate the main claim text for background context
+  const mainClaimText = processedClaims[0]?.text || context.normalizedText;
+  
+  // Run epistemic pipeline and background context generation in parallel
+  const [epistemicOutput, bgContextResult] = await Promise.all([
+    // Epistemic pipeline
+    runEpistemicPipeline({
       analysisId: payload.analysisId,
       claims: processedClaims.map((c) => ({ id: c.id, text: c.text })),
       topic: classification.topic,
       maxEvidencePerClaim: 5,
       evidenceRetrieverTimeoutMs: isFastTypedClaim ? 2_500 : undefined
-    });
+    }).catch((error) => {
+      console.error("[Pipeline] Epistemic pipeline failed, falling back to legacy reasoning:", error);
+      return null;
+    }),
+    // Background context generation via Perplexity
+    perplexity?.generateBackgroundContext(mainClaimText, classification.topic).catch((error) => {
+      console.warn("[Pipeline] Background context generation failed:", error);
+      return "";
+    }) ?? Promise.resolve("")
+  ]);
+  
+  if (epistemicOutput) {
     epistemicResult = epistemicOutput.result;
     const stage3 = epistemicOutput.auditLog.stages.find((s) => s.stage === "Stage3_EvidenceRetrieval");
     if (stage3) timings.epistemicEvidenceRetrieval = stage3.durationMs;
     console.log(`[Pipeline] Epistemic pipeline completed: score=${epistemicResult.finalScore}, band="${epistemicResult.scoreBand}"`);
-  } catch (error) {
-    console.error("[Pipeline] Epistemic pipeline failed, falling back to legacy reasoning:", error);
-    epistemicResult = null;
   }
+  
+  if (bgContextResult && bgContextResult.length > 0) {
+    backgroundContext = bgContextResult;
+    console.log(`[Pipeline] Background context generated: ${backgroundContext.length} characters`);
+  }
+  
   timings.epistemic = Date.now() - epistemicStart;
 
   // ============================================================================
@@ -1013,6 +1034,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     title,
     summary: adjustedVerdictData.summary,
     recommendation: adjustedVerdictData.recommendation,
+    backgroundContext,
     complexity,
     sources,
     claims,

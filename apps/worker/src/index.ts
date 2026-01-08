@@ -439,6 +439,7 @@ function createWorker(): Worker {
             title: pipelineResult.title,
             summary: pipelineResult.summary,
             recommendation: pipelineResult.recommendation,
+            backgroundContext: pipelineResult.backgroundContext ?? null,
             complexity: pipelineResult.complexity,
             resultJson: JSON.stringify(pipelineResult.resultJson),
             updatedAt: new Date()

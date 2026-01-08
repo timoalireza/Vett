@@ -98,6 +98,7 @@ export const analyses = pgTable("analyses", {
   title: text("title"), // 3-10 word summary title for history display
   summary: text("summary"),
   recommendation: text("recommendation"),
+  backgroundContext: text("background_context"), // Background information about the claim topic
   rawInput: text("raw_input"),
   resultJson: text("result_json"), // stored JSON string
   imageUrl: text("image_url"), // Featured image URL for card display
