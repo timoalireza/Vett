@@ -94,7 +94,7 @@ Return ONLY the search query, nothing else.`;
         }
       ],
       temperature: 0.7,
-      max_tokens: 20
+      max_completion_tokens: 20
     });
 
     const query = response.choices[0]?.message?.content?.trim() || "";
@@ -134,7 +134,7 @@ async function scoreImageAesthetics(imageUrl: string): Promise<number> {
           ]
         }
       ],
-      max_tokens: 10
+      max_completion_tokens: 10
     });
 
     const scoreText = response.choices[0]?.message?.content?.trim() || "0.5";
@@ -196,7 +196,7 @@ Return ONLY the DALL-E prompt, nothing else.`;
         }
       ],
       temperature: 0.5, // Lower temperature for more consistent, realistic outputs
-      max_tokens: 200
+      max_completion_tokens: 200
     });
 
     const dallePrompt = response.choices[0]?.message?.content?.trim();

@@ -67,7 +67,7 @@ export async function extractClaims(
         }
       ],
       response_format: { type: "json_object" },
-      max_tokens: 500
+      max_completion_tokens: 500
     });
 
     const content = response.choices[0]?.message?.content;

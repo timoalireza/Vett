@@ -995,7 +995,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
           content: `Shorten this claim to max 40 characters, preserving the original wording:\n\n${claimsText.substring(0, 500)}`
         }
       ],
-      max_tokens: 15,
+      max_completion_tokens: 15,
       temperature: 0.3
     });
     let rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";

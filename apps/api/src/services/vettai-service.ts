@@ -156,7 +156,7 @@ async function chatWithOpenAI(
           { role: "user", content: input.message.substring(0, 1000) }
         ],
         temperature: 0.5, // Lower temperature for more consistent, analytical responses
-        max_tokens: 600
+        max_completion_tokens: 600
       },
       {
         timeout: 30000 // 30 second timeout
