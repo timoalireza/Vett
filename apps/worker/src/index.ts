@@ -741,8 +741,14 @@ async function startWorker() {
     
     // CRITICAL: Ensure background_context column exists BEFORE starting worker
     // This must succeed or the worker will fail when updating analyses
-    // DO NOT catch this error - let it propagate to prevent startup
-    await ensureBackgroundContextColumn();
+    // ANY failure (connection, permission, timeout, etc.) is FATAL
+    try {
+      await ensureBackgroundContextColumn();
+    } catch (error: any) {
+      logger.error({ error }, "[Startup] ❌ FATAL: Failed to ensure background_context column exists");
+      console.error("[Startup] ❌ FATAL: Failed to ensure background_context column exists:", error);
+      process.exit(1);
+    }
     
     // Test Redis connection by getting shared connection
     try {
@@ -935,22 +941,9 @@ async function startWorker() {
   } catch (error: any) {
     logger.error({ error }, "[Startup] Failed to start worker");
     
-    // CRITICAL: Migration failures are FATAL - worker cannot operate without required schema
-    // Check if this is a database schema error (migration failure)
-    const isMigrationFailure = 
-      error?.message?.includes("analyses") ||
-      error?.message?.includes("background_context") ||
-      error?.code === "42P01" || // undefined_table
-      error?.code === "42703" || // undefined_column
-      error?.code === "42P07"; // duplicate_table (shouldn't happen with IF NOT EXISTS, but handle anyway)
-    
-    if (isMigrationFailure) {
-      logger.error("[Startup] ❌ FATAL: Database migration failed - worker cannot start");
-      console.error("[Startup] ❌ FATAL: Database migration failed - worker cannot start");
-      process.exit(1);
-    }
-    
-    // For other errors (e.g., Redis connection), don't exit - let it retry
+    // NOTE: Migration failures are handled above and call process.exit(1) immediately
+    // This catch block only handles other errors (e.g., Redis connection, worker creation)
+    // For these errors, don't exit - let the worker retry
     logger.warn("[Startup] ⚠️ Worker will continue attempting to connect");
   }
 }
