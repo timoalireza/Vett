@@ -18,6 +18,30 @@ function canonicalizeUrlForCache(raw: string): string {
     u.hash = "";
     u.hostname = u.hostname.toLowerCase();
     if (u.hostname.startsWith("www.")) u.hostname = u.hostname.slice(4);
+    
+    // Drop common tracking params to maximize cache hits (same post with different utm_* should use cache)
+    const dropKeys = new Set([
+      "fbclid",
+      "gclid",
+      "mc_cid",
+      "mc_eid",
+      "ref",
+      "ref_src",
+      "igsh",
+      "igshid",
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content"
+    ]);
+    for (const key of Array.from(u.searchParams.keys())) {
+      const k = key.toLowerCase();
+      if (k.startsWith("utm_") || dropKeys.has(k)) {
+        u.searchParams.delete(key);
+      }
+    }
+    
     if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\/+$/, "");
     return u.toString();
   } catch {
