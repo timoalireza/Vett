@@ -1004,7 +1004,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   const complexity = calculateComplexity();
 
-  // Helper function to ensure title meets 3-10 word constraint
+  // Helper function to ensure title meets 3-10 word constraint AND 40-char limit
   const ensureTitleConstraint = (text: string): string => {
     const words = text.split(" ").filter(w => w.length > 0);
     
@@ -1014,21 +1014,29 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       if (fallbackWords.length === 0) {
         return "Analysis";
       }
-      // Ensure 3-10 words from fallback
+      // Ensure 3-10 words from fallback, respecting 40-char limit
       if (fallbackWords.length < 3) {
-        // Pad with "Analysis" to reach minimum 3 words
-        return [...fallbackWords, ...Array(3 - fallbackWords.length).fill("Analysis")].slice(0, 10).join(" ");
+        const combined = [...fallbackWords, ...Array(3 - fallbackWords.length).fill("Analysis")].slice(0, 10);
+        const joined = combined.join(" ");
+        return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
       }
-      return fallbackWords.slice(0, 10).join(" ");
+      const joined = fallbackWords.slice(0, 10).join(" ");
+      return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
     }
     
     // Truncate if more than 10 words
     if (words.length > 10) {
-      return words.slice(0, 10).join(" ");
+      const truncated = words.slice(0, 10).join(" ");
+      return truncated.length <= 40 ? truncated : truncated.slice(0, 37) + "...";
     }
     
-    // Ensure minimum 3 words
+    // Ensure minimum 3 words (but respect 40-char limit)
     if (words.length < 3) {
+      // If text is already at/near 40 chars but under 3 words, don't pad (would exceed limit)
+      if (text.length >= 38) {
+        return text; // Already at limit, accept fewer than 3 words
+      }
+      
       // Try to get additional words from first claim
       if (claims[0]?.text) {
         const claimWords = claims[0].text.split(" ").filter(w => w.length > 0);
@@ -1039,23 +1047,32 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         const combined = [...words, ...additionalWords];
         
         if (combined.length >= 3) {
-          return combined.slice(0, 10).join(" ");
+          const joined = combined.slice(0, 10).join(" ");
+          return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
         }
-        // If still not enough, pad with "Analysis"
+        // If still not enough, pad with "Analysis" (but check 40-char limit)
         while (combined.length < 3 && combined.length < 10) {
+          const testCombined = [...combined, "Analysis"].join(" ");
+          if (testCombined.length > 40) break; // Stop padding if it would exceed limit
           combined.push("Analysis");
         }
-        return combined.join(" ");
+        const joined = combined.join(" ");
+        return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
       }
-      // Last resort: pad with "Analysis"
+      // Last resort: pad with "Analysis" (but respect 40-char limit)
       const padded = [...words];
       while (padded.length < 3 && padded.length < 10) {
+        const testPadded = [...padded, "Analysis"].join(" ");
+        if (testPadded.length > 40) break; // Stop padding if it would exceed limit
         padded.push("Analysis");
       }
-      return padded.join(" ");
+      const joined = padded.join(" ");
+      return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
     }
     
-    return words.join(" ");
+    // Already 3-10 words, just ensure 40-char limit
+    const joined = words.join(" ");
+    return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
   };
 
   // Use title generated in parallel (already completed)
