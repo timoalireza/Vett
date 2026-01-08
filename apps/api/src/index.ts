@@ -141,6 +141,7 @@ initSentry();
 
 import { randomUUID } from "crypto";
 import { constants } from "zlib";
+import { Pool } from "pg";
 import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
@@ -462,9 +463,24 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
+async function ensureBackgroundContextColumn(): Promise<void> {
+  const pool = new Pool({
+    connectionString: env.DATABASE_URL,
+    ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+  });
+
+  try {
+    await pool.query('ALTER TABLE "analyses" ADD COLUMN IF NOT EXISTS "background_context" TEXT;');
+    console.log('[Startup] ✅ Ensured "analyses.background_context" exists');
+  } finally {
+    await pool.end();
+  }
+}
+
 async function start() {
   try {
     console.log(`[Startup] Initializing server on port ${env.PORT}...`);
+    await ensureBackgroundContextColumn();
     const app = await buildServer();
     console.log(`[Startup] Server built successfully, starting listener...`);
     await app.listen({ port: env.PORT, host: "0.0.0.0" });

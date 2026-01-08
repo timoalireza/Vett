@@ -241,6 +241,18 @@ const pool = new Pool({
 });
 const db = drizzle(pool, { schema });
 
+async function ensureBackgroundContextColumn(): Promise<void> {
+  try {
+    await pool.query('ALTER TABLE "analyses" ADD COLUMN IF NOT EXISTS "background_context" TEXT;');
+    logger.info('[Startup] ✅ Ensured "analyses.background_context" exists');
+    console.log('[Startup] ✅ Ensured "analyses.background_context" exists');
+  } catch (error) {
+    logger.error({ error }, '[Startup] ❌ Failed ensuring "analyses.background_context" exists');
+    console.error('[Startup] ❌ Failed ensuring "analyses.background_context" exists');
+    throw error;
+  }
+}
+
 // Removed ensureRedisConnection - using initializeRedisForBullMQ instead
 
 // CRITICAL: Pass Redis connection directly to Queue instead of connection factory
@@ -699,6 +711,7 @@ async function startWorker() {
     try {
       await pool.query("SELECT 1");
       logger.info("[Startup] ✅ Database connection successful");
+      await ensureBackgroundContextColumn();
     } catch (error: any) {
       const errorCode = error?.code || "";
       const errorMessage = error?.message || "";
