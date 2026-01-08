@@ -488,6 +488,7 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 120,
     height: 40,
+    tintColor: '#FFFFFF',
   },
   headlineSection: {
     paddingTop: 32,

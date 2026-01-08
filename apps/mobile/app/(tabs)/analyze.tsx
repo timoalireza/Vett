@@ -837,7 +837,6 @@ const styles = StyleSheet.create({
   logo: {
     width: 80,
     height: 32,
-    tintColor: '#FFFFFF',
   },
   upgradeContainer: {
     position: 'absolute',
