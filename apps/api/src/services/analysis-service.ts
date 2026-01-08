@@ -657,6 +657,12 @@ class AnalysisService {
         
         const confidenceIntervalRaw = epistemicRaw.confidenceInterval as Record<string, unknown> | undefined;
         
+        // Parse keyReasons, ensuring it's always an array of strings
+        const keyReasonsRaw = epistemicRaw.keyReasons;
+        const keyReasons: string[] = Array.isArray(keyReasonsRaw)
+          ? keyReasonsRaw.filter((r): r is string => typeof r === "string")
+          : [];
+        
         epistemic = {
           version: String(epistemicRaw.version ?? "1.0.0"),
           finalScore: typeof epistemicRaw.finalScore === "number" ? Math.round(epistemicRaw.finalScore) : 50,
@@ -678,6 +684,7 @@ class AnalysisService {
               }
             : null,
           explanationText: String(epistemicRaw.explanationText ?? ""),
+          keyReasons: keyReasons.length > 0 ? keyReasons : ["Analysis completed."],
           pipelineVersion: String(epistemicRaw.pipelineVersion ?? "1.0.0"),
           processedAt: String(epistemicRaw.processedAt ?? new Date().toISOString()),
           totalProcessingTimeMs: typeof epistemicRaw.totalProcessingTimeMs === "number" 

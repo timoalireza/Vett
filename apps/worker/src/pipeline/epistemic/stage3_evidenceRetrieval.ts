@@ -24,7 +24,7 @@ import {
 } from "./types.js";
 
 const MODEL_NAME = "gpt-4.1-mini";
-const SOURCE_TYPING_TIMEOUT_MS = Number(process.env.EPISTEMIC_SOURCE_TYPING_TIMEOUT_MS ?? 2_000);
+const SOURCE_TYPING_TIMEOUT_MS = Number(process.env.EPISTEMIC_SOURCE_TYPING_TIMEOUT_MS ?? 6_000);
 const EVIDENCE_CONCURRENCY = Number(process.env.EPISTEMIC_EVIDENCE_CONCURRENCY ?? 2);
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {

@@ -5,7 +5,7 @@ import { recordEvidenceReliability } from "../retrievers/trust.js";
 
 const MODEL_NAME = process.env.EVIDENCE_EVALUATOR_MODEL ?? "gpt-4o-mini";
 const MAX_EVIDENCE_PER_REQUEST = 5;
-const EVIDENCE_EVALUATION_TIMEOUT_MS = Number(process.env.EVIDENCE_EVALUATION_TIMEOUT_MS ?? 3_500);
+const EVIDENCE_EVALUATION_TIMEOUT_MS = Number(process.env.EVIDENCE_EVALUATION_TIMEOUT_MS ?? 8_000);
 const CACHE_TTL_MS = Number(process.env.EVIDENCE_EVALUATION_CACHE_TTL_MS ?? 10 * 60 * 1000);
 
 type CacheEntry = { expiresAt: number; results: EvidenceResult[] };
