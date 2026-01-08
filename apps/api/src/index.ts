@@ -473,7 +473,13 @@ async function ensureBackgroundContextColumn(): Promise<void> {
     await pool.query('ALTER TABLE "analyses" ADD COLUMN IF NOT EXISTS "background_context" TEXT;');
     console.log('[Startup] ✅ Ensured "analyses.background_context" exists');
   } finally {
-    await pool.end();
+    // Suppress pool cleanup errors to preserve the original error (if any)
+    try {
+      await pool.end();
+    } catch (cleanupError) {
+      console.warn('[Startup] Warning: Failed to close database pool:', cleanupError);
+      // Don't throw - preserve the original error from the try block
+    }
   }
 }
 
