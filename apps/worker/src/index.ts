@@ -711,7 +711,6 @@ async function startWorker() {
     try {
       await pool.query("SELECT 1");
       logger.info("[Startup] ✅ Database connection successful");
-      await ensureBackgroundContextColumn();
     } catch (error: any) {
       const errorCode = error?.code || "";
       const errorMessage = error?.message || "";
@@ -739,6 +738,11 @@ async function startWorker() {
       // Don't throw - let it retry, but log the error clearly
       logger.warn("[Startup] ⚠️ Worker will continue but database operations may fail");
     }
+    
+    // CRITICAL: Ensure background_context column exists BEFORE starting worker
+    // This must succeed or the worker will fail when updating analyses
+    // DO NOT catch this error - let it propagate to prevent startup
+    await ensureBackgroundContextColumn();
     
     // Test Redis connection by getting shared connection
     try {
@@ -928,9 +932,25 @@ async function startWorker() {
       logger.info({ isRunning }, "[Health] Worker status check");
       console.log(`[Health] Worker status: isRunning=${isRunning}`);
     }, 30000); // Every 30 seconds
-  } catch (error) {
+  } catch (error: any) {
     logger.error({ error }, "[Startup] Failed to start worker");
-    // Don't exit - let it retry, but log clearly
+    
+    // CRITICAL: Migration failures are FATAL - worker cannot operate without required schema
+    // Check if this is a database schema error (migration failure)
+    const isMigrationFailure = 
+      error?.message?.includes("analyses") ||
+      error?.message?.includes("background_context") ||
+      error?.code === "42P01" || // undefined_table
+      error?.code === "42703" || // undefined_column
+      error?.code === "42P07"; // duplicate_table (shouldn't happen with IF NOT EXISTS, but handle anyway)
+    
+    if (isMigrationFailure) {
+      logger.error("[Startup] ❌ FATAL: Database migration failed - worker cannot start");
+      console.error("[Startup] ❌ FATAL: Database migration failed - worker cannot start");
+      process.exit(1);
+    }
+    
+    // For other errors (e.g., Redis connection), don't exit - let it retry
     logger.warn("[Startup] ⚠️ Worker will continue attempting to connect");
   }
 }
