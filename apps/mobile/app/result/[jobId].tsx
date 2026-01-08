@@ -728,7 +728,7 @@ export default function ResultScreen() {
                         // Determine bullet color based on sentiment
                         const bulletColor = sentiment === 'POSITIVE' ? '#2EFAC0' : 
                                            sentiment === 'NEGATIVE' ? '#EF4444' : 
-                                           '#9CA3AF'; // neutral gray
+                                           '#E5E5E5'; // neutral - matches text color
                         
                         return (
                           <View key={index} style={styles.keyReasonItem}>

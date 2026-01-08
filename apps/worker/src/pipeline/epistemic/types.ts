@@ -255,7 +255,7 @@ export interface ScoringArtifact {
 // Stage 6: Explanation Output
 // ============================================================================
 
-export type KeyReasonSentiment = "positive" | "negative" | "neutral";
+export type KeyReasonSentiment = "POSITIVE" | "NEGATIVE" | "NEUTRAL";
 
 export interface KeyReason {
   text: string;

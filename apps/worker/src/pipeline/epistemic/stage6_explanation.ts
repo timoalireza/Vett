@@ -304,34 +304,34 @@ function generateKeyReasons(
   if (stats.totalSources === 0) {
     reasons.push({ 
       text: "We couldn't find reliable sources to check this claim.", 
-      sentiment: "negative" 
+      sentiment: "NEGATIVE" 
     });
   } else if (stats.supportingCount > stats.refutingCount && stats.supportingCount >= 2) {
     if (finalScore >= 75) {
       reasons.push({ 
         text: `${stats.supportingCount} different sources back up this claim.`, 
-        sentiment: "positive" 
+        sentiment: "POSITIVE" 
       });
     } else {
       reasons.push({ 
         text: `${stats.supportingCount} source${stats.supportingCount > 1 ? "s" : ""} partly support${stats.supportingCount === 1 ? "s" : ""} this, but with some caveats.`, 
-        sentiment: "neutral" 
+        sentiment: "NEUTRAL" 
       });
     }
   } else if (stats.refutingCount > stats.supportingCount && stats.refutingCount >= 1) {
     reasons.push({ 
       text: `${stats.refutingCount} source${stats.refutingCount > 1 ? "s" : ""} disagree${stats.refutingCount === 1 ? "s" : ""} with key parts of this claim.`, 
-      sentiment: "negative" 
+      sentiment: "NEGATIVE" 
     });
   } else if (stats.supportingCount > 0 && stats.refutingCount > 0) {
     reasons.push({ 
       text: "Sources are split — some agree, some disagree.", 
-      sentiment: "neutral" 
+      sentiment: "NEUTRAL" 
     });
   } else if (stats.totalSources > 0) {
     reasons.push({ 
       text: `We found ${stats.totalSources} source${stats.totalSources > 1 ? "s" : ""} with related info, but nothing that directly confirms or denies this.`, 
-      sentiment: "neutral" 
+      sentiment: "NEUTRAL" 
     });
   }
 
@@ -339,22 +339,22 @@ function generateKeyReasons(
   if (claimCategory === "science_health" && stats.peerReviewedCount >= 1 && finalScore >= 60) {
     reasons.push({ 
       text: `Backed by ${stats.peerReviewedCount} scientific/research source${stats.peerReviewedCount > 1 ? "s" : ""}.`, 
-      sentiment: "positive" 
+      sentiment: "POSITIVE" 
     });
   } else if (claimCategory === "factual_event" && stats.uniqueHostnames >= 3) {
     reasons.push({ 
       text: `Multiple news outlets reported on this independently.`, 
-      sentiment: "positive" 
+      sentiment: "POSITIVE" 
     });
   } else if (stats.singleSourceDominance && stats.dominantHostname) {
     reasons.push({ 
       text: `Most info comes from one place (${stats.dominantHostname}), so it's harder to double-check.`, 
-      sentiment: "negative" 
+      sentiment: "NEGATIVE" 
     });
   } else if (stats.uniqueHostnames >= 3) {
     reasons.push({ 
       text: `Info comes from ${stats.uniqueHostnames} different sources, which adds credibility.`, 
-      sentiment: "positive" 
+      sentiment: "POSITIVE" 
     });
   }
 
@@ -378,19 +378,19 @@ function generateKeyReasons(
     if (claimCategory === "factual_event" && finalScore >= 75) {
       reasons.push({ 
         text: "This event has been widely reported and documented.", 
-        sentiment: "positive" 
+        sentiment: "POSITIVE" 
       });
     } else if (claimCategory === "prediction") {
       reasons.push({ 
         text: "This is a prediction about the future, which can't be fully verified yet.", 
-        sentiment: "neutral" 
+        sentiment: "NEUTRAL" 
       });
     } else if (claimCategory === "science_health") {
       const hasCausal = claims.some(c => c.primaryType === "causal");
       if (hasCausal && finalScore < 75) {
         reasons.push({ 
           text: "The claim says one thing causes another, but the evidence doesn't fully support that.", 
-          sentiment: "negative" 
+          sentiment: "NEGATIVE" 
         });
       }
     }
@@ -401,12 +401,12 @@ function generateKeyReasons(
     if (stats.averageReliability >= 0.7) {
       reasons.push({ 
         text: "The sources we checked are well-known and generally reliable.", 
-        sentiment: "positive" 
+        sentiment: "POSITIVE" 
       });
     } else if (stats.averageReliability < 0.5) {
       reasons.push({ 
         text: "The available sources aren't well-established, so take this with a grain of salt.", 
-        sentiment: "negative" 
+        sentiment: "NEGATIVE" 
       });
     }
   }
@@ -416,17 +416,17 @@ function generateKeyReasons(
     if (finalScore >= 75) {
       reasons.push({ 
         text: "The evidence lines up well with what's being claimed.", 
-        sentiment: "positive" 
+        sentiment: "POSITIVE" 
       });
     } else if (finalScore >= 45) {
       reasons.push({ 
         text: "We found some supporting info, but there are gaps.", 
-        sentiment: "neutral" 
+        sentiment: "NEUTRAL" 
       });
     } else {
       reasons.push({ 
         text: "The evidence we found doesn't really support this claim.", 
-        sentiment: "negative" 
+        sentiment: "NEGATIVE" 
       });
     }
   }
@@ -446,7 +446,7 @@ function convertPenaltyToReason(
   claimCategory: string
 ): KeyReason | null {
   // All penalties indicate issues, so sentiment is negative
-  const sentiment: KeyReasonSentiment = "negative";
+  const sentiment: KeyReasonSentiment = "NEGATIVE";
   
   switch (penaltyName) {
     case "Evidence contradiction":

@@ -219,6 +219,13 @@ export interface EpistemicConfidenceIntervalSummary {
   high: number;
 }
 
+export type KeyReasonSentiment = "POSITIVE" | "NEGATIVE" | "NEUTRAL";
+
+export interface KeyReason {
+  text: string;
+  sentiment: KeyReasonSentiment;
+}
+
 export interface EpistemicResultSummary {
   version: string;
   finalScore: number;
@@ -228,7 +235,7 @@ export interface EpistemicResultSummary {
   evidenceSummary: string;
   confidenceInterval?: EpistemicConfidenceIntervalSummary | null;
   explanationText: string;
-  keyReasons: string[];
+  keyReasons: KeyReason[];
   pipelineVersion: string;
   processedAt: string;
   totalProcessingTimeMs: number;
@@ -732,10 +739,29 @@ class AnalysisService {
         
         const confidenceIntervalRaw = epistemicRaw.confidenceInterval as Record<string, unknown> | undefined;
         
-        // Parse keyReasons, ensuring it's always an array of strings
+        // Parse keyReasons, handling both new format (objects) and legacy format (strings)
         const keyReasonsRaw = epistemicRaw.keyReasons;
-        const keyReasons: string[] = Array.isArray(keyReasonsRaw)
-          ? keyReasonsRaw.filter((r): r is string => typeof r === "string")
+        const keyReasons: KeyReason[] = Array.isArray(keyReasonsRaw)
+          ? keyReasonsRaw
+              .map((r): KeyReason | null => {
+                // New format: { text, sentiment }
+                if (typeof r === "object" && r !== null && typeof (r as any).text === "string") {
+                  const reasonObj = r as Record<string, unknown>;
+                  const sentiment = String(reasonObj.sentiment ?? "NEUTRAL").toUpperCase();
+                  return {
+                    text: String(reasonObj.text),
+                    sentiment: (["POSITIVE", "NEGATIVE", "NEUTRAL"].includes(sentiment) 
+                      ? sentiment 
+                      : "NEUTRAL") as KeyReasonSentiment
+                  };
+                }
+                // Legacy format: string (convert to object)
+                if (typeof r === "string") {
+                  return { text: r, sentiment: "NEUTRAL" };
+                }
+                return null;
+              })
+              .filter((r): r is KeyReason => r !== null)
           : [];
         
         epistemic = {
@@ -759,7 +785,7 @@ class AnalysisService {
               }
             : null,
           explanationText: String(epistemicRaw.explanationText ?? ""),
-          keyReasons: keyReasons.length > 0 ? keyReasons : ["Analysis completed."],
+          keyReasons: keyReasons.length > 0 ? keyReasons : [{ text: "Analysis completed.", sentiment: "NEUTRAL" }],
           pipelineVersion: String(epistemicRaw.pipelineVersion ?? "1.0.0"),
           processedAt: String(epistemicRaw.processedAt ?? new Date().toISOString()),
           totalProcessingTimeMs: typeof epistemicRaw.totalProcessingTimeMs === "number" 

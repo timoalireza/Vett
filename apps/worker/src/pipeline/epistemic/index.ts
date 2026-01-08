@@ -101,7 +101,7 @@ export async function runEpistemicPipeline(
       penaltiesApplied: [],
       evidenceSummary: "No claims were provided for analysis.",
       explanationText: "Unable to perform epistemic analysis: no claims were extracted from the content.",
-      keyReasons: ["No verifiable claims were extracted from the provided content."],
+      keyReasons: [{ text: "No verifiable claims were extracted from the provided content.", sentiment: "NEUTRAL" }],
       artifacts: {
         claimParsing: {
           version: EPISTEMIC_PIPELINE_VERSION,
