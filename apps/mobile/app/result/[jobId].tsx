@@ -481,7 +481,21 @@ export default function ResultScreen() {
     : "";
   
   // IMPORTANT: Never truncate UI text. We auto-scale the font so the full title always fits.
-  const claimMaxFontSize = 52;
+  // Dynamic font sizing based on text length to improve readability
+  // Ring size when scaled: 420 * 0.5 = 210px, usable area ~180px width
+  const calculateTitleFontSize = (text: string): number => {
+    const length = text.length;
+    // Short text (< 30 chars): use larger font
+    if (length < 30) return 48;
+    // Medium text (30-50 chars): medium font
+    if (length < 50) return 40;
+    // Long text (50-80 chars): smaller font
+    if (length < 80) return 32;
+    // Very long text (80+ chars): smallest font
+    return 26;
+  };
+  
+  const claimMaxFontSize = calculateTitleFontSize(displayClaimText);
 
   // Video selection matches epistemic score bands:
   // 75+ (Strongly Supported/Supported) = green
@@ -608,15 +622,16 @@ export default function ResultScreen() {
                       fontSize: claimMaxFontSize,
                       color: '#FFFFFF',
                       textAlign: 'center',
-                      maxWidth: 420 * 0.85,
+                      // Ring scales to 210px (420 * 0.5), use ~80% of that for text width
+                      maxWidth: 210 * 0.8,
                       textShadowColor: 'rgba(0, 0, 0, 0.8)',
                       textShadowOffset: { width: 0, height: 2 },
                       textShadowRadius: 6,
                     }}
                     // Auto-scale to ensure the claim title is never cut off inside the orb.
                     adjustsFontSizeToFit
-                    minimumFontScale={0.05}
-                    numberOfLines={10}
+                    minimumFontScale={0.35}
+                    numberOfLines={5}
                     allowFontScaling={false}
                     ellipsizeMode="clip"
                   >

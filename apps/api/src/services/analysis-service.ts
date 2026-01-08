@@ -73,6 +73,11 @@ function dedupeAttachments(
   for (const att of attachments) {
     const url = canonicalizeUrlForDedup(att.url);
     const key = `${att.kind}:${url}`;
+    // Validate URL is non-empty before adding
+    if (!url) {
+      dropped += 1;
+      continue;
+    }
     if (seen.has(key)) {
       dropped += 1;
       continue;

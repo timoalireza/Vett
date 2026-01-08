@@ -554,7 +554,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   // OPTIMIZATION: Skip title generation for simple single-claim analyses (saves ~500ms)
   const shouldGenerateTitle = !isFastTypedClaim || processedClaims.length > 1;
   
-  // Helper to generate title via LLM
+  // Helper to generate title via LLM or direct truncation
   const generateTitle = async (): Promise<string> => {
     try {
       const claimsText = processedClaims.map(c => c.text).join(" ");
@@ -593,13 +593,19 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       return rawTitle || processedClaims[0]?.text || "Analysis";
     } catch (error) {
       console.warn("[Pipeline] Failed to generate title, using fallback", error);
-      // Fallback: use first claim text
+      // Fallback: use first claim text, enforce 40-char limit
       let fallbackText = processedClaims[0]?.text || "Analysis";
       if (fallbackText.length > 40) {
         fallbackText = fallbackText.slice(0, 37) + "...";
       }
       return fallbackText;
     }
+  };
+  
+  // Helper to enforce 40-char limit on direct title (for simple claims)
+  const enforceCharLimit = (text: string): string => {
+    if (text.length <= 40) return text;
+    return text.slice(0, 37) + "...";
   };
   
   // Run epistemic pipeline, background context, and title generation in parallel
@@ -623,8 +629,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
           return "";
         })
       : Promise.resolve(""),
-    // Title generation (skip for simple claims, use direct text)
-    shouldGenerateTitle ? generateTitle() : Promise.resolve(processedClaims[0]?.text || "Analysis")
+    // Title generation (skip for simple claims, use direct text with 40-char limit)
+    shouldGenerateTitle ? generateTitle() : Promise.resolve(enforceCharLimit(processedClaims[0]?.text || "Analysis"))
   ]);
   
   if (epistemicOutput) {
