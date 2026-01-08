@@ -429,7 +429,9 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
           text,
           truncated,
           wordCount: words.length,
-          imageUrl: instagramResult.imageUrl || instagramResult.videoUrl,
+          // Only pass through a real image URL for optional vision summarization.
+          // Avoid feeding video URLs to the image describer (slow + likely to fail).
+          imageUrl: instagramResult.imageUrl,
           warnings: quality.level === "poor" || quality.level === "insufficient" 
             ? ["Instagram content extraction quality is low. Consider using Instagram API for better results."]
             : undefined,
@@ -438,13 +440,12 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
       }
     }
     
-    // Instagram-specific extraction failed, fall through to generic HTML scraper
-    console.warn(`[LinkFetcher] Instagram-specific extraction failed for ${attachment.url}, falling back to generic HTML scraper`);
-    
-    // Log failure reason if extraction returned null or empty result
-    if (!instagramResult || !instagramResult.text || instagramResult.text.trim().length === 0) {
-      console.warn(`[LinkFetcher] Instagram extraction returned no content for ${attachment.url}`);
-    }
+    // Instagram-specific extraction already tries Apify + HTML scraping.
+    // Falling back to the generic HTML scraper would re-fetch the same URL again, adding latency.
+    return {
+      error:
+        "Unable to extract readable content from Instagram link. The post may be private, require authentication, or Instagram may be blocking access. Please try uploading a screenshot of the post instead."
+    };
   } else if (platformInfo.platform === "threads") {
     const threadsResult = await extractThreadsContent(attachment.url);
     if (threadsResult?.text) {
@@ -698,10 +699,7 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
     if (!combined || isLowInformation(combined)) {
       warnings.push("Extracted content may be low-information.");
       if (!combined) {
-        // Provide more specific error message for Instagram links
-        if (platformInfo.platform === "instagram") {
-          return { error: "Unable to extract content from Instagram link. The post may be private, require authentication, or Instagram may be blocking access. Please try uploading a screenshot of the post instead." };
-        }
+        // Note: Instagram-specific handling happens earlier and returns before this point
         return { error: "No meaningful text extracted from attachment. Please try uploading a screenshot instead." };
       }
     }
@@ -710,20 +708,18 @@ export async function fetchLinkAttachment(attachment: AnalysisAttachmentInput): 
     const words = text.split(/\s+/).filter(Boolean);
 
     if (words.length === 0) {
-      // Provide more specific error message for Instagram links
-      if (platformInfo.platform === "instagram") {
-        return { error: "Unable to extract readable content from Instagram link. The post may be private, require authentication, or contain only media without captions. Please try uploading a screenshot of the post instead." };
-      }
+      // Note: Instagram-specific handling happens earlier and returns before this point
       return { error: "No meaningful text extracted from attachment. Please try uploading a screenshot instead." };
     }
 
     // Assess quality for generic extraction (only if it's a social media platform)
+    // Note: Instagram returns early, so platformInfo.platform cannot be "instagram" here
     let quality;
     if (platformInfo.platform !== "unknown") {
       quality = assessExtractionQuality(
         text,
         words.length,
-        platformInfo.platform as "twitter" | "x" | "instagram" | "threads" | "facebook",
+        platformInfo.platform,
         segments.some((s) => s.includes("Author:")),
         Boolean(imageUrl),
         truncated

@@ -43,10 +43,21 @@ export const schema = `
     evidenceSummary: String!
     confidenceInterval: EpistemicConfidenceInterval
     explanationText: String!
-    keyReasons: [String!]!
+    keyReasons: [KeyReason!]!
     pipelineVersion: String!
     processedAt: String!
     totalProcessingTimeMs: Int!
+  }
+
+  type KeyReason {
+    text: String!
+    sentiment: KeyReasonSentiment!
+  }
+
+  enum KeyReasonSentiment {
+    POSITIVE
+    NEGATIVE
+    NEUTRAL
   }
 
   type EpistemicPenalty {

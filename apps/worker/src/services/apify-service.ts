@@ -5,6 +5,26 @@ import { env } from '../env.js';
 // Use a lazy initialization or check if token exists to avoid errors if not configured
 let client: ApifyClient | null = null;
 
+type CacheEntry<T> = { expiresAt: number; promise: Promise<T> };
+const instagramScrapeCache = new Map<string, CacheEntry<ApifyInstagramResult | null>>();
+const INSTAGRAM_SCRAPE_CACHE_TTL_MS = Number(process.env.INSTAGRAM_SCRAPE_CACHE_TTL_MS ?? 10 * 60_000); // 10 min
+const INSTAGRAM_SCRAPE_FAILURE_TTL_MS = Number(process.env.INSTAGRAM_SCRAPE_FAILURE_TTL_MS ?? 30_000); // 30s
+
+function canonicalizeUrlForCache(raw: string): string {
+  const input = (raw ?? "").trim();
+  if (!input) return input;
+  try {
+    const u = new URL(input);
+    u.hash = "";
+    u.hostname = u.hostname.toLowerCase();
+    if (u.hostname.startsWith("www.")) u.hostname = u.hostname.slice(4);
+    if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\/+$/, "");
+    return u.toString();
+  } catch {
+    return input;
+  }
+}
+
 function getClient(): ApifyClient | null {
   if (client) return client;
   
@@ -107,6 +127,12 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
     return null;
   }
 
+  const cacheKey = canonicalizeUrlForCache(url);
+  const cached = instagramScrapeCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return await cached.promise;
+  }
+
   // Input for apify/instagram-post-scraper (more specialized for single posts)
   // This actor is often more reliable for single URLs than the general scraper
   // Input format: { "username": [], "startUrls": ["..."], "resultsType": "posts" }
@@ -115,7 +141,7 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
   // Input format: { "startUrls": ["..."], "resultsType": "posts" }
   // Note: input is prepared but not used in current implementation
 
-  try {
+  const promise = (async () => {
     console.log(`[Apify] Scraping Instagram post: ${url}`);
     
     // Use the input format that works for 'apify/instagram-scraper'
@@ -150,7 +176,7 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
     
     console.warn(`[Apify] No items found in dataset ${run.defaultDatasetId} for URL: ${url}`);
     return null;
-  } catch (error) {
+  })().catch((error) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
     const errorName = error instanceof Error ? error.name : typeof error;
@@ -164,7 +190,23 @@ export async function scrapeInstagramPost(url: string): Promise<ApifyInstagramRe
       ...(error instanceof Error && 'statusCode' in error ? { statusCode: (error as any).statusCode } : {})
     });
     return null;
+  });
+
+  instagramScrapeCache.set(cacheKey, {
+    expiresAt: Date.now() + INSTAGRAM_SCRAPE_CACHE_TTL_MS,
+    promise
+  });
+
+  const result = await promise;
+  if (!result) {
+    // Keep negative caching short so transient failures don't get stuck.
+    instagramScrapeCache.set(cacheKey, {
+      expiresAt: Date.now() + INSTAGRAM_SCRAPE_FAILURE_TTL_MS,
+      promise: Promise.resolve(null)
+    });
   }
+
+  return result;
 }
 
 export async function scrapeTwitterPost(url: string): Promise<ApifyTwitterResult | null> {

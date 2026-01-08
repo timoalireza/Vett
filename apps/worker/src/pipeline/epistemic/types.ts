@@ -255,6 +255,13 @@ export interface ScoringArtifact {
 // Stage 6: Explanation Output
 // ============================================================================
 
+export type KeyReasonSentiment = "positive" | "negative" | "neutral";
+
+export interface KeyReason {
+  text: string;
+  sentiment: KeyReasonSentiment;
+}
+
 export interface ExplanationOutput {
   finalScore: number;
   scoreBand: string;
@@ -270,7 +277,7 @@ export interface ExplanationOutput {
   uncertaintyStatement: string;
   evidenceSummary: string;
   explanationText: string;  // Full human-readable explanation
-  keyReasons: string[];  // 3-5 concise bullet points summarizing main factors
+  keyReasons: KeyReason[];  // 3-5 concise bullet points summarizing main factors
 }
 
 // ============================================================================
@@ -304,7 +311,7 @@ export interface EpistemicResult {
     high: number;
   };
   explanationText: string;
-  keyReasons: string[];  // 3-5 concise bullet points summarizing main factors
+  keyReasons: KeyReason[];  // 3-5 concise bullet points summarizing main factors
   
   // For determinism/audit
   artifacts: EpistemicArtifacts;

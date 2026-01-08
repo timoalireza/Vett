@@ -14,6 +14,48 @@ import type { SubscriptionPlan } from "../types/subscription.js";
 
 const INSTAGRAM_API_BASE = "https://graph.facebook.com/v18.0";
 
+function canonicalizeUrlForDedup(raw: string): string {
+  const input = (raw ?? "").trim();
+  if (!input) return input;
+  try {
+    const u = new URL(input);
+    u.hash = "";
+    u.hostname = u.hostname.toLowerCase();
+    if (u.hostname.startsWith("www.")) u.hostname = u.hostname.slice(4);
+
+    // Drop common tracking params (keep everything else).
+    const dropKeys = new Set([
+      "fbclid",
+      "gclid",
+      "mc_cid",
+      "mc_eid",
+      "ref",
+      "ref_src",
+      "igsh",
+      "igshid",
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content"
+    ]);
+    for (const key of Array.from(u.searchParams.keys())) {
+      const k = key.toLowerCase();
+      if (k.startsWith("utm_") || dropKeys.has(k)) {
+        u.searchParams.delete(key);
+      }
+    }
+
+    if (u.pathname.length > 1) {
+      u.pathname = u.pathname.replace(/\/+$/, "");
+    }
+
+    return u.toString();
+  } catch {
+    return input;
+  }
+}
+
 // DM limits are now defined in PLAN_LIMITS (subscription-service.ts)
 // FREE: 3/month, PLUS: 10/month, PRO: unlimited
 
@@ -599,9 +641,17 @@ class InstagramService {
    * Extract content from Instagram message (links, images, text)
    */
   async extractContentFromMessage(message: InstagramMessage): Promise<ExtractedContent> {
-    const content: ExtractedContent = {
-      links: [],
-      images: []
+    const linkSet = new Set<string>();
+    const imageSet = new Set<string>();
+    const content: ExtractedContent = { links: [], images: [] };
+
+    const addLink = (url: string) => {
+      const canonical = canonicalizeUrlForDedup(url);
+      if (canonical) linkSet.add(canonical);
+    };
+    const addImage = (url: string) => {
+      const trimmed = (url ?? "").trim();
+      if (trimmed) imageSet.add(trimmed);
     };
 
     serviceLogger.debug({
@@ -623,17 +673,17 @@ class InstagramService {
         // Classify URLs: Instagram CDN URLs go to images, others go to links
         for (const url of urls) {
           if (this.isInstagramCdnUrl(url)) {
-            content.images.push(url);
+            addImage(url);
             serviceLogger.debug({ url }, "[Instagram] Found Instagram CDN URL in text, added as image");
           } else {
-            content.links.push(url);
+            addLink(url);
             serviceLogger.debug({ url }, "[Instagram] Found URL in text, added as link");
           }
         }
         serviceLogger.debug({ 
           totalUrls: urls.length, 
-          links: content.links.length, 
-          images: content.images.length 
+          links: linkSet.size, 
+          images: imageSet.size 
         }, "[Instagram] Classified URLs from text");
       }
     }
@@ -649,7 +699,7 @@ class InstagramService {
 
         if (attachment.type === "image" && attachment.payload?.url) {
           // Images should always be treated as images, not links
-          content.images.push(attachment.payload.url);
+          addImage(attachment.payload.url);
           serviceLogger.debug({ url: attachment.payload.url }, "[Instagram] Added image URL");
         } else if (attachment.type === "share" && attachment.payload?.url) {
           const shareUrl = attachment.payload.url;
@@ -662,19 +712,19 @@ class InstagramService {
             
             if (postUrl) {
               // Use the extracted post URL as a link for content extraction
-              content.links.push(postUrl);
+              addLink(postUrl);
               serviceLogger.debug({ 
                 cdnUrl: shareUrl, 
                 postUrl 
               }, "[Instagram] Extracted post URL from shared attachment, added as link");
             } else {
               // Fallback: treat CDN URL as image if we can't extract post URL
-              content.images.push(shareUrl);
+              addImage(shareUrl);
               serviceLogger.debug({ url: shareUrl }, "[Instagram] Could not extract post URL, treating CDN URL as image");
             }
           } else {
             // Regular shared links/posts (not CDN URLs)
-            content.links.push(shareUrl);
+            addLink(shareUrl);
             serviceLogger.debug({ url: shareUrl }, "[Instagram] Added shared link URL");
           }
         } else if (attachment.type === "video" && attachment.payload?.url) {
@@ -682,11 +732,11 @@ class InstagramService {
           const videoUrl = attachment.payload.url;
           if (this.isInstagramCdnUrl(videoUrl)) {
             // Instagram CDN URLs are media files, treat as images (videos can be analyzed as images)
-            content.images.push(videoUrl);
+            addImage(videoUrl);
             serviceLogger.debug({ url: videoUrl }, "[Instagram] Added video from CDN URL as image");
           } else {
             // Regular video links
-            content.links.push(videoUrl);
+            addLink(videoUrl);
             serviceLogger.debug({ url: videoUrl }, "[Instagram] Added video URL");
           }
         } else if (attachment.type === "fallback" && attachment.payload?.url) {
@@ -694,11 +744,11 @@ class InstagramService {
           const fallbackUrl = attachment.payload.url;
           if (this.isInstagramCdnUrl(fallbackUrl)) {
             // Instagram CDN URLs are media files, treat as images
-            content.images.push(fallbackUrl);
+            addImage(fallbackUrl);
             serviceLogger.debug({ url: fallbackUrl }, "[Instagram] Added fallback image from CDN URL");
           } else {
             // Regular fallback links
-            content.links.push(fallbackUrl);
+            addLink(fallbackUrl);
             serviceLogger.debug({ url: fallbackUrl }, "[Instagram] Added fallback URL");
           }
         } else {
@@ -706,6 +756,9 @@ class InstagramService {
         }
       }
     }
+
+    content.links = Array.from(linkSet);
+    content.images = Array.from(imageSet);
 
     serviceLogger.debug({
       hasText: !!content.text,
@@ -1253,18 +1306,24 @@ I'll send you the results as soon as they're ready! 📊`;
         analysisInput.text = content.text;
       } else {
         // Add links
-        for (const link of content.links) {
-          analysisInput.attachments.push({ kind: "link", url: link });
-        }
+        const seen = new Set<string>();
+        const addAttachment = (kind: "link" | "image", url: string) => {
+          const normalized = kind === "link" ? canonicalizeUrlForDedup(url) : (url ?? "").trim();
+          if (!normalized) return;
+          const key = `${kind}:${normalized}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          analysisInput.attachments.push({ kind, url: normalized });
+        };
+
+        for (const link of content.links) addAttachment("link", link);
 
         // Add images (only if not successfully processed by multimodal pipeline)
         // Include images if multimodal processing wasn't attempted or failed
         // If multimodal succeeded (extractedClaims.length > 0), skip images since they're already processed as claims
         // If multimodal failed or wasn't attempted (extractedClaims.length === 0), include images for regular analysis
         if (extractedClaims.length === 0) {
-          for (const imageUrl of content.images) {
-            analysisInput.attachments.push({ kind: "image", url: imageUrl });
-          }
+          for (const imageUrl of content.images) addAttachment("image", imageUrl);
         }
 
         // Add text if present (as context)

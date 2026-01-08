@@ -186,10 +186,10 @@ export default function ResultScreen() {
               evidenceSummary: "This claim makes a causal assertion about coffee and lifespan extension.",
               explanationText: "Evidence partially supports moderate coffee consumption having health benefits, but the specific claim of 10 years is unsupported.",
               keyReasons: [
-                "2 sources partially support the general health benefits of coffee.",
-                "The specific claim of 10 years lifespan extension lacks peer-reviewed support.",
-                "Correlation is presented as causation without sufficient evidence.",
-                "Most coffee research is observational and cannot establish causation.",
+                { text: "2 sources partly support the general health benefits of coffee.", sentiment: "POSITIVE" as const },
+                { text: "We couldn't find scientific studies backing the specific \"10 years\" claim.", sentiment: "NEGATIVE" as const },
+                { text: "Just because coffee drinkers live longer doesn't mean coffee causes it.", sentiment: "NEGATIVE" as const },
+                { text: "Most coffee studies only show patterns, not proof of cause and effect.", sentiment: "NEUTRAL" as const },
               ],
               pipelineVersion: "1.0.0",
               processedAt: new Date().toISOString(),
@@ -717,15 +717,26 @@ export default function ResultScreen() {
 
               {/* Key Reasons Card */}
               {analysis?.epistemic?.keyReasons && analysis.epistemic.keyReasons.length > 0 && (
-                <Animated.View style={[card3AnimatedStyle, { marginTop: 16 }]}>
-                  <Card label="KEY REASONS">
+                <Animated.View style={[card3AnimatedStyle, { marginTop: 16, width: '100%' }]}>
+                  <Card label="WHY WE THINK THIS">
                     <View style={styles.keyReasonsList}>
-                      {analysis.epistemic.keyReasons.map((reason: string, index: number) => (
-                        <View key={index} style={styles.keyReasonItem}>
-                          <View style={[styles.keyReasonBullet, { backgroundColor: scoreColor }]} />
-                          <Text style={styles.keyReasonText}>{reason}</Text>
-                        </View>
-                      ))}
+                      {analysis.epistemic.keyReasons.map((reason, index: number) => {
+                        // Handle both new format (object) and legacy format (string)
+                        const reasonText = typeof reason === 'string' ? reason : reason.text;
+                        const sentiment = typeof reason === 'string' ? 'NEUTRAL' : reason.sentiment;
+                        
+                        // Determine bullet color based on sentiment
+                        const bulletColor = sentiment === 'POSITIVE' ? '#2EFAC0' : 
+                                           sentiment === 'NEGATIVE' ? '#EF4444' : 
+                                           '#9CA3AF'; // neutral gray
+                        
+                        return (
+                          <View key={index} style={styles.keyReasonItem}>
+                            <View style={[styles.keyReasonBullet, { backgroundColor: bulletColor }]} />
+                            <Text style={styles.keyReasonText}>{reasonText}</Text>
+                          </View>
+                        );
+                      })}
                     </View>
                   </Card>
                 </Animated.View>

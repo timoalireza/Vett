@@ -16,7 +16,9 @@ import {
   Penalty,
   ScoringResult,
   ExplanationOutput,
-  SCORE_BANDS
+  SCORE_BANDS,
+  KeyReason,
+  KeyReasonSentiment
 } from "./types.js";
 
 export interface ExplanationInput {
@@ -208,92 +210,224 @@ function generateImprovementSuggestions(penalties: Penalty[]): string[] {
 }
 
 /**
+ * Determine claim category for contextual reason generation.
+ * Different claim types need different explanations.
+ */
+function getClaimCategory(claims: TypedClaim[], evidence: EvidenceGraph): "factual_event" | "science_health" | "prediction" | "opinion" | "general" {
+  // Check source types for context
+  const stats = evidence.stats;
+  const sourceTypes = stats.sourceTypeDistribution || {};
+  const hasNewsReports = (sourceTypes.news_report || 0) >= 2;
+  const hasPeerReviewed = stats.peerReviewedCount >= 1;
+  const hasInstitutional = (sourceTypes.institutional_consensus || 0) >= 1;
+  
+  // Check claim types
+  const hasPredictive = claims.some(c => c.primaryType === "predictive");
+  const hasCausal = claims.some(c => c.primaryType === "causal");
+  const hasNormative = claims.some(c => c.isNormative);
+  const isEmpiricalObservational = claims.some(c => c.primaryType === "empirical_observational");
+  
+  // Check timeframe - past events are factual
+  const isPastEvent = claims.some(c => c.timeframe?.type === "past");
+  
+  if (hasPredictive) return "prediction";
+  if (hasNormative) return "opinion";
+  if (isPastEvent && hasNewsReports && !hasPeerReviewed) return "factual_event";
+  if (hasPeerReviewed || hasInstitutional || hasCausal) return "science_health";
+  if (isEmpiricalObservational && isPastEvent) return "factual_event";
+  
+  return "general";
+}
+
+/**
+ * Check if a penalty is relevant for the given claim category.
+ * Some penalties don't make sense for certain claim types.
+ */
+function isPenaltyRelevant(penaltyName: string, claimCategory: string, claims: TypedClaim[]): boolean {
+  // Penalties that don't apply to factual event claims (celebrity news, historical events)
+  const notForFactualEvents = [
+    "Ambiguous quantifiers",  // Factual events usually don't have quantifiers
+    "Model dependence",       // Not relevant for past events
+    "Low expert consensus",   // Celebrity/news claims don't need expert consensus
+    "Rhetorical certainty",   // Factual events are either true or false
+  ];
+  
+  // Penalties that don't apply to predictions
+  const notForPredictions = [
+    "Outdated evidence",      // Future claims can't have outdated evidence about themselves
+  ];
+  
+  // Check if claim actually has quantifiers before including ambiguous_quantifiers penalty
+  const hasQuantifiers = claims.some(c => 
+    c.quantifiers.length > 0 && 
+    !c.quantifiers.every(q => q === "none" || q === "precise")
+  );
+  
+  if (penaltyName === "Ambiguous quantifiers" && !hasQuantifiers) {
+    return false;
+  }
+  
+  if (claimCategory === "factual_event" && notForFactualEvents.includes(penaltyName)) {
+    return false;
+  }
+  
+  if (claimCategory === "prediction" && notForPredictions.includes(penaltyName)) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * Generate 3-5 concise key reasons summarizing main factors influencing the verdict.
  * 
  * Rules:
- * - Each reason is one sentence max
- * - Reference evidence, logic, or source alignment (not AI reasoning)
- * - Neutral, analytical tone
- * - No speculative language
+ * - Each reason includes text and sentiment (positive/negative/neutral)
+ * - Reasons are contextually relevant to the claim type
+ * - Use simple, conversational language
+ * - No irrelevant penalties for the claim category
  */
 function generateKeyReasons(
   scoringResult: ScoringResult,
   evidence: EvidenceGraph,
   topPenalties: Array<{ name: string; weight: number; rationale: string }>,
   claims: TypedClaim[]
-): string[] {
-  const reasons: string[] = [];
+): KeyReason[] {
+  const reasons: KeyReason[] = [];
   const stats = evidence.stats;
   const { finalScore } = scoringResult;
+  
+  // Determine claim category for contextual reasoning
+  const claimCategory = getClaimCategory(claims, evidence);
 
-  // Reason 1: Evidence alignment
+  // Reason 1: Evidence alignment (always relevant)
   if (stats.totalSources === 0) {
-    reasons.push("No verifiable sources were found to assess this claim.");
+    reasons.push({ 
+      text: "We couldn't find reliable sources to check this claim.", 
+      sentiment: "negative" 
+    });
   } else if (stats.supportingCount > stats.refutingCount && stats.supportingCount >= 2) {
     if (finalScore >= 75) {
-      reasons.push(`${stats.supportingCount} independent sources align with the claim.`);
+      reasons.push({ 
+        text: `${stats.supportingCount} different sources back up this claim.`, 
+        sentiment: "positive" 
+      });
     } else {
-      reasons.push(`${stats.supportingCount} source${stats.supportingCount > 1 ? "s" : ""} partially support${stats.supportingCount === 1 ? "s" : ""} the claim with caveats.`);
+      reasons.push({ 
+        text: `${stats.supportingCount} source${stats.supportingCount > 1 ? "s" : ""} partly support${stats.supportingCount === 1 ? "s" : ""} this, but with some caveats.`, 
+        sentiment: "neutral" 
+      });
     }
   } else if (stats.refutingCount > stats.supportingCount && stats.refutingCount >= 1) {
-    reasons.push(`${stats.refutingCount} source${stats.refutingCount > 1 ? "s" : ""} contradict${stats.refutingCount === 1 ? "s" : ""} key aspects of the claim.`);
+    reasons.push({ 
+      text: `${stats.refutingCount} source${stats.refutingCount > 1 ? "s" : ""} disagree${stats.refutingCount === 1 ? "s" : ""} with key parts of this claim.`, 
+      sentiment: "negative" 
+    });
   } else if (stats.supportingCount > 0 && stats.refutingCount > 0) {
-    reasons.push("Evidence is divided, with sources both supporting and contradicting the claim.");
+    reasons.push({ 
+      text: "Sources are split — some agree, some disagree.", 
+      sentiment: "neutral" 
+    });
   } else if (stats.totalSources > 0) {
-    reasons.push(`${stats.totalSources} source${stats.totalSources > 1 ? "s" : ""} provided indirect context for this claim.`);
+    reasons.push({ 
+      text: `We found ${stats.totalSources} source${stats.totalSources > 1 ? "s" : ""} with related info, but nothing that directly confirms or denies this.`, 
+      sentiment: "neutral" 
+    });
   }
 
-  // Reason 2: Source quality/diversity
-  if (stats.peerReviewedCount >= 1 && finalScore >= 60) {
-    reasons.push(`Claim is supported by ${stats.peerReviewedCount} peer-reviewed source${stats.peerReviewedCount > 1 ? "s" : ""}.`);
+  // Reason 2: Source quality/diversity (contextual based on claim type)
+  if (claimCategory === "science_health" && stats.peerReviewedCount >= 1 && finalScore >= 60) {
+    reasons.push({ 
+      text: `Backed by ${stats.peerReviewedCount} scientific/research source${stats.peerReviewedCount > 1 ? "s" : ""}.`, 
+      sentiment: "positive" 
+    });
+  } else if (claimCategory === "factual_event" && stats.uniqueHostnames >= 3) {
+    reasons.push({ 
+      text: `Multiple news outlets reported on this independently.`, 
+      sentiment: "positive" 
+    });
   } else if (stats.singleSourceDominance && stats.dominantHostname) {
-    reasons.push(`Evidence is concentrated from ${stats.dominantHostname}, limiting independent verification.`);
+    reasons.push({ 
+      text: `Most info comes from one place (${stats.dominantHostname}), so it's harder to double-check.`, 
+      sentiment: "negative" 
+    });
   } else if (stats.uniqueHostnames >= 3) {
-    reasons.push(`Evidence gathered from ${stats.uniqueHostnames} distinct sources enhances reliability.`);
+    reasons.push({ 
+      text: `Info comes from ${stats.uniqueHostnames} different sources, which adds credibility.`, 
+      sentiment: "positive" 
+    });
   }
 
-  // Reason 3-5: Based on top penalties (converted to neutral observations)
+  // Reason 3-5: Based on top penalties (only include relevant ones)
   for (const penalty of topPenalties.slice(0, 3)) {
     if (reasons.length >= 5) break;
     
-    const reason = convertPenaltyToReason(penalty.name, penalty.rationale, claims);
-    if (reason && !reasons.includes(reason)) {
+    // Skip irrelevant penalties for this claim type
+    if (!isPenaltyRelevant(penalty.name, claimCategory, claims)) {
+      continue;
+    }
+    
+    const reason = convertPenaltyToReason(penalty.name, penalty.rationale, claims, claimCategory);
+    if (reason && !reasons.some(r => r.text === reason.text)) {
       reasons.push(reason);
     }
   }
 
-  // Add claim structure observation if we need more reasons
+  // Add claim-type-specific observations if we need more reasons
   if (reasons.length < 3) {
-    const hasPredictive = claims.some(c => c.primaryType === "predictive");
-    const hasCausal = claims.some(c => c.primaryType === "causal");
-    const hasUniversal = claims.some(c => c.quantifiers.includes("universal"));
-    
-    if (hasPredictive) {
-      reasons.push("The claim involves future projections that cannot be empirically verified.");
-    } else if (hasCausal && finalScore < 75) {
-      reasons.push("The causal relationship asserted lacks sufficient empirical support.");
-    } else if (hasUniversal && finalScore < 75) {
-      reasons.push("Absolute language in the claim exceeds what evidence can support.");
+    if (claimCategory === "factual_event" && finalScore >= 75) {
+      reasons.push({ 
+        text: "This event has been widely reported and documented.", 
+        sentiment: "positive" 
+      });
+    } else if (claimCategory === "prediction") {
+      reasons.push({ 
+        text: "This is a prediction about the future, which can't be fully verified yet.", 
+        sentiment: "neutral" 
+      });
+    } else if (claimCategory === "science_health") {
+      const hasCausal = claims.some(c => c.primaryType === "causal");
+      if (hasCausal && finalScore < 75) {
+        reasons.push({ 
+          text: "The claim says one thing causes another, but the evidence doesn't fully support that.", 
+          sentiment: "negative" 
+        });
+      }
     }
   }
 
-  // Ensure we have at least 3 reasons
+  // Ensure we have at least 3 reasons with appropriate fallbacks
   if (reasons.length < 3 && stats.totalSources > 0) {
     if (stats.averageReliability >= 0.7) {
-      reasons.push("Consulted sources have established credibility in this domain.");
+      reasons.push({ 
+        text: "The sources we checked are well-known and generally reliable.", 
+        sentiment: "positive" 
+      });
     } else if (stats.averageReliability < 0.5) {
-      reasons.push("Available sources have limited established reliability.");
+      reasons.push({ 
+        text: "The available sources aren't well-established, so take this with a grain of salt.", 
+        sentiment: "negative" 
+      });
     }
   }
 
-  // Final fallback
+  // Final fallback based on score
   if (reasons.length < 3) {
     if (finalScore >= 75) {
-      reasons.push("Evidence consistently aligns with the stated claim.");
+      reasons.push({ 
+        text: "The evidence lines up well with what's being claimed.", 
+        sentiment: "positive" 
+      });
     } else if (finalScore >= 45) {
-      reasons.push("Evidence partially addresses the claim with notable gaps.");
+      reasons.push({ 
+        text: "We found some supporting info, but there are gaps.", 
+        sentiment: "neutral" 
+      });
     } else {
-      reasons.push("Available evidence does not adequately support the claim.");
+      reasons.push({ 
+        text: "The evidence we found doesn't really support this claim.", 
+        sentiment: "negative" 
+      });
     }
   }
 
@@ -302,41 +436,57 @@ function generateKeyReasons(
 }
 
 /**
- * Convert a penalty name to a neutral, evidence-based reason.
+ * Convert a penalty name to a user-friendly reason with sentiment.
+ * All penalties are negative by nature (they reduce the score).
  */
 function convertPenaltyToReason(
   penaltyName: string,
   _rationale: string,
-  claims: TypedClaim[]
-): string | null {
+  claims: TypedClaim[],
+  claimCategory: string
+): KeyReason | null {
+  // All penalties indicate issues, so sentiment is negative
+  const sentiment: KeyReasonSentiment = "negative";
+  
   switch (penaltyName) {
     case "Evidence contradiction":
-      return "Available evidence contradicts central elements of the claim.";
+      return { text: "The evidence we found actually contradicts this claim.", sentiment };
     case "Model dependence":
-      return "The claim relies on model-based projections rather than observed data.";
+      return { text: "This is based on predictions/estimates, not hard facts.", sentiment };
     case "Temporal mismatch":
-      return "The timeframe referenced does not match available evidence.";
+      return { text: "The dates or timeframes don't quite match up with the evidence.", sentiment };
     case "Missing context":
-      return "The claim omits important qualifying context.";
+      // Make this more specific based on claim type
+      if (claimCategory === "factual_event") {
+        return { text: "Some details about this event are missing or unclear.", sentiment };
+      }
+      return { text: "There's important context missing that could change the meaning.", sentiment };
     case "Causal overreach":
-      return "Correlation is presented as causation without sufficient evidence.";
+      return { text: "Just because two things happen together doesn't mean one causes the other.", sentiment };
     case "Scope exaggeration":
-      return "The claim generalizes beyond what the evidence supports.";
+      return { text: "The claim makes broader statements than the evidence actually supports.", sentiment };
     case "Low expert consensus":
-      return "Expert sources show disagreement on this topic.";
+      // Only relevant for science/health claims
+      if (claimCategory === "science_health") {
+        return { text: "Experts don't all agree on this topic.", sentiment };
+      }
+      return null;
     case "Outdated evidence":
-      return "Available evidence may not reflect the most current information.";
+      return { text: "Some of the information might be outdated.", sentiment };
     case "Selective citation":
-      return "Evidence comes from a narrow range of sources.";
+      return { text: "The evidence comes from a limited set of sources.", sentiment };
     case "Rhetorical certainty":
       const hasDefiniteMarkers = claims.some(c => c.certaintyLanguage === "definite");
-      return hasDefiniteMarkers 
-        ? "Definitive language overstates what evidence can confirm."
-        : "The claim's certainty exceeds what evidence supports.";
+      return { 
+        text: hasDefiniteMarkers 
+          ? "The claim sounds more certain than the evidence allows."
+          : "The claim is stated more confidently than the evidence supports.",
+        sentiment 
+      };
     case "Ambiguous quantifiers":
-      return "Imprecise quantifiers make the claim difficult to verify.";
+      return { text: "Vague words like \"many\" or \"most\" make this hard to verify.", sentiment };
     case "Comparative distortion":
-      return "The comparison methodology affects result interpretation.";
+      return { text: "The comparison might be oversimplified or misleading.", sentiment };
     default:
       return null;
   }

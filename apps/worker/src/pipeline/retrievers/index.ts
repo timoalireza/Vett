@@ -9,7 +9,7 @@ import { adjustReliability, extractHostname, isBlacklisted, isLowTrust } from ".
 // Prioritize Perplexity for better citation quality and real-time information
 const RETRIEVERS: Retriever[] = [perplexityRetriever, braveRetriever, serperRetriever, googleFactCheckRetriever];
 
-const DEFAULT_EVIDENCE_RETRIEVAL_TIMEOUT_MS = Number(process.env.EVIDENCE_RETRIEVAL_TIMEOUT_MS ?? 4_000); // per retriever
+const DEFAULT_EVIDENCE_RETRIEVAL_TIMEOUT_MS = Number(process.env.EVIDENCE_RETRIEVAL_TIMEOUT_MS ?? 2_500); // per retriever - reduced for speed
 
 async function runWithRetry(
   retriever: Retriever,

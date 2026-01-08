@@ -23,7 +23,7 @@ import { runEpistemicPipeline, EpistemicResult } from "./epistemic/index.js";
 import { normalizeContext, normalizeSummary } from "./utils/uxCopy.js";
 
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
-const LEGACY_EVIDENCE_CONCURRENCY = Number(process.env.LEGACY_EVIDENCE_CONCURRENCY ?? 2);
+const LEGACY_EVIDENCE_CONCURRENCY = Number(process.env.LEGACY_EVIDENCE_CONCURRENCY ?? 3); // Increased for speed - timeouts protect against slowdowns
 
 async function asyncPool<T, R>(
   poolLimit: number,
@@ -538,34 +538,93 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const imageDerivedClaimIds = new Set(imageDerivedClaims.map((c) => c.id));
   
   // ============================================================================
-  // Run Epistemic Pipeline + Background Context Generation in parallel
+  // Run Epistemic Pipeline + Background Context + Title Generation in parallel
   // ============================================================================
   const epistemicStart = Date.now();
   let epistemicResult: EpistemicResult | null = null;
   let backgroundContext: string | undefined;
+  let titleGenerated: string | undefined;
   
   // Generate the main claim text for background context
   const mainClaimText = processedClaims[0]?.text || context.normalizedText;
   
-  // Run epistemic pipeline and background context generation in parallel
-  const [epistemicOutput, bgContextResult] = await Promise.all([
-    // Epistemic pipeline
+  // OPTIMIZATION: Skip background context for simple/fast claims (saves 1-2s)
+  const shouldGenerateBackground = !isFastTypedClaim && processedClaims.length > 1;
+  
+  // OPTIMIZATION: Skip title generation for simple single-claim analyses (saves ~500ms)
+  const shouldGenerateTitle = !isFastTypedClaim || processedClaims.length > 1;
+  
+  // Helper to generate title via LLM
+  const generateTitle = async (): Promise<string> => {
+    try {
+      const claimsText = processedClaims.map(c => c.text).join(" ");
+      const titleResponse = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        messages: [
+          {
+            role: "system",
+            content: "You are a text shortening assistant. Your task is to shorten the given claim text to fit within 40 characters while preserving the original meaning and wording as much as possible. Do not create a new title or add stylization. Simply truncate or compress the claim naturally. Return only the shortened text, no quotes or extra text."
+          },
+          {
+            role: "user",
+            content: `Shorten this claim to max 40 characters, preserving the original wording:\n\n${claimsText.substring(0, 500)}`
+          }
+        ],
+        max_completion_tokens: 15,
+        temperature: 0.3
+      });
+      let rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";
+      // Enforce 40 character limit
+      if (rawTitle.length > 40) {
+        const words = rawTitle.split(" ");
+        rawTitle = "";
+        for (const word of words) {
+          if ((rawTitle + " " + word).trim().length <= 37) {
+            rawTitle = (rawTitle + " " + word).trim();
+          } else {
+            break;
+          }
+        }
+        if (rawTitle.length === 0) {
+          rawTitle = words[0]?.slice(0, 37) || "Analysis";
+        }
+        rawTitle += "...";
+      }
+      return rawTitle || processedClaims[0]?.text || "Analysis";
+    } catch (error) {
+      console.warn("[Pipeline] Failed to generate title, using fallback", error);
+      // Fallback: use first claim text
+      let fallbackText = processedClaims[0]?.text || "Analysis";
+      if (fallbackText.length > 40) {
+        fallbackText = fallbackText.slice(0, 37) + "...";
+      }
+      return fallbackText;
+    }
+  };
+  
+  // Run epistemic pipeline, background context, and title generation in parallel
+  const [epistemicOutput, bgContextResult, titleResult] = await Promise.all([
+    // Epistemic pipeline - reduced maxEvidencePerClaim from 5 to 3 for speed
     runEpistemicPipeline({
       analysisId: payload.analysisId,
       claims: processedClaims.map((c) => ({ id: c.id, text: c.text })),
       topic: classification.topic,
-      maxEvidencePerClaim: 5,
-      evidenceRetrieverTimeoutMs: isFastTypedClaim ? 2_500 : undefined
+      maxEvidencePerClaim: 3,
+      evidenceRetrieverTimeoutMs: isFastTypedClaim ? 2_500 : 2_500
     }).catch((error) => {
       console.error("[Pipeline] Epistemic pipeline failed, falling back to legacy reasoning:", error);
       return null;
     }),
-    // Background context generation via Perplexity
+    // Background context generation via Perplexity (skip for simple claims)
     // Note: Must apply ?? before .catch() to avoid calling .catch() on undefined when perplexity is null
-    (perplexity?.generateBackgroundContext(mainClaimText, classification.topic) ?? Promise.resolve("")).catch((error) => {
-      console.warn("[Pipeline] Background context generation failed:", error);
-      return "";
-    })
+    shouldGenerateBackground
+      ? (perplexity?.generateBackgroundContext(mainClaimText, classification.topic) ?? Promise.resolve("")).catch((error) => {
+          console.warn("[Pipeline] Background context generation failed:", error);
+          return "";
+        })
+      : Promise.resolve(""),
+    // Title generation (skip for simple claims, use direct text)
+    shouldGenerateTitle ? generateTitle() : Promise.resolve(processedClaims[0]?.text || "Analysis")
   ]);
   
   if (epistemicOutput) {
@@ -578,6 +637,11 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   if (bgContextResult && bgContextResult.length > 0) {
     backgroundContext = bgContextResult;
     console.log(`[Pipeline] Background context generated: ${backgroundContext.length} characters`);
+  }
+  
+  if (titleResult) {
+    titleGenerated = titleResult;
+    console.log(`[Pipeline] Title generated in parallel: "${titleGenerated}"`);
   }
   
   timings.epistemic = Date.now() - epistemicStart;
@@ -648,15 +712,23 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   const rankedSources = rankEvidenceByTrust(sources);
   const claims = attachSourcesToClaims(processedClaims, rankedSources, claimEvidenceMap);
   
+  // OPTIMIZATION: Skip legacy reasoner when epistemic pipeline succeeds (saves 1-3s)
+  // Set ENABLE_LEGACY_REASONER=true to force legacy reasoner for backward compatibility
+  const enableLegacyReasoner = process.env.ENABLE_LEGACY_REASONER === "true" || !epistemicResult;
+  
   // Legacy reasoning (kept for backward compatibility, will be phased out)
   const reasonStart = Date.now();
   const reasonerHints = epistemicResult
     ? { score: epistemicResult.finalScore, verdict: epistemicToLegacyVerdict(epistemicResult.scoreBand) }
     : undefined;
-  // Even when the epistemic scorer is used, we still run the reasoner to generate claim-specific UX copy.
-  // The reasoner is guided by hints so its verdict/score stays aligned with the epistemic outcome.
-  let reasoned = hasRealSources ? await reasonVerdict(claims, rankedSources, imageDerivedClaimIds, reasonerHints) : null;
+  let reasoned = enableLegacyReasoner && hasRealSources 
+    ? await reasonVerdict(claims, rankedSources, imageDerivedClaimIds, reasonerHints) 
+    : null;
   timings.reasoning = Date.now() - reasonStart;
+  
+  if (!enableLegacyReasoner && epistemicResult) {
+    console.log(`[Pipeline] Skipped legacy reasoner (epistemic pipeline succeeded) - saved ${Date.now() - reasonStart}ms`);
+  }
   
   // Validate reasoned verdict immediately after receiving it
   if (reasoned) {
@@ -925,7 +997,6 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   const complexity = calculateComplexity();
 
-  // Generate title from claims (3-10 words)
   // Helper function to ensure title meets 3-10 word constraint
   const ensureTitleConstraint = (text: string): string => {
     const words = text.split(" ").filter(w => w.length > 0);
@@ -980,51 +1051,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     return words.join(" ");
   };
 
-  let title: string;
-  try {
-    const claimsText = claims.map(c => c.text).join(" ");
-    const titleResponse = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      messages: [
-        {
-          role: "system",
-          content: "You are a text shortening assistant. Your task is to shorten the given claim text to fit within 40 characters while preserving the original meaning and wording as much as possible. Do not create a new title or add stylization. Simply truncate or compress the claim naturally. Return only the shortened text, no quotes or extra text."
-        },
-        {
-          role: "user",
-          content: `Shorten this claim to max 40 characters, preserving the original wording:\n\n${claimsText.substring(0, 500)}`
-        }
-      ],
-      max_completion_tokens: 15,
-      temperature: 0.3
-    });
-    let rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";
-    // Enforce 40 character limit
-    if (rawTitle.length > 40) {
-      const words = rawTitle.split(" ");
-      rawTitle = "";
-      for (const word of words) {
-        if ((rawTitle + " " + word).trim().length <= 37) {
-          rawTitle = (rawTitle + " " + word).trim();
-        } else {
-          break;
-        }
-      }
-      if (rawTitle.length === 0) {
-        rawTitle = words[0]?.slice(0, 37) || "Analysis";
-      }
-      rawTitle += "...";
-    }
-    title = ensureTitleConstraint(rawTitle || claims[0]?.text || "Analysis");
-  } catch (error) {
-    console.warn("[Pipeline] Failed to generate title, using fallback", error);
-    // Fallback: use first claim text, ensuring 3-10 words and max 40 chars
-    let fallbackText = claims[0]?.text || "Analysis";
-    if (fallbackText.length > 40) {
-      fallbackText = fallbackText.slice(0, 37) + "...";
-    }
-    title = ensureTitleConstraint(fallbackText);
-  }
+  // Use title generated in parallel (already completed)
+  const title = titleGenerated ? ensureTitleConstraint(titleGenerated) : ensureTitleConstraint(claims[0]?.text || "Analysis");
 
   return {
     topic: classification.topic,

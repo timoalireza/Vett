@@ -29,6 +29,13 @@ export interface EpistemicConfidenceInterval {
   high: number;
 }
 
+export type KeyReasonSentiment = "POSITIVE" | "NEGATIVE" | "NEUTRAL";
+
+export interface KeyReason {
+  text: string;
+  sentiment: KeyReasonSentiment;
+}
+
 export interface EpistemicResult {
   version: string;
   finalScore: number;
@@ -38,7 +45,7 @@ export interface EpistemicResult {
   evidenceSummary: string;
   confidenceInterval?: EpistemicConfidenceInterval | null;
   explanationText: string;
-  keyReasons: string[];
+  keyReasons: KeyReason[];
   pipelineVersion: string;
   processedAt: string;
   totalProcessingTimeMs: number;
@@ -130,7 +137,10 @@ const ANALYSIS_QUERY = `
           high
         }
         explanationText
-        keyReasons
+        keyReasons {
+          text
+          sentiment
+        }
         pipelineVersion
         processedAt
         totalProcessingTimeMs
@@ -215,7 +225,10 @@ const ANALYSES_QUERY = `
             }
             evidenceSummary
             explanationText
-            keyReasons
+            keyReasons {
+              text
+              sentiment
+            }
           }
         }
         cursor

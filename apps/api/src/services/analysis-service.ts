@@ -20,6 +20,70 @@ import { trackAnalysisSubmitted } from "../plugins/metrics.js";
 
 type SubmitAnalysisInput = AnalysisJobInput;
 
+function canonicalizeUrlForDedup(raw: string): string {
+  const input = (raw ?? "").trim();
+  if (!input) return input;
+  try {
+    const u = new URL(input);
+    u.hash = "";
+    u.hostname = u.hostname.toLowerCase();
+    if (u.hostname.startsWith("www.")) u.hostname = u.hostname.slice(4);
+
+    // Drop common tracking params (keep everything else).
+    const dropKeys = new Set([
+      "fbclid",
+      "gclid",
+      "mc_cid",
+      "mc_eid",
+      "ref",
+      "ref_src",
+      "igsh",
+      "igshid",
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content"
+    ]);
+    for (const key of Array.from(u.searchParams.keys())) {
+      const k = key.toLowerCase();
+      if (k.startsWith("utm_") || dropKeys.has(k)) {
+        u.searchParams.delete(key);
+      }
+    }
+
+    // Normalize trailing slashes (except root).
+    if (u.pathname.length > 1) {
+      u.pathname = u.pathname.replace(/\/+$/, "");
+    }
+
+    return u.toString();
+  } catch {
+    return input;
+  }
+}
+
+function dedupeAttachments(
+  attachments: AnalysisAttachmentInput[]
+): { attachments: AnalysisAttachmentInput[]; dropped: number } {
+  const seen = new Set<string>();
+  const out: AnalysisAttachmentInput[] = [];
+  let dropped = 0;
+
+  for (const att of attachments) {
+    const url = canonicalizeUrlForDedup(att.url);
+    const key = `${att.kind}:${url}`;
+    if (seen.has(key)) {
+      dropped += 1;
+      continue;
+    }
+    seen.add(key);
+    out.push({ ...att, url });
+  }
+
+  return { attachments: out, dropped };
+}
+
 export interface AnalysisSummary {
   id: string;
   userId: string | null;
@@ -196,6 +260,17 @@ class AnalysisService {
       })
     });
     console.log("[AnalysisService] ✅ Input parsed successfully");
+
+    // De-dupe attachments to prevent duplicate scraping/ingestion work downstream.
+    const { attachments: dedupedAttachments, dropped } = dedupeAttachments(normalizedInput.attachments);
+    if (dropped > 0) {
+      console.warn("[AnalysisService] Dropped duplicate attachments", {
+        dropped,
+        before: normalizedInput.attachments.length,
+        after: dedupedAttachments.length
+      });
+    }
+    normalizedInput.attachments = dedupedAttachments;
 
     let id: string;
     try {
