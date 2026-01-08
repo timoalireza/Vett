@@ -603,9 +603,22 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   };
   
   // Helper to enforce 40-char limit on direct title (for simple claims)
+  // Respects word boundaries to avoid cutting words in half
   const enforceCharLimit = (text: string): string => {
     if (text.length <= 40) return text;
-    return text.slice(0, 37) + "...";
+    
+    // Find the last complete word that fits within 37 chars (leaving room for "...")
+    let truncated = text.slice(0, 37);
+    const lastSpaceIndex = truncated.lastIndexOf(" ");
+    
+    // If we found a space, truncate at the last complete word
+    if (lastSpaceIndex > 0 && lastSpaceIndex >= 20) {
+      truncated = truncated.slice(0, lastSpaceIndex);
+    }
+    // Otherwise, if no space found or it's too early, keep the char-based truncation
+    // (better to have a partial word than a 2-word title)
+    
+    return truncated.trim() + "...";
   };
   
   // Run epistemic pipeline, background context, and title generation in parallel
