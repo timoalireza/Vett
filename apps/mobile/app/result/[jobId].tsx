@@ -485,14 +485,16 @@ export default function ResultScreen() {
   // Ring size when scaled: 420 * 0.5 = 210px, usable area ~180px width
   const calculateTitleFontSize = (text: string): number => {
     const length = text.length;
-    // Short text (< 30 chars): use larger font
+    // Short text (< 30 chars): use larger font for better impact
     if (length < 30) return 48;
     // Medium text (30-50 chars): medium font
     if (length < 50) return 40;
     // Long text (50-80 chars): smaller font
     if (length < 80) return 32;
-    // Very long text (80+ chars): smallest font
-    return 26;
+    // Very long text (80-120 chars): extra small font
+    if (length < 120) return 24;
+    // Extremely long text (120+ chars): minimum readable size
+    return 18;
   };
   
   const claimMaxFontSize = calculateTitleFontSize(displayClaimText);
@@ -628,10 +630,11 @@ export default function ResultScreen() {
                       textShadowOffset: { width: 0, height: 2 },
                       textShadowRadius: 6,
                     }}
-                    // Auto-scale to ensure the claim title is never cut off inside the orb.
+                    // Auto-scale to ensure the claim title is NEVER cut off inside the orb.
+                    // Use aggressive scaling to fit all text (no clipping/truncation)
                     adjustsFontSizeToFit
-                    minimumFontScale={0.35}
-                    numberOfLines={5}
+                    minimumFontScale={0.05}
+                    numberOfLines={10}
                     allowFontScaling={false}
                     ellipsizeMode="clip"
                   >

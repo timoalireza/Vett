@@ -71,7 +71,8 @@ function dedupeAttachments(
   let dropped = 0;
 
   for (const att of attachments) {
-    const url = canonicalizeUrlForDedup(att.url);
+    // Only canonicalize links; images should only be trimmed to avoid breaking API URLs
+    const url = att.kind === "link" ? canonicalizeUrlForDedup(att.url) : (att.url ?? "").trim();
     const key = `${att.kind}:${url}`;
     // Validate URL is non-empty before adding
     if (!url) {
