@@ -590,7 +590,15 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
         }
         rawTitle += "...";
       }
-      return rawTitle || processedClaims[0]?.text || "Analysis";
+      // If rawTitle is empty, use fallback with proper 40-char limit enforcement
+      if (!rawTitle) {
+        const fallback = processedClaims[0]?.text || "Analysis";
+        if (fallback.length > 40) {
+          return fallback.slice(0, 37) + "...";
+        }
+        return fallback;
+      }
+      return rawTitle;
     } catch (error) {
       console.warn("[Pipeline] Failed to generate title, using fallback", error);
       // Fallback: use first claim text, enforce 40-char limit
@@ -1046,8 +1054,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     // Ensure minimum 3 words (but respect 40-char limit)
     if (words.length < 3) {
       // If text is already at/near 40 chars but under 3 words, don't pad (would exceed limit)
+      // Enforce 40-char limit before returning
       if (text.length >= 38) {
-        return text; // Already at limit, accept fewer than 3 words
+        return text.length <= 40 ? text : text.slice(0, 37) + "..."; // Enforce limit even when not padding
       }
       
       // Try to get additional words from first claim
