@@ -482,19 +482,21 @@ export default function ResultScreen() {
   
   // IMPORTANT: Never truncate UI text. We auto-scale the font so the full title always fits.
   // Dynamic font sizing based on text length to improve readability
-  // Ring size when scaled: 420 * 0.5 = 210px, usable area ~180px width
+  // Ring is 420px initially, scales to 210px via lensScale transform
+  // Text is INSIDE the scaled container, so maxWidth should be relative to UNSCALED size (420px)
+  // After scaling: 420 * 0.85 * 0.5 = 178.5px effective width (good fit for 210px ring)
   const calculateTitleFontSize = (text: string): number => {
     const length = text.length;
     // Short text (< 30 chars): use larger font for better impact
-    if (length < 30) return 48;
+    if (length < 30) return 52;
     // Medium text (30-50 chars): medium font
-    if (length < 50) return 40;
+    if (length < 50) return 44;
     // Long text (50-80 chars): smaller font
-    if (length < 80) return 32;
+    if (length < 80) return 36;
     // Very long text (80-120 chars): extra small font
-    if (length < 120) return 24;
+    if (length < 120) return 28;
     // Extremely long text (120+ chars): minimum readable size
-    return 18;
+    return 22;
   };
   
   const claimMaxFontSize = calculateTitleFontSize(displayClaimText);
@@ -624,8 +626,9 @@ export default function ResultScreen() {
                       fontSize: claimMaxFontSize,
                       color: '#FFFFFF',
                       textAlign: 'center',
-                      // Ring scales to 210px (420 * 0.5), use ~80% of that for text width
-                      maxWidth: 210 * 0.8,
+                      // Text is inside scaled parent (420 → 210), so maxWidth is relative to UNSCALED size
+                      // 420 * 0.85 = 357px unscaled → 178.5px after 0.5 scale (fits well in 210px ring)
+                      maxWidth: 420 * 0.85,
                       textShadowColor: 'rgba(0, 0, 0, 0.8)',
                       textShadowOffset: { width: 0, height: 2 },
                       textShadowRadius: 6,
