@@ -469,23 +469,30 @@ async function ensureBackgroundContextColumn(): Promise<void> {
     ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
   });
 
-  let querySucceeded = false;
+  let queryError: any = null;
   try {
     await pool.query('ALTER TABLE "analyses" ADD COLUMN IF NOT EXISTS "background_context" TEXT;');
     console.log('[Startup] ✅ Ensured "analyses.background_context" exists');
-    querySucceeded = true;
+  } catch (error) {
+    // Capture the query error to ensure it's not lost during cleanup
+    queryError = error;
   } finally {
+    // Always attempt cleanup, but handle errors appropriately
     try {
       await pool.end();
     } catch (cleanupError) {
       console.warn('[Startup] Warning: Failed to close database pool:', cleanupError);
-      // Only suppress cleanup errors if there was already an error in the try block
-      // If the query succeeded, propagate cleanup errors to avoid hiding resource leaks
-      if (querySucceeded) {
+      // If there was no query error, propagate the cleanup error (resource leak)
+      // If there was a query error, suppress cleanup error to preserve the original error
+      if (!queryError) {
         throw cleanupError;
       }
-      // If query failed, don't throw - preserve the original error from the try block
     }
+  }
+
+  // Re-throw the original query error if one occurred
+  if (queryError) {
+    throw queryError;
   }
 }
 
