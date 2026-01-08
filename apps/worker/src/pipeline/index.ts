@@ -616,7 +616,8 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       claims: processedClaims.map((c) => ({ id: c.id, text: c.text })),
       topic: classification.topic,
       maxEvidencePerClaim: 3,
-      evidenceRetrieverTimeoutMs: isFastTypedClaim ? 2_500 : 2_500
+      // Fast claims get 2000ms, regular claims use default 2500ms
+      evidenceRetrieverTimeoutMs: isFastTypedClaim ? 2_000 : undefined
     }).catch((error) => {
       console.error("[Pipeline] Epistemic pipeline failed, falling back to legacy reasoning:", error);
       return null;
