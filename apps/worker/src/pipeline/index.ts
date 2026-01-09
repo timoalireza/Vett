@@ -958,35 +958,42 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ];
     
     // Internal diagnostic patterns from generateEvidenceSummary (not user-facing)
-    // These must match the EXACT format produced by generateEvidenceSummary() to avoid
-    // false positives on legitimate context (e.g., "The WHO draws from peer-reviewed sources")
-    // Format: "X supporting source(s) found.", "Mixed evidence: X supporting, Y contradicting.", etc.
-    const diagnosticPatterns = [
-      // Exact formats from generateEvidenceSummary():
-      /^\d+\s+supporting\s+sources?\s+found\.?$/i,           // "3 supporting sources found."
-      /^\d+\s+contradicting\s+sources?\s+found\.?$/i,        // "2 contradicting sources found."
-      /^mixed evidence:\s*\d+\s+supporting,\s*\d+\s+contradicting\.?/i,  // "Mixed evidence: 2 supporting, 1 contradicting."
-      /^\d+\s+sources?\s+reviewed\.?$/i,                     // "5 sources reviewed."
-      /^no sources available/i,                              // "No sources available for verification."
-      /^evidence reviewed\.?$/i,                             // "Evidence reviewed."
-      /^includes\s+\d+\s+peer-reviewed\s+sources?\.?/i,      // "Includes 2 peer-reviewed sources."
-      /^evidence from \d+ independent sources\.?$/i,         // "Evidence from 5 independent sources."
-      /^evidence concentrated from\s+\S+\.?$/i,              // "Evidence concentrated from example.com."
+    // generateEvidenceSummary() produces multi-part output like:
+    // "3 supporting sources found. Includes 2 peer-reviewed sources. Evidence from 5 independent sources."
+    // We check if text STARTS with a diagnostic first sentence (using ^) but allow more text after (no $)
+    // Secondary patterns check for diagnostic phrases anywhere in the text
+    const diagnosticStartPatterns = [
+      // First sentence patterns (text starts with these):
+      /^\d+\s+supporting\s+sources?\s+found\b/i,             // "3 supporting sources found..."
+      /^\d+\s+contradicting\s+sources?\s+found\b/i,          // "2 contradicting sources found..."
+      /^mixed evidence:\s*\d+\s+supporting/i,                // "Mixed evidence: 2 supporting..."
+      /^\d+\s+sources?\s+reviewed\b/i,                       // "5 sources reviewed..."
+      /^no sources available/i,                              // "No sources available..."
+      /^evidence reviewed\b/i,                               // "Evidence reviewed..."
     ];
     
-    // Also check for post-normalization variants (after deAttribution replaces "sources" → "available information")
+    // Diagnostic phrases that can appear anywhere (secondary sentences in multi-part output)
+    // These use \b word boundaries instead of ^ or $ to avoid false positives
+    const diagnosticAnywherePatterns = [
+      /\bincludes\s+\d+\s+peer-reviewed\s+sources?\b/i,      // "...Includes 2 peer-reviewed sources..."
+      /\bevidence from \d+ independent sources\b/i,          // "...Evidence from 5 independent sources..."
+      /\bevidence concentrated from\s+\S+\b/i,               // "...Evidence concentrated from example.com..."
+    ];
+    
+    // Post-normalization variants (after deAttribution replaces "sources" → "available information")
     const normalizedDiagnosticPatterns = [
-      /^\d+\s+supporting\s+available information\s+found\.?$/i,
-      /^\d+\s+contradicting\s+available information\s+found\.?$/i,
+      /^\d+\s+supporting\s+available information\s+found\b/i,
+      /^\d+\s+contradicting\s+available information\s+found\b/i,
       /^mixed available information:/i,
-      /^\d+\s+available information\s+reviewed\.?$/i,
-      /^includes\s+\d+\s+peer-reviewed\s+available information\.?/i,
-      /^available information from \d+ independent confirmation\.?$/i,
-      /^available information concentrated from\s+\S+\.?$/i,
+      /^\d+\s+available information\s+reviewed\b/i,
+      /\bincludes\s+\d+\s+peer-reviewed\s+available information\b/i,
+      /\bavailable information from \d+ independent confirmation\b/i,
+      /\bavailable information concentrated from\s+\S+\b/i,
     ];
     
     return metaPatterns.some(pattern => pattern.test(text)) || 
-           diagnosticPatterns.some(pattern => pattern.test(text)) ||
+           diagnosticStartPatterns.some(pattern => pattern.test(text)) ||
+           diagnosticAnywherePatterns.some(pattern => pattern.test(text)) ||
            normalizedDiagnosticPatterns.some(pattern => pattern.test(text));
   };
 
