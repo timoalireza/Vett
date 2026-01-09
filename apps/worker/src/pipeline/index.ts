@@ -967,10 +967,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     console.log("[Pipeline] Using Perplexity backgroundContext as Context card");
   } else if (isMetaDescriptive(adjustedVerdictData.recommendation)) {
     // Reasoner produced meta-descriptive output - provide concrete fallback
-    const mainClaim = processedClaims[0]?.text || "";
-    const fallbackContext = mainClaim.length > 50 
-      ? `This analysis covers a claim about ${classification.topic.toLowerCase()}.`
-      : `Limited background information is available for this specific subject.`;
+    // Extract a specific subject description from topic, never use meta-language
+    const topicLower = classification.topic.toLowerCase();
+    const fallbackContext = `Limited public information exists about ${topicLower}.`;
     adjustedVerdictData.recommendation = fallbackContext;
     console.warn("[Pipeline] Detected meta-descriptive Context, using fallback");
   }
