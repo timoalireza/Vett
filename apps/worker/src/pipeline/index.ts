@@ -938,12 +938,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     }
   }
 
-  // Final UX copy normalization (applies to epistemic + legacy + guardrails).
-  adjustedVerdictData.summary = normalizeSummary(adjustedVerdictData.verdict, adjustedVerdictData.summary);
-  adjustedVerdictData.recommendation = normalizeContext(adjustedVerdictData.recommendation);
-
   // Context card quality check: Prefer backgroundContext (Perplexity) over reasoner recommendation
   // when available and not generic/meta-descriptive or internal diagnostic output
+  // NOTE: Must run BEFORE normalizeContext() because deAttribution() transforms "sources" → "available information"
   const isNotUserFacingContext = (text: string): boolean => {
     // Meta-descriptive patterns (forbidden per verdict.ts guidelines)
     const metaPatterns = [
@@ -977,19 +974,26 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
            diagnosticPatterns.some(pattern => pattern.test(text));
   };
 
+  // Check quality BEFORE normalization transforms the text
+  const rawRecommendation = adjustedVerdictData.recommendation;
+  
   // Use backgroundContext as recommendation if it's better quality
   if (backgroundContext && backgroundContext.length > 30 && !isNotUserFacingContext(backgroundContext)) {
     // backgroundContext from Perplexity is available and good - use it
-    adjustedVerdictData.recommendation = normalizeContext(backgroundContext);
+    adjustedVerdictData.recommendation = backgroundContext;
     console.log("[Pipeline] Using Perplexity backgroundContext as Context card");
-  } else if (isNotUserFacingContext(adjustedVerdictData.recommendation)) {
+  } else if (isNotUserFacingContext(rawRecommendation)) {
     // Reasoner produced meta-descriptive or diagnostic output - provide concrete fallback
     // Extract a specific subject description from topic, never use meta-language
     const topicLower = classification.topic.toLowerCase();
-    const fallbackContext = `Limited public information exists about ${topicLower}.`;
-    adjustedVerdictData.recommendation = fallbackContext;
+    adjustedVerdictData.recommendation = `Limited public information exists about ${topicLower}.`;
     console.warn("[Pipeline] Detected non-user-facing Context, using fallback");
   }
+
+  // Final UX copy normalization (applies to epistemic + legacy + guardrails).
+  // NOTE: normalizeContext() must run AFTER quality check since deAttribution() transforms diagnostic patterns
+  adjustedVerdictData.summary = normalizeSummary(adjustedVerdictData.verdict, adjustedVerdictData.summary);
+  adjustedVerdictData.recommendation = normalizeContext(adjustedVerdictData.recommendation);
 
   // Image generation removed - no longer using DALL-E 3 or Unsplash
 
