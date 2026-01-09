@@ -943,8 +943,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   adjustedVerdictData.recommendation = normalizeContext(adjustedVerdictData.recommendation);
 
   // Context card quality check: Prefer backgroundContext (Perplexity) over reasoner recommendation
-  // when available and not generic/meta-descriptive
-  const isMetaDescriptive = (text: string): boolean => {
+  // when available and not generic/meta-descriptive or internal diagnostic output
+  const isNotUserFacingContext = (text: string): boolean => {
+    // Meta-descriptive patterns (forbidden per verdict.ts guidelines)
     const metaPatterns = [
       /^this claim/i,
       /^the claim/i,
@@ -957,21 +958,37 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       /\bspecific context and scope\b/i,
       /\bthis statement involves?\b/i,
     ];
-    return metaPatterns.some(pattern => pattern.test(text));
+    
+    // Internal diagnostic patterns from generateEvidenceSummary (not user-facing)
+    const diagnosticPatterns = [
+      /^\d+\s+supporting\s+sources?\s+found/i,
+      /^\d+\s+contradicting\s+sources?\s+found/i,
+      /^mixed evidence:/i,
+      /^\d+\s+sources?\s+reviewed/i,
+      /^no sources available/i,
+      /^evidence reviewed/i,
+      /\bsupporting,\s*\d+\s+contradicting\b/i,
+      /\bpeer-reviewed sources?\b/i,
+      /\bevidence from \d+ independent sources\b/i,
+      /\bevidence concentrated from\b/i,
+    ];
+    
+    return metaPatterns.some(pattern => pattern.test(text)) || 
+           diagnosticPatterns.some(pattern => pattern.test(text));
   };
 
   // Use backgroundContext as recommendation if it's better quality
-  if (backgroundContext && backgroundContext.length > 30 && !isMetaDescriptive(backgroundContext)) {
+  if (backgroundContext && backgroundContext.length > 30 && !isNotUserFacingContext(backgroundContext)) {
     // backgroundContext from Perplexity is available and good - use it
     adjustedVerdictData.recommendation = normalizeContext(backgroundContext);
     console.log("[Pipeline] Using Perplexity backgroundContext as Context card");
-  } else if (isMetaDescriptive(adjustedVerdictData.recommendation)) {
-    // Reasoner produced meta-descriptive output - provide concrete fallback
+  } else if (isNotUserFacingContext(adjustedVerdictData.recommendation)) {
+    // Reasoner produced meta-descriptive or diagnostic output - provide concrete fallback
     // Extract a specific subject description from topic, never use meta-language
     const topicLower = classification.topic.toLowerCase();
     const fallbackContext = `Limited public information exists about ${topicLower}.`;
     adjustedVerdictData.recommendation = fallbackContext;
-    console.warn("[Pipeline] Detected meta-descriptive Context, using fallback");
+    console.warn("[Pipeline] Detected non-user-facing Context, using fallback");
   }
 
   // Image generation removed - no longer using DALL-E 3 or Unsplash
