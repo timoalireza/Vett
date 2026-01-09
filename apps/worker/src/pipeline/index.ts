@@ -943,6 +943,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   // NOTE: Must run BEFORE normalizeContext() because deAttribution() transforms "sources" → "available information"
   const isNotUserFacingContext = (text: string): boolean => {
     // Meta-descriptive patterns (forbidden per verdict.ts guidelines)
+    // These also check for post-normalization variants (after deAttribution transforms text)
     const metaPatterns = [
       /^this claim/i,
       /^the claim/i,
@@ -957,21 +958,36 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     ];
     
     // Internal diagnostic patterns from generateEvidenceSummary (not user-facing)
+    // These must match the EXACT format produced by generateEvidenceSummary() to avoid
+    // false positives on legitimate context (e.g., "The WHO draws from peer-reviewed sources")
+    // Format: "X supporting source(s) found.", "Mixed evidence: X supporting, Y contradicting.", etc.
     const diagnosticPatterns = [
-      /^\d+\s+supporting\s+sources?\s+found/i,
-      /^\d+\s+contradicting\s+sources?\s+found/i,
-      /^mixed evidence:/i,
-      /^\d+\s+sources?\s+reviewed/i,
-      /^no sources available/i,
-      /^evidence reviewed/i,
-      /\bsupporting,\s*\d+\s+contradicting\b/i,
-      /\bpeer-reviewed sources?\b/i,
-      /\bevidence from \d+ independent sources\b/i,
-      /\bevidence concentrated from\b/i,
+      // Exact formats from generateEvidenceSummary():
+      /^\d+\s+supporting\s+sources?\s+found\.?$/i,           // "3 supporting sources found."
+      /^\d+\s+contradicting\s+sources?\s+found\.?$/i,        // "2 contradicting sources found."
+      /^mixed evidence:\s*\d+\s+supporting,\s*\d+\s+contradicting\.?/i,  // "Mixed evidence: 2 supporting, 1 contradicting."
+      /^\d+\s+sources?\s+reviewed\.?$/i,                     // "5 sources reviewed."
+      /^no sources available/i,                              // "No sources available for verification."
+      /^evidence reviewed\.?$/i,                             // "Evidence reviewed."
+      /^includes\s+\d+\s+peer-reviewed\s+sources?\.?/i,      // "Includes 2 peer-reviewed sources."
+      /^evidence from \d+ independent sources\.?$/i,         // "Evidence from 5 independent sources."
+      /^evidence concentrated from\s+\S+\.?$/i,              // "Evidence concentrated from example.com."
+    ];
+    
+    // Also check for post-normalization variants (after deAttribution replaces "sources" → "available information")
+    const normalizedDiagnosticPatterns = [
+      /^\d+\s+supporting\s+available information\s+found\.?$/i,
+      /^\d+\s+contradicting\s+available information\s+found\.?$/i,
+      /^mixed available information:/i,
+      /^\d+\s+available information\s+reviewed\.?$/i,
+      /^includes\s+\d+\s+peer-reviewed\s+available information\.?/i,
+      /^available information from \d+ independent confirmation\.?$/i,
+      /^available information concentrated from\s+\S+\.?$/i,
     ];
     
     return metaPatterns.some(pattern => pattern.test(text)) || 
-           diagnosticPatterns.some(pattern => pattern.test(text));
+           diagnosticPatterns.some(pattern => pattern.test(text)) ||
+           normalizedDiagnosticPatterns.some(pattern => pattern.test(text));
   };
 
   // Check quality BEFORE normalization transforms the text
