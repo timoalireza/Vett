@@ -133,14 +133,42 @@ SUMMARY (What's the answer?) RULES:
   * Scores 30-40: Acknowledge lack of verification ("alleged", "claimed without independent confirmation", "rests on assertions")
   * Scores <30: State contradiction or falseness clearly
 
-CONTEXT (How to understand this claim) RULES:
-- 3–5 sentences maximum.
-- MUST be purely factual: answer WHO made the claim, WHAT was claimed, WHEN, WHERE.
-- Provide neutral background needed to interpret the claim correctly (definitions, common confusions).
-- Do NOT evaluate evidence, Do NOT use judgmental language ("alleged", "unsubstantiated").
-- Do NOT analyze or weigh evidence - save that for the Summary.
-- Do NOT restate the Summary or repeat the verdict label.
-- Think of this as a neutral encyclopedia entry setting up the claim, not evaluating it.
+CONTEXT (Background information) RULES - CRITICAL:
+The Context field must provide REAL-WORLD BACKGROUND INFORMATION that helps the reader understand what the claim is about. It must NEVER describe or reference the claim itself, the analysis, or the act of verification.
+
+HARD REQUIREMENTS:
+- 2–4 sentences maximum.
+- Explain relevant entities, events, timelines, policies, technologies, or mechanisms mentioned in the claim.
+- If the claim references a person, organization, law, study, technology, or event: briefly explain what it is and why it matters.
+- Write as if answering: "What background does someone need to understand what this claim is talking about?"
+- Context must be CLAIM-SPECIFIC. If you swapped out this claim, the context should no longer apply.
+
+ABSOLUTELY FORBIDDEN (violation = generation failure):
+- "This claim makes..."
+- "This claim states..."
+- "This claim asserts..."
+- "Understanding this claim..."
+- "The claim references..."
+- "This statement involves..."
+- Any sentence starting with "This claim" or "The claim"
+- Any meta-language about claims, assertions, statements, or the act of analysis
+- Any self-referential language about evaluation, verification, or scope
+- Restating the verdict, score, or conclusions
+- Implying truth, falsehood, likelihood, or uncertainty
+- Generic phrases that could apply to any claim
+
+GOOD CONTEXT EXAMPLES:
+- "The WHO is a United Nations agency responsible for global public health guidance. During COVID-19, it issued recommendations on vaccines and containment that were adopted differently by national governments."
+- "Jake Paul is an American social media personality and professional boxer who rose to fame on YouTube. He has been involved in several high-profile boxing matches against MMA fighters and other celebrities."
+- "mRNA vaccines work by instructing cells to produce a protein that triggers an immune response. This technology was used in the Pfizer-BioNTech and Moderna COVID-19 vaccines."
+
+BAD CONTEXT (NEVER PRODUCE):
+- "This claim makes a factual assertion about a specific topic."
+- "Understanding this claim requires considering its specific context and scope."
+- "This statement refers to events involving a public figure."
+- "The claim involves allegations that require careful evaluation."
+
+If you cannot generate claim-specific background (e.g., the topic is too obscure), write a short concrete statement about WHY context is limited: "Limited public information exists about [specific subject]." Never fall back to meta-descriptions.
 
 EVIDENCE SUPPORT RULES:
 - The \`evidenceSupport\` field must cite evidence using the provided \`key\` values (strings).
@@ -170,7 +198,7 @@ const JSON_SCHEMA = {
       type: "string", 
       maxLength: 500,
       description:
-        "CONTEXT (How to understand this claim) - 3–5 sentences max. MUST be purely factual, answering: WHO made the claim? WHAT was claimed? WHEN? WHERE? Provide neutral background/definitions needed to interpret the claim correctly. Do NOT evaluate evidence quality. Do NOT use judgmental/evaluative language (\"alleged\", \"unsubstantiated\", \"disputed\", \"questionable\"). Do NOT analyze or weigh evidence - that belongs in Summary. Think of this as a neutral encyclopedia entry setting up the claim factually, not judging it. Do NOT restate the Summary or repeat the verdict label. Do NOT use bullets, numbers, emojis, percentages, citations, links, or attribution language (\"sources say\", \"reports\", \"experts\", \"according to\"). Do NOT use the words \"true\" or \"false\"."
+        "CONTEXT (Background information) - 2–4 sentences max. Provide REAL-WORLD BACKGROUND about entities, events, policies, technologies, or mechanisms in the claim. NEVER start with 'This claim' or use meta-language about claims/assertions/analysis. Write as if explaining the subject matter to someone unfamiliar with it. Examples: 'The WHO is a UN agency for global health...' or 'mRNA vaccines work by instructing cells to produce proteins...' FORBIDDEN: 'This claim makes a factual assertion...', 'Understanding this claim requires...', any self-referential language. If the topic is obscure, state why context is limited—never use generic meta-descriptions."
     },
     rationale: { type: "string", maxLength: 200 },
     evidenceSupport: {

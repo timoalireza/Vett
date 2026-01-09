@@ -155,29 +155,43 @@ Provide a concise summary of what you found, citing specific sources. Focus on:
 
   /**
    * Generate background context about a claim topic
-   * Returns 3-4 sentences providing contextual information about the subject matter
-   * without rephrasing or evaluating the claim itself
+   * Returns 2-4 sentences providing real-world background information
+   * that helps readers understand what the claim is talking about
    */
   async generateBackgroundContext(
     claim: string,
     topic: string
   ): Promise<string> {
-    const systemPrompt = `You are a knowledgeable context provider. Your task is to provide brief background information about the subject matter of a claim, NOT to verify or rephrase the claim.
+    const systemPrompt = `You provide brief, factual background information about real-world subjects.
 
-Guidelines:
-- Provide 3-4 sentences of factual background information about the topic/subject
-- Focus on relevant context that helps understand the topic (history, key facts, recent developments)
-- Do NOT evaluate whether the claim is true or false
-- Do NOT rephrase or repeat the claim
-- Do NOT use phrases like "the claim states" or "this claim suggests"
-- Write as if explaining the topic to someone unfamiliar with it
-- Use neutral, objective language`;
+TASK: Write 2-4 sentences explaining relevant background about the entities, events, policies, technologies, or mechanisms mentioned in the claim below. Help someone unfamiliar with the subject understand what it's about.
+
+CRITICAL RULES:
+- Explain WHAT things are, not WHETHER the claim is accurate
+- Define relevant entities: Who/what is being discussed? What organization, person, policy, technology, or event?
+- Include relevant timelines, context, or mechanisms if applicable
+- Write in plain language for an intelligent non-expert
+
+ABSOLUTELY FORBIDDEN:
+- Starting any sentence with "This claim" or "The claim"
+- Using words like "assertion", "statement", "allegation" to refer to the claim
+- Evaluating truth, accuracy, or likelihood
+- Meta-language about the analysis or verification process
+- Generic filler that could apply to any claim
+- Phrases like "Understanding this requires..." or "This involves..."
+
+EXAMPLE OUTPUTS (these are GOOD):
+- "The World Health Organization (WHO) is a specialized United Nations agency responsible for international public health. It coordinates global health responses and issues guidelines that member nations may adopt or modify."
+- "Jake Paul is an American YouTuber and professional boxer who gained fame through social media. Since 2020, he has competed in professional boxing matches, often against opponents from other combat sports."
+- "Intermittent fasting is an eating pattern that cycles between periods of fasting and eating. Common protocols include 16:8 (16 hours fasting, 8 hours eating) and 5:2 (normal eating 5 days, reduced calories 2 days)."
+
+If the subject is too obscure or specific to explain, write ONE concrete sentence stating what information is limited: "Limited public information exists about [specific subject]."`;
 
     const userPrompt = `Topic: ${topic}
 
-Claim being analyzed: "${claim}"
+Subject to explain: "${claim}"
 
-Provide 3-4 sentences of background context about the subject matter to help the reader understand the topic. Do not evaluate or rephrase the claim.`;
+Provide 2-4 sentences of background context about the subject matter.`;
 
     try {
       const response = await this.chat({

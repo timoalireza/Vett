@@ -548,8 +548,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   // Generate the main claim text for background context
   const mainClaimText = processedClaims[0]?.text || context.normalizedText;
   
-  // OPTIMIZATION: Skip background context for simple/fast claims (saves 1-2s)
-  const shouldGenerateBackground = !isFastTypedClaim && processedClaims.length > 1;
+  // Generate background context for all claims to ensure quality Context card
+  // (Previously skipped for simple claims, but this produced poor generic output)
+  const shouldGenerateBackground = true;
   
   // OPTIMIZATION: Skip title generation for simple single-claim analyses (saves ~500ms)
   const shouldGenerateTitle = !isFastTypedClaim || processedClaims.length > 1;
@@ -940,6 +941,39 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   // Final UX copy normalization (applies to epistemic + legacy + guardrails).
   adjustedVerdictData.summary = normalizeSummary(adjustedVerdictData.verdict, adjustedVerdictData.summary);
   adjustedVerdictData.recommendation = normalizeContext(adjustedVerdictData.recommendation);
+
+  // Context card quality check: Prefer backgroundContext (Perplexity) over reasoner recommendation
+  // when available and not generic/meta-descriptive
+  const isMetaDescriptive = (text: string): boolean => {
+    const metaPatterns = [
+      /^this claim/i,
+      /^the claim/i,
+      /\bthis claim makes\b/i,
+      /\bthis claim asserts?\b/i,
+      /\bthis claim states?\b/i,
+      /\bunderstanding this claim\b/i,
+      /\bfactual assertion about\b/i,
+      /\brequires considering its\b/i,
+      /\bspecific context and scope\b/i,
+      /\bthis statement involves?\b/i,
+    ];
+    return metaPatterns.some(pattern => pattern.test(text));
+  };
+
+  // Use backgroundContext as recommendation if it's better quality
+  if (backgroundContext && backgroundContext.length > 30 && !isMetaDescriptive(backgroundContext)) {
+    // backgroundContext from Perplexity is available and good - use it
+    adjustedVerdictData.recommendation = normalizeContext(backgroundContext);
+    console.log("[Pipeline] Using Perplexity backgroundContext as Context card");
+  } else if (isMetaDescriptive(adjustedVerdictData.recommendation)) {
+    // Reasoner produced meta-descriptive output - provide concrete fallback
+    const mainClaim = processedClaims[0]?.text || "";
+    const fallbackContext = mainClaim.length > 50 
+      ? `This analysis covers a claim about ${classification.topic.toLowerCase()}.`
+      : `Limited background information is available for this specific subject.`;
+    adjustedVerdictData.recommendation = fallbackContext;
+    console.warn("[Pipeline] Detected meta-descriptive Context, using fallback");
+  }
 
   // Image generation removed - no longer using DALL-E 3 or Unsplash
 

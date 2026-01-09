@@ -65,85 +65,43 @@ const IMPROVEMENT_SUGGESTIONS: Record<string, string> = {
 };
 
 /**
- * CONTEXT (How to understand this claim)
- * 
- * Goal: Provide purely factual background - WHO, WHAT, WHEN, WHERE.
- * 3-5 sentences maximum.
- * 
- * - State what was claimed and by whom (if known from claim structure)
- * - Provide neutral definitions or background concepts
- * - Clarify what type of claim this is (predictive, causal, comparative, etc.)
- * - Note structural features (uses absolute language, makes comparisons, etc.)
- * 
- * Tone: Neutral, encyclopedic. Like setting up a problem statement.
- * DO NOT: Evaluate evidence quality, use judgmental language ("alleged", "unsubstantiated"),
- *         analyze or weigh evidence (save for Summary), restate the verdict/summary
+ * Generate evidence summary for internal processing.
+ * NOTE: This is NOT the user-facing Context card. The Context card is generated
+ * by the reasoner (verdict.ts) or Perplexity background context.
+ * This function provides internal diagnostic information about evidence quality.
  */
-function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], penalties: Penalty[]): string {
+function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], _penalties: Penalty[]): string {
   const stats = evidence.stats;
-  const parts: string[] = [];
 
+  // This is internal diagnostic info, not user-facing context
   if (stats.totalSources === 0) {
-    return "No reliable sources were available to assess this claim. The topic may be too specific, too recent, or not well-documented.";
+    return "No sources available for verification.";
   }
 
-  // Describe what kind of claim this is (factual, neutral description)
-  const hasPredictiveClaim = claims.some((c) => c.primaryType === "predictive");
-  const hasCausalClaim = claims.some((c) => c.primaryType === "causal");
-  const hasComparativeClaim = claims.some((c) => c.primaryType === "comparative");
-  const hasUniversalQuantifier = claims.some((c) => c.quantifiers.includes("universal"));
-  const hasVagueQuantifier = claims.some((c) => c.quantifiers.includes("vague"));
-
-  // Start with neutral claim type description
-  if (hasPredictiveClaim) {
-    parts.push("This claim makes a prediction about future events or outcomes.");
-    parts.push("Predictions typically involve projections based on current data and assumptions.");
-  } else if (hasCausalClaim) {
-    parts.push("This claim asserts a cause-and-effect relationship between events or factors.");
-    parts.push("Causal claims require evidence showing that one thing directly causes another, not just correlation.");
-  } else if (hasComparativeClaim) {
-    parts.push("This claim makes a comparison between two or more things.");
-    parts.push("Comparisons depend on the methodology and criteria used for measurement.");
-  }
-
-  // Describe claim structure (neutral, factual)
-  if (hasUniversalQuantifier) {
-    parts.push("The claim uses absolute terms like 'always,' 'never,' or 'all.'");
-  } else if (hasVagueQuantifier) {
-    parts.push("The claim uses imprecise quantifiers that lack specific numbers.");
-  }
-
-  // Note scope or framing (neutral description, not evaluation)
-  const hasContextIssue = penalties.some((p) => 
-    p.name === "context_omission" || p.name === "scope_exaggeration"
-  );
-  if (hasContextIssue && parts.length < 4) {
-    parts.push("The claim's scope or applicable conditions are not fully specified.");
-  }
-
-  // Provide general background if nothing else to say
-  if (parts.length === 0) {
-    parts.push("This claim makes a factual assertion about a specific topic.");
-  }
+  const parts: string[] = [];
   
-  // Add a second neutral sentence if we only have one
-  if (parts.length === 1) {
-    if (claims.length > 1) {
-      parts.push("Multiple related assertions are bundled in this claim.");
-    } else {
-      parts.push("Understanding this claim requires considering its specific context and scope.");
-    }
+  // Internal evidence quality summary (for debugging/audit, not displayed to users)
+  if (stats.supportingCount > 0 && stats.refutingCount === 0) {
+    parts.push(`${stats.supportingCount} supporting source${stats.supportingCount > 1 ? "s" : ""} found.`);
+  } else if (stats.refutingCount > 0 && stats.supportingCount === 0) {
+    parts.push(`${stats.refutingCount} contradicting source${stats.refutingCount > 1 ? "s" : ""} found.`);
+  } else if (stats.supportingCount > 0 && stats.refutingCount > 0) {
+    parts.push(`Mixed evidence: ${stats.supportingCount} supporting, ${stats.refutingCount} contradicting.`);
+  } else {
+    parts.push(`${stats.totalSources} source${stats.totalSources > 1 ? "s" : ""} reviewed.`);
   }
 
-  // Limit to 3-5 sentences and clean up
-  const result = parts.slice(0, 5).join(" ").replace(/\s+/g, " ").trim();
-  
-  // Final fallback only if we truly have nothing (shouldn't happen with logic above)
-  if (result.length < 20) {
-    return "This claim covers a topic with limited available documentation.";
+  if (stats.peerReviewedCount > 0) {
+    parts.push(`Includes ${stats.peerReviewedCount} peer-reviewed source${stats.peerReviewedCount > 1 ? "s" : ""}.`);
   }
-  
-  return result;
+
+  if (stats.uniqueHostnames >= 3) {
+    parts.push(`Evidence from ${stats.uniqueHostnames} independent sources.`);
+  } else if (stats.singleSourceDominance && stats.dominantHostname) {
+    parts.push(`Evidence concentrated from ${stats.dominantHostname}.`);
+  }
+
+  return parts.join(" ").trim() || "Evidence reviewed.";
 }
 
 function generateUncertaintyStatement(
