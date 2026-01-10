@@ -70,7 +70,7 @@ const IMPROVEMENT_SUGGESTIONS: Record<string, string> = {
  * by the reasoner (verdict.ts) or Perplexity background context.
  * This function provides internal diagnostic information about evidence quality.
  */
-function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], _penalties: Penalty[]): string {
+function generateEvidenceSummary(evidence: EvidenceGraph, _claims: TypedClaim[], _penalties: Penalty[]): string {
   const stats = evidence.stats;
 
   // This is internal diagnostic info, not user-facing context
@@ -79,6 +79,11 @@ function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], 
   }
 
   const parts: string[] = [];
+  
+  // Count unique hostnames specifically from SUPPORTING sources for consistency
+  const supportingNodes = evidence.nodes.filter((n) => n.stance === "supports");
+  const supportingHostnames = new Set(supportingNodes.map((n) => n.hostname));
+  const uniqueSupportingHostnames = supportingHostnames.size;
   
   // Internal evidence quality summary (for debugging/audit, not displayed to users)
   if (stats.supportingCount > 0 && stats.refutingCount === 0) {
@@ -95,8 +100,8 @@ function generateEvidenceSummary(evidence: EvidenceGraph, claims: TypedClaim[], 
     parts.push(`Includes ${stats.peerReviewedCount} peer-reviewed source${stats.peerReviewedCount > 1 ? "s" : ""}.`);
   }
 
-  if (stats.uniqueHostnames >= 3) {
-    parts.push(`Evidence from ${stats.uniqueHostnames} independent sources.`);
+  if (uniqueSupportingHostnames >= 3) {
+    parts.push(`Evidence from ${uniqueSupportingHostnames} independent sources.`);
   } else if (stats.singleSourceDominance && stats.dominantHostname) {
     parts.push(`Evidence concentrated from ${stats.dominantHostname}.`);
   }
