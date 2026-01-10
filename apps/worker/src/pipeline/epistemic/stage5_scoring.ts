@@ -113,6 +113,52 @@ function checkCeilingRule(
 // Main Scoring Function
 // ============================================================================
 
+/**
+ * Calculate corroboration bonus based on evidence quality.
+ * Strong independent corroboration should boost the score.
+ */
+function calculateCorroborationBonus(evidence: EvidenceGraph): { bonus: number; reason?: string } {
+  const stats = evidence.stats;
+  
+  // No bonus if no evidence
+  if (stats.totalSources === 0) {
+    return { bonus: 0 };
+  }
+  
+  let bonus = 0;
+  let reason: string | undefined;
+  
+  // Bonus for multiple independent sources agreeing
+  // Only apply if supporting > refuting (net positive stance)
+  if (stats.supportingCount > stats.refutingCount) {
+    const netSupporting = stats.supportingCount - stats.refutingCount;
+    
+    // Strong corroboration: 4+ supporting sources from 3+ unique hostnames
+    if (netSupporting >= 4 && stats.uniqueHostnames >= 3) {
+      bonus = 15;
+      reason = `Strong corroboration: ${netSupporting} supporting sources from ${stats.uniqueHostnames} independent outlets.`;
+    }
+    // Good corroboration: 3+ supporting sources from 2+ unique hostnames
+    else if (netSupporting >= 3 && stats.uniqueHostnames >= 2) {
+      bonus = 10;
+      reason = `Good corroboration: ${netSupporting} supporting sources from ${stats.uniqueHostnames} outlets.`;
+    }
+    // Moderate corroboration: 2+ supporting sources from different hostnames
+    else if (netSupporting >= 2 && stats.uniqueHostnames >= 2) {
+      bonus = 5;
+      reason = `Moderate corroboration: ${netSupporting} supporting sources.`;
+    }
+  }
+  
+  // Additional bonus for high average reliability when corroborated
+  if (bonus > 0 && stats.averageReliability >= 0.7) {
+    bonus += 5;
+    reason = reason ? `${reason} High-reliability sources.` : "High-reliability sources.";
+  }
+  
+  return { bonus, reason };
+}
+
 export function computeEpistemicScore(input: ScoringInput): ScoringOutput {
   const startTime = Date.now();
 
@@ -122,7 +168,15 @@ export function computeEpistemicScore(input: ScoringInput): ScoringOutput {
   // Step 2: Apply penalties cumulatively
   const penaltiesApplied = [...input.penalties];
   const totalPenalties = penaltiesApplied.reduce((sum, p) => sum + p.weight, 0);
-  let rawScore = initialScore - totalPenalties;
+  
+  // Step 2b: Calculate corroboration bonus for well-supported claims
+  const corroborationBonus = calculateCorroborationBonus(input.evidenceGraph);
+  
+  let rawScore = initialScore - totalPenalties + corroborationBonus.bonus;
+  
+  if (corroborationBonus.bonus > 0) {
+    console.log(`[Scoring] Applied corroboration bonus: +${corroborationBonus.bonus} (${corroborationBonus.reason})`);
+  }
 
   // Step 3: Apply safeguards
   const floorCheck = checkFloorRule(input.typedClaims, input.evidenceGraph);

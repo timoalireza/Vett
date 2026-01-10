@@ -25,6 +25,55 @@ import { normalizeContext, normalizeSummary } from "./utils/uxCopy.js";
 const CLAIM_CONFIDENCE_THRESHOLD = 0.5;
 const LEGACY_EVIDENCE_CONCURRENCY = Number(process.env.LEGACY_EVIDENCE_CONCURRENCY ?? 3); // Increased for speed - timeouts protect against slowdowns
 
+/**
+ * Generate background context using GPT-4o when Perplexity is unavailable.
+ * This provides meaningful context about the claim's subject matter.
+ */
+async function generateBackgroundContextWithOpenAI(claimText: string, topic: string): Promise<string> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a context provider for a fact-checking app. Your job is to provide BRIEF, FACTUAL background information that helps users understand what a claim is about.
+
+RULES:
+- Write 2-3 sentences MAX
+- Explain relevant entities, events, organizations, or concepts mentioned in the claim
+- DO NOT evaluate whether the claim is true or false
+- DO NOT use phrases like "This claim...", "The claim states...", or any meta-language about the claim itself
+- DO NOT mention sources, evidence, or verification
+- Write as if you're providing encyclopedia-style background context
+- Be neutral and informative
+
+GOOD EXAMPLE:
+Claim: "Elon Musk bought Twitter for $44 billion"
+Context: "Elon Musk is the CEO of Tesla and SpaceX. Twitter is a social media platform founded in 2006 that allows users to post short messages called tweets."
+
+BAD EXAMPLE (don't do this):
+"This claim is about a business acquisition. The statement references a well-known entrepreneur."`
+        },
+        {
+          role: "user",
+          content: `Provide brief background context for this claim (topic: ${topic}):\n\n"${claimText}"`
+        }
+      ],
+      max_tokens: 150,
+      temperature: 0.3
+    });
+
+    const content = response.choices[0]?.message?.content?.trim();
+    if (content && content.length > 20) {
+      return content;
+    }
+    return "";
+  } catch (error) {
+    console.warn("[Pipeline] GPT-4o context generation failed:", error);
+    return "";
+  }
+}
+
 async function asyncPool<T, R>(
   poolLimit: number,
   items: T[],
@@ -555,79 +604,19 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
   // OPTIMIZATION: Skip title generation for simple single-claim analyses (saves ~500ms)
   const shouldGenerateTitle = !isFastTypedClaim || processedClaims.length > 1;
   
-  // Helper to generate title via LLM or direct truncation
+  // Helper to get title - use full claim text without artificial truncation
+  // The UI handles text wrapping, so we should show the complete claim
   const generateTitle = async (): Promise<string> => {
-    try {
-      const claimsText = processedClaims.map(c => c.text).join(" ");
-      const titleResponse = await openai.chat.completions.create({
-        model: "gpt-5.2",
-        messages: [
-          {
-            role: "system",
-            content: "You are a text shortening assistant. Your task is to shorten the given claim text to fit within 40 characters while preserving the original meaning and wording as much as possible. Do not create a new title or add stylization. Simply truncate or compress the claim naturally. Return only the shortened text, no quotes or extra text."
-          },
-          {
-            role: "user",
-            content: `Shorten this claim to max 40 characters, preserving the original wording:\n\n${claimsText.substring(0, 500)}`
-          }
-        ],
-        max_completion_tokens: 15,
-        temperature: 0.3
-      });
-      let rawTitle = titleResponse.choices[0]?.message?.content?.trim() || "";
-      // Enforce 40 character limit
-      if (rawTitle.length > 40) {
-        const words = rawTitle.split(" ");
-        rawTitle = "";
-        for (const word of words) {
-          if ((rawTitle + " " + word).trim().length <= 37) {
-            rawTitle = (rawTitle + " " + word).trim();
-          } else {
-            break;
-          }
-        }
-        if (rawTitle.length === 0) {
-          rawTitle = words[0]?.slice(0, 37) || "Analysis";
-        }
-        rawTitle += "...";
-      }
-      // If rawTitle is empty, use fallback with proper 40-char limit enforcement
-      if (!rawTitle) {
-        const fallback = processedClaims[0]?.text || "Analysis";
-        if (fallback.length > 40) {
-          return fallback.slice(0, 37) + "...";
-        }
-        return fallback;
-      }
-      return rawTitle;
-    } catch (error) {
-      console.warn("[Pipeline] Failed to generate title, using fallback", error);
-      // Fallback: use first claim text, enforce 40-char limit
-      let fallbackText = processedClaims[0]?.text || "Analysis";
-      if (fallbackText.length > 40) {
-        fallbackText = fallbackText.slice(0, 37) + "...";
-      }
-      return fallbackText;
-    }
+    // Return the full claim text - no truncation needed
+    // The mobile UI will handle text wrapping/display
+    const claimsText = processedClaims.map(c => c.text).join(" ");
+    return claimsText.trim() || "Analysis";
   };
   
-  // Helper to enforce 40-char limit on direct title (for simple claims)
-  // Respects word boundaries to avoid cutting words in half
+  // Helper for simple claims - return full text
   const enforceCharLimit = (text: string): string => {
-    if (text.length <= 40) return text;
-    
-    // Find the last complete word that fits within 37 chars (leaving room for "...")
-    let truncated = text.slice(0, 37);
-    const lastSpaceIndex = truncated.lastIndexOf(" ");
-    
-    // If we found a space, truncate at the last complete word
-    if (lastSpaceIndex > 0 && lastSpaceIndex >= 20) {
-      truncated = truncated.slice(0, lastSpaceIndex);
-    }
-    // Otherwise, if no space found or it's too early, keep the char-based truncation
-    // (better to have a partial word than a 2-word title)
-    
-    return truncated.trim() + "...";
+    // Return full text - UI handles display
+    return text.trim() || "Analysis";
   };
   
   // Run epistemic pipeline, background context, and title generation in parallel
@@ -1005,12 +994,29 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
     // backgroundContext from Perplexity is available and good - use it
     adjustedVerdictData.recommendation = backgroundContext;
     console.log("[Pipeline] Using Perplexity backgroundContext as Context card");
-  } else if (isNotUserFacingContext(rawRecommendation)) {
-    // Reasoner produced meta-descriptive or diagnostic output - provide concrete fallback
-    // Extract a specific subject description from topic, never use meta-language
-    const topicLower = classification.topic.toLowerCase();
-    adjustedVerdictData.recommendation = `Limited public information exists about ${topicLower}.`;
-    console.warn("[Pipeline] Detected non-user-facing Context, using fallback");
+  } else if (isNotUserFacingContext(rawRecommendation) || !rawRecommendation || rawRecommendation.length < 30) {
+    // Perplexity unavailable AND reasoner produced meta-descriptive/diagnostic/empty output
+    // Fall back to GPT-4o for meaningful context generation
+    console.log("[Pipeline] Primary context sources unavailable, falling back to GPT-4o");
+    
+    const gpt4oContext = await generateBackgroundContextWithOpenAI(mainClaimText, classification.topic);
+    
+    if (gpt4oContext && gpt4oContext.length > 20 && !isNotUserFacingContext(gpt4oContext)) {
+      adjustedVerdictData.recommendation = gpt4oContext;
+      console.log("[Pipeline] Using GPT-4o generated context as Context card");
+    } else {
+      // Ultimate fallback - only used if GPT-4o also fails
+      const topicLower = classification.topic.toLowerCase();
+      const genericTopics = ["general", "other", "unknown", "misc", "miscellaneous"];
+      
+      if (genericTopics.includes(topicLower)) {
+        // For generic topics, provide a minimal but grammatically correct statement
+        adjustedVerdictData.recommendation = "Background information for this topic is limited.";
+      } else {
+        adjustedVerdictData.recommendation = `Background information about ${topicLower} is limited.`;
+      }
+      console.warn("[Pipeline] All context generation failed, using minimal fallback");
+    }
   }
 
   // Final UX copy normalization (applies to epistemic + legacy + guardrails).
@@ -1102,76 +1108,17 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
 
   const complexity = calculateComplexity();
 
-  // Helper function to ensure title meets 3-10 word constraint AND 40-char limit
+  // Helper function to clean up title text
+  // No artificial character limits - show the full claim
   const ensureTitleConstraint = (text: string): string => {
-    const words = text.split(" ").filter(w => w.length > 0);
+    const trimmed = text.trim();
     
-    // If no words, use first claim as fallback
-    if (words.length === 0) {
-      const fallbackWords = claims[0]?.text?.split(" ").filter(w => w.length > 0) || [];
-      if (fallbackWords.length === 0) {
-        return "Analysis";
-      }
-      // Ensure 3-10 words from fallback, respecting 40-char limit
-      if (fallbackWords.length < 3) {
-        const combined = [...fallbackWords, ...Array(3 - fallbackWords.length).fill("Analysis")].slice(0, 10);
-        const joined = combined.join(" ");
-        return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
-      }
-      const joined = fallbackWords.slice(0, 10).join(" ");
-      return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
+    // If empty, use first claim as fallback
+    if (!trimmed) {
+      return claims[0]?.text?.trim() || "Analysis";
     }
     
-    // Truncate if more than 10 words
-    if (words.length > 10) {
-      const truncated = words.slice(0, 10).join(" ");
-      return truncated.length <= 40 ? truncated : truncated.slice(0, 37) + "...";
-    }
-    
-    // Ensure minimum 3 words (but respect 40-char limit)
-    if (words.length < 3) {
-      // If text is already at/near 40 chars but under 3 words, don't pad (would exceed limit)
-      // Enforce 40-char limit before returning
-      if (text.length >= 38) {
-        return text.length <= 40 ? text : text.slice(0, 37) + "..."; // Enforce limit even when not padding
-      }
-      
-      // Try to get additional words from first claim
-      if (claims[0]?.text) {
-        const claimWords = claims[0].text.split(" ").filter(w => w.length > 0);
-        const neededWords = 3 - words.length;
-        // Take words from claim that aren't already in the title (avoid duplicates)
-        const existingLower = new Set(words.map(w => w.toLowerCase()));
-        const additionalWords = claimWords.filter(w => !existingLower.has(w.toLowerCase())).slice(0, neededWords);
-        const combined = [...words, ...additionalWords];
-        
-        if (combined.length >= 3) {
-          const joined = combined.slice(0, 10).join(" ");
-          return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
-        }
-        // If still not enough, pad with "Analysis" (but check 40-char limit)
-        while (combined.length < 3 && combined.length < 10) {
-          const testCombined = [...combined, "Analysis"].join(" ");
-          if (testCombined.length > 40) break; // Stop padding if it would exceed limit
-          combined.push("Analysis");
-        }
-        const joined = combined.join(" ");
-        return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
-      }
-      // Last resort: pad with "Analysis" (but respect 40-char limit)
-      const padded = [...words];
-      while (padded.length < 3 && padded.length < 10) {
-        const testPadded = [...padded, "Analysis"].join(" ");
-        if (testPadded.length > 40) break; // Stop padding if it would exceed limit
-        padded.push("Analysis");
-      }
-      const joined = padded.join(" ");
-      return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
-    }
-    
-    // Already 3-10 words, just ensure 40-char limit
-    const joined = words.join(" ");
-    return joined.length <= 40 ? joined : joined.slice(0, 37) + "...";
+    return trimmed;
   };
 
   // Use title generated in parallel (already completed)
