@@ -241,6 +241,20 @@ const pool = new Pool({
 });
 const db = drizzle(pool, { schema });
 
+// CRITICAL: Ensure background_context column exists before processing jobs
+// This must succeed or the worker will fail when updating analyses
+async function ensureBackgroundContextColumn(): Promise<void> {
+  try {
+    await pool.query('ALTER TABLE "analyses" ADD COLUMN IF NOT EXISTS "background_context" TEXT;');
+    logger.info('[Startup] ✅ Ensured "analyses.background_context" exists');
+    console.log('[Startup] ✅ Ensured "analyses.background_context" exists');
+  } catch (error) {
+    logger.error({ error }, '[Startup] ❌ Failed ensuring "analyses.background_context" exists');
+    console.error('[Startup] ❌ Failed ensuring "analyses.background_context" exists');
+    throw error;
+  }
+}
+
 // Removed ensureRedisConnection - using initializeRedisForBullMQ instead
 
 // CRITICAL: Pass Redis connection directly to Queue instead of connection factory
@@ -726,7 +740,18 @@ async function startWorker() {
       // Don't throw - let it retry, but log the error clearly
       logger.warn("[Startup] ⚠️ Worker will continue but database operations may fail");
     }
-    
+
+    // CRITICAL: Ensure background_context column exists BEFORE starting worker
+    // This must succeed or the worker will fail when updating analyses
+    // ANY failure (connection, permission, timeout, etc.) is FATAL
+    try {
+      await ensureBackgroundContextColumn();
+    } catch (error: any) {
+      logger.error({ error }, "[Startup] ❌ FATAL: Failed to ensure background_context column exists");
+      console.error("[Startup] ❌ FATAL: Failed to ensure background_context column exists:", error);
+      process.exit(1);
+    }
+
     // Test Redis connection by getting shared connection
     try {
       const conn = getSharedConnection();
