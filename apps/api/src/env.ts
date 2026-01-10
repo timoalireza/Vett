@@ -116,6 +116,14 @@ const envSchema = z.object({
     .optional()
     .transform((value) => (value ? Number(value) : undefined))
     .pipe(z.number().int().nonnegative().optional()),
+  // SSL certificate verification for database connections
+  // Set to "true" to require valid SSL certificates (recommended for production with proper certs)
+  // Defaults to false for compatibility with cloud providers using self-signed certs
+  DB_SSL_REJECT_UNAUTHORIZED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true")
+    .pipe(z.boolean().default(false)),
   // Sentry error tracking (optional, but recommended for production)
   SENTRY_DSN: z
     .string()

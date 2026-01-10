@@ -128,23 +128,28 @@ function calculateCorroborationBonus(evidence: EvidenceGraph): { bonus: number; 
   let bonus = 0;
   let reason: string | undefined;
   
+  // Count unique hostnames specifically from SUPPORTING sources
+  const supportingNodes = evidence.nodes.filter((n) => n.stance === "supports");
+  const supportingHostnames = new Set(supportingNodes.map((n) => n.hostname));
+  const uniqueSupportingHostnames = supportingHostnames.size;
+  
   // Bonus for multiple independent sources agreeing
   // Only apply if supporting > refuting (net positive stance)
   if (stats.supportingCount > stats.refutingCount) {
     const netSupporting = stats.supportingCount - stats.refutingCount;
     
     // Strong corroboration: 4+ supporting sources from 3+ unique hostnames
-    if (netSupporting >= 4 && stats.uniqueHostnames >= 3) {
+    if (netSupporting >= 4 && uniqueSupportingHostnames >= 3) {
       bonus = 15;
-      reason = `Strong corroboration: ${netSupporting} supporting sources from ${stats.uniqueHostnames} independent outlets.`;
+      reason = `Strong corroboration: ${netSupporting} supporting sources from ${uniqueSupportingHostnames} independent outlets.`;
     }
     // Good corroboration: 3+ supporting sources from 2+ unique hostnames
-    else if (netSupporting >= 3 && stats.uniqueHostnames >= 2) {
+    else if (netSupporting >= 3 && uniqueSupportingHostnames >= 2) {
       bonus = 10;
-      reason = `Good corroboration: ${netSupporting} supporting sources from ${stats.uniqueHostnames} outlets.`;
+      reason = `Good corroboration: ${netSupporting} supporting sources from ${uniqueSupportingHostnames} outlets.`;
     }
     // Moderate corroboration: 2+ supporting sources from different hostnames
-    else if (netSupporting >= 2 && stats.uniqueHostnames >= 2) {
+    else if (netSupporting >= 2 && uniqueSupportingHostnames >= 2) {
       bonus = 5;
       reason = `Moderate corroboration: ${netSupporting} supporting sources.`;
     }

@@ -303,32 +303,21 @@ export const resolvers: IResolvers<GraphQLContext> = {
       submitAnalysis: async (_parent, args, context) => {
         trackGraphQLMutation("submitAnalysis");
         try {
-          console.log("[GraphQL] submitAnalysis called", { 
-            hasInput: !!args.input,
-            inputType: args.input?.mediaType,
-            hasUserId: !!(context as GraphQLContext).userId
-          });
-          
           const ctx = context as GraphQLContext;
           // Get or create user in database
           let userId: string | undefined;
           if (ctx.userId) {
-            console.log("[GraphQL] Getting/creating user:", ctx.userId);
             userId = await userService.getOrCreateUser(ctx.userId);
-            console.log("[GraphQL] User ID:", userId);
-            
+
             // Check subscription limits
             const canPerform = await subscriptionService.canPerformAnalysis(userId);
             if (!canPerform.allowed) {
-              console.log("[GraphQL] Subscription limit reached:", canPerform.reason);
               throw new Error(canPerform.reason || "Analysis limit reached");
             }
           }
 
-          console.log("[GraphQL] Enqueueing analysis...");
           // Instagram user ID is undefined for app-submitted analyses (only set for DM-submitted)
           const analysisId = await analysisService.enqueueAnalysis(args.input, userId, undefined);
-          console.log("[GraphQL] ✅ Analysis enqueued:", analysisId);
         
         // Increment usage if user is authenticated
         if (userId) {
@@ -347,9 +336,6 @@ export const resolvers: IResolvers<GraphQLContext> = {
         };
       } catch (error) {
         trackGraphQLError();
-        // Log the actual error for debugging
-        console.error("[submitAnalysis] Error:", error);
-        
         // Check if it's a database connection error (but NOT a schema mismatch error)
         if (error instanceof Error) {
           const errorMessage = error.message.toLowerCase();
@@ -790,12 +776,10 @@ export const resolvers: IResolvers<GraphQLContext> = {
       }
 
       try {
-        console.log("[GraphQL] syncSubscription called for user:", ctx.userId);
         const dbUserId = await userService.getOrCreateUser(ctx.userId);
 
         // Sync subscription from RevenueCat (this waits for completion)
         if (!env.REVENUECAT_API_KEY) {
-          console.warn("[GraphQL] REVENUECAT_API_KEY not configured");
           return {
             success: false,
             subscription: null,
@@ -804,17 +788,10 @@ export const resolvers: IResolvers<GraphQLContext> = {
         }
 
         const { syncUserSubscriptionFromRevenueCat } = await import("../services/revenuecat-sync.js");
-        console.log("[GraphQL] Calling syncUserSubscriptionFromRevenueCat...");
         await syncUserSubscriptionFromRevenueCat(ctx.userId);
-        console.log("[GraphQL] Sync completed, fetching updated subscription info...");
 
         // Get updated subscription info
         const info = await subscriptionService.getSubscriptionInfo(dbUserId);
-        console.log("[GraphQL] Updated subscription info:", {
-          plan: info.plan,
-          status: info.status,
-          billingCycle: info.billingCycle
-        });
 
         return {
           success: true,
@@ -833,11 +810,6 @@ export const resolvers: IResolvers<GraphQLContext> = {
         };
       } catch (error: any) {
         trackGraphQLError();
-        console.error("[GraphQL] Error syncing subscription:", {
-          userId: ctx.userId,
-          error: error.message,
-          stack: error.stack
-        });
         return {
           success: false,
           subscription: null,

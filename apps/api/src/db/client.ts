@@ -14,7 +14,8 @@ const pool = new Pool({
   idleTimeoutMillis: 30000, // Close idle connections after 30s
   connectionTimeoutMillis: 10000, // Timeout after 10s (increased for cloud databases)
   // SSL configuration (required for most cloud providers)
-  ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+  // Use DB_SSL_REJECT_UNAUTHORIZED=true when you have proper SSL certificates
+  ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED } : false
 });
 
 // Handle pool errors gracefully

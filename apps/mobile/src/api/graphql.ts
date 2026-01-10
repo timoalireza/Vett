@@ -2,6 +2,9 @@ import { GRAPHQL_ENDPOINT } from "./config";
 import { getClerkToken } from "./clerk-token";
 import { tokenProvider } from "./token-provider";
 
+// React Native global - true in development, false in production builds
+declare const __DEV__: boolean;
+
 interface GraphQLResponse<T> {
   data?: T;
   errors?: Array<{ message: string }>;
@@ -78,14 +81,14 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
   // Get auth token if available
   let token = await getAuthToken();
   const queryName = query.split("query")[1]?.split("(")[0]?.trim() || query.split("mutation")[1]?.split("(")[0]?.trim();
-  console.log("[GraphQL] Request:", { 
-    hasToken: !!token, 
-    tokenLength: token?.length,
-    tokenPrefix: token?.substring(0, 20),
-    isJwtLike: token ? isJwtLike(token) : false,
-    queryName, 
-    variables 
-  });
+  // Debug logging - avoid logging token content for security
+  if (__DEV__) {
+    console.log("[GraphQL] Request:", {
+      hasToken: !!token,
+      isJwtLike: token ? isJwtLike(token) : false,
+      queryName
+    });
+  }
   
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -140,9 +143,6 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
 
   let json = await doFetch(token);
   
-  // Log full response for debugging
-  console.log("[GraphQL] Response:", JSON.stringify(json, null, 2));
-  
   if (json.errors?.length) {
     const authErr = isAuthError(json.errors as any);
     const log = authErr ? console.warn : console.error;
@@ -150,27 +150,21 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
     
     // If it's an auth error, log additional debugging info
     if (authErr) {
-      console.warn("[GraphQL] Authentication error detected. Token status:", {
-        hadToken: !!token,
-        tokenLength: token?.length,
-        authState: tokenProvider.getAuthState(),
-        queryName
-      });
+      if (__DEV__) {
+        console.warn("[GraphQL] Authentication error detected:", {
+          hadToken: !!token,
+          authState: tokenProvider.getAuthState(),
+          queryName
+        });
+      }
 
       // If we think we're signed in, try refreshing token once and retry the request.
       if (tokenProvider.getAuthState() === "signedIn") {
         const refreshed = await tokenProvider.refreshToken();
         if (refreshed && refreshed !== token) {
-          console.warn("[GraphQL] Retrying request after token refresh:", {
-            queryName,
-            refreshedTokenLength: refreshed.length,
-            refreshedIsJwtLike: isJwtLike(refreshed)
-          });
           token = refreshed;
           json = await doFetch(token);
-          console.log("[GraphQL] Response (retry):", JSON.stringify(json, null, 2));
           if (!json.errors?.length && json.data) {
-            console.log("[GraphQL] Success (retry):", Object.keys(json.data));
             return json.data;
           }
           // Retry failed with errors - re-evaluate error type for correct log level
@@ -221,11 +215,9 @@ export async function graphqlRequest<TData, TVariables = Record<string, unknown>
     throw new Error(errorMessages);
   }
   if (!json.data) {
-    console.error("[GraphQL] No data in response");
     throw new Error("GraphQL response missing data");
   }
 
-  console.log("[GraphQL] Success:", Object.keys(json.data));
   return json.data;
 }
 

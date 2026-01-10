@@ -444,15 +444,20 @@ function detectSelectiveCitation(
   // If multiple INDEPENDENT sources (3+ unique hostnames) all support the claim,
   // that's strong corroboration, NOT selection bias - do NOT penalize.
   if (stats.supportingCount > 0 && stats.refutingCount === 0 && stats.totalSources >= 3) {
-    // If we have 3+ unique hostnames all agreeing, this is corroboration, not bias
-    if (stats.uniqueHostnames >= 3) {
+    // Count unique hostnames specifically from SUPPORTING sources
+    const supportingNodes = evidence.nodes.filter((n) => n.stance === "supports");
+    const supportingHostnames = new Set(supportingNodes.map((n) => n.hostname));
+    const uniqueSupportingHostnames = supportingHostnames.size;
+    
+    // If we have 3+ unique hostnames all supporting, this is corroboration, not bias
+    if (uniqueSupportingHostnames >= 3) {
       // Strong independent corroboration - do NOT penalize
       return null;
     }
     
     // Only flag if evidence seems one-sided from limited sources
     const mixedEvidence = evidence.nodes.filter((n) => n.stance === "mixed");
-    if (mixedEvidence.length === 0 && stats.uniqueHostnames < 3) {
+    if (mixedEvidence.length === 0 && uniqueSupportingHostnames < 3) {
       // Could be selective citation when sources are limited
       return createPenalty(
         "selective_citation",

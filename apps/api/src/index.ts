@@ -141,7 +141,6 @@ initSentry();
 
 import { randomUUID } from "crypto";
 import { constants } from "zlib";
-import { Pool } from "pg";
 import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
@@ -463,43 +462,9 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-async function ensureBackgroundContextColumn(): Promise<void> {
-  const pool = new Pool({
-    connectionString: env.DATABASE_URL,
-    ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
-  });
-
-  let queryError: any = null;
-  try {
-    await pool.query('ALTER TABLE "analyses" ADD COLUMN IF NOT EXISTS "background_context" TEXT;');
-    console.log('[Startup] ✅ Ensured "analyses.background_context" exists');
-  } catch (error) {
-    // Capture the query error to ensure it's not lost during cleanup
-    queryError = error;
-  } finally {
-    // Always attempt cleanup, but handle errors appropriately
-    try {
-      await pool.end();
-    } catch (cleanupError) {
-      console.warn('[Startup] Warning: Failed to close database pool:', cleanupError);
-      // If there was no query error, propagate the cleanup error (resource leak)
-      // If there was a query error, suppress cleanup error to preserve the original error
-      if (!queryError) {
-        throw cleanupError;
-      }
-    }
-  }
-
-  // Re-throw the original query error if one occurred
-  if (queryError) {
-    throw queryError;
-  }
-}
-
 async function start() {
   try {
     console.log(`[Startup] Initializing server on port ${env.PORT}...`);
-    await ensureBackgroundContextColumn();
     const app = await buildServer();
     console.log(`[Startup] Server built successfully, starting listener...`);
     await app.listen({ port: env.PORT, host: "0.0.0.0" });

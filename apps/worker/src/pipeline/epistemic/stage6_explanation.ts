@@ -257,6 +257,11 @@ function generateKeyReasons(
   
   // Determine claim category for contextual reasoning
   const claimCategory = getClaimCategory(claims, evidence);
+  
+  // Count unique hostnames specifically from SUPPORTING sources for corroboration checks
+  const supportingNodes = evidence.nodes.filter((n) => n.stance === "supports");
+  const supportingHostnames = new Set(supportingNodes.map((n) => n.hostname));
+  const uniqueSupportingHostnames = supportingHostnames.size;
 
   // Reason 1: Evidence alignment (always relevant)
   if (stats.totalSources === 0) {
@@ -299,7 +304,7 @@ function generateKeyReasons(
       text: `Backed by ${stats.peerReviewedCount} scientific/research source${stats.peerReviewedCount > 1 ? "s" : ""}.`, 
       sentiment: "POSITIVE" 
     });
-  } else if (claimCategory === "factual_event" && stats.uniqueHostnames >= 3) {
+  } else if (claimCategory === "factual_event" && uniqueSupportingHostnames >= 3) {
     reasons.push({ 
       text: `Multiple news outlets reported on this independently.`, 
       sentiment: "POSITIVE" 
@@ -309,9 +314,9 @@ function generateKeyReasons(
       text: `Most info comes from one place (${stats.dominantHostname}), so it's harder to double-check.`, 
       sentiment: "NEGATIVE" 
     });
-  } else if (stats.uniqueHostnames >= 3) {
+  } else if (uniqueSupportingHostnames >= 3) {
     reasons.push({ 
-      text: `Info comes from ${stats.uniqueHostnames} different sources, which adds credibility.`, 
+      text: `Info comes from ${uniqueSupportingHostnames} different sources, which adds credibility.`, 
       sentiment: "POSITIVE" 
     });
   }
