@@ -29,31 +29,38 @@ export function deAttribution(text: string): string {
   const preservedPrefix = verdictPrefixMatch?.[0] ?? "";
   if (preservedPrefix) t = t.slice(preservedPrefix.length);
 
-  // Remove common attribution phrases + source-y framing.
-  t = t.replace(/\baccording to\b/gi, "");
-  t = t.replace(/\bexperts say\b/gi, "");
-  t = t.replace(/\bsources say\b/gi, "");
+  // Remove attribution phrases completely (these are typically filler)
+  t = t.replace(/\baccording to\s+[^,.\n]+[,.]?\s*/gi, "");
+  t = t.replace(/\b(experts|sources)\s+say\s+(that\s+)?/gi, "");
+  t = t.replace(/\bretrieved\s+/gi, "");
 
-  // Avoid awkward "retrieved ..." phrasing in user-facing copy.
-  t = t.replace(/\bretrieved\b/gi, "");
+  // Handle numbered sources - transform the whole phrase to avoid "3 available information"
+  // "3 sources confirm" -> "This is confirmed"
+  // "Multiple sources suggest" -> "It is suggested"
+  t = t.replace(/\b\d+\s+sources?\s+(confirm|support|indicate|suggest|show)s?\b/gi, "This is $1ed");
+  t = t.replace(/\bmultiple\s+sources?\s+(confirm|support|indicate|suggest|show)s?\b/gi, "This is $1ed");
+  t = t.replace(/\bseveral\s+sources?\s+(confirm|support|indicate|suggest|show)s?\b/gi, "This is $1ed");
 
-  // For replacements that introduce "the available information", strip any preceding article to avoid "the the available information".
-  t = t.replace(/\b(?:the|a|an)\s+reports(?:\s+say)?\b/gi, "the available information");
-  t = t.replace(/\breports(?:\s+say)?\b/gi, "available information");
-  t = t.replace(/\b(?:the|a|an)\s+studies\s+(?:say|show)\b/gi, "the available information indicates");
-  t = t.replace(/\bstudies\s+(?:say|show)\b/gi, "available information indicates");
-  t = t.replace(/\b(?:the|a|an)\s+multiple\s+sources\b/gi, "the available information");
-  t = t.replace(/\bmultiple\s+sources\b/gi, "available information");
-  t = t.replace(/\b(?:the|a|an)\s+sources\b/gi, "the available information");
-  t = t.replace(/\bsources\b/gi, "available information");
-  t = t.replace(/\b(?:the|a|an)\s+evidence\b/gi, "the available information");
-  t = t.replace(/\bevidence\b/gi, "available information");
+  // Handle specific phrases where replacement is grammatical
+  t = t.replace(/\bsources\s+indicate\s+that\b/gi, "indications suggest that");
+  t = t.replace(/\bsources\s+suggest\s+that\b/gi, "it appears that");
+  t = t.replace(/\bevidence\s+suggests\s+that\b/gi, "it appears that");
+  t = t.replace(/\bevidence\s+indicates\s+that\b/gi, "it appears that");
+  t = t.replace(/\bthe\s+available\s+evidence\b/gi, "available information");
 
-  // Replace corroboration/source-count language with neutral wording.
+  // Handle "reports say/show" patterns
+  t = t.replace(/\breports\s+(say|show|indicate|suggest)\s+(that\s+)?/gi, "it appears that ");
+  t = t.replace(/\bstudies\s+(say|show|indicate|suggest)\s+(that\s+)?/gi, "research indicates that ");
+
+  // DON'T do blanket replacement of "sources" or "evidence" - leave them in other contexts
+  // This avoids creating broken phrases like "3 available information"
+
+  // Replace corroboration language with neutral wording
+  t = t.replace(/\bindependent\s+corroboration\b/gi, "independent confirmation");
+  t = t.replace(/\bcorroborated\s+by\b/gi, "confirmed by");
   t = t.replace(/\bcorroboration\b/gi, "confirmation");
-  t = t.replace(/\bindependent sources?\b/gi, "independent confirmation");
 
-  // Replace "true/false" usages outside the verdict label with neutral wording.
+  // Replace "true/false" usages outside the verdict label with neutral wording
   t = t.replace(/\b(this claim is|the claim is)\s+false\b/gi, "$1 not supported");
   t = t.replace(/\b(this claim is|the claim is)\s+true\b/gi, "$1 supported");
   t = t.replace(/\bnot true\b/gi, "not supported");

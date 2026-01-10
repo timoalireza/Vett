@@ -207,6 +207,30 @@ Provide 2-4 sentences of background context about the subject matter.`;
       });
 
       const context = response.choices[0]?.message?.content?.trim() || "";
+
+      // Quality validation - reject responses that indicate failure or don't provide useful context
+      if (context.length < 30) {
+        console.warn("[perplexity] Context too short, returning empty");
+        return "";
+      }
+
+      // Check for patterns that indicate Perplexity couldn't provide useful context
+      const forbiddenPatterns = [
+        /^I (cannot|can't|am unable to)/i,
+        /^sorry,?\s+I/i,
+        /^this claim/i,
+        /^the claim/i,
+        /^I don't have (enough )?information/i,
+        /^limited information is available/i,
+        /^I('m| am) not able to/i,
+        /^unfortunately,?\s+I/i,
+      ];
+
+      if (forbiddenPatterns.some(p => p.test(context))) {
+        console.warn("[perplexity] Context contains forbidden pattern, returning empty");
+        return "";
+      }
+
       return context;
     } catch (error: any) {
       console.error("[perplexity] Background context generation failed:", error.message);

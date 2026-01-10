@@ -170,45 +170,54 @@ export function computeEpistemicScore(input: ScoringInput): ScoringOutput {
   // Step 1: Initialize at 100
   const initialScore = 100;
 
-  // Step 2: Apply penalties cumulatively
+  // Step 2: Apply penalties cumulatively (NO bonus yet)
   const penaltiesApplied = [...input.penalties];
   const totalPenalties = penaltiesApplied.reduce((sum, p) => sum + p.weight, 0);
-  
-  // Step 2b: Calculate corroboration bonus for well-supported claims
-  const corroborationBonus = calculateCorroborationBonus(input.evidenceGraph);
-  
-  let rawScore = initialScore - totalPenalties + corroborationBonus.bonus;
-  
-  if (corroborationBonus.bonus > 0) {
-    console.log(`[Scoring] Applied corroboration bonus: +${corroborationBonus.bonus} (${corroborationBonus.reason})`);
-  }
 
-  // Step 3: Apply safeguards
+  // Step 2b: Calculate corroboration bonus (but don't apply yet)
+  const corroborationBonus = calculateCorroborationBonus(input.evidenceGraph);
+
+  // Pre-bonus raw score
+  const rawScorePreBonus = initialScore - totalPenalties;
+
+  // Step 3: Apply safeguards to PRE-BONUS score
   const floorCheck = checkFloorRule(input.typedClaims, input.evidenceGraph);
   const ceilingCheck = checkCeilingRule(input.typedClaims, input.evidenceGraph);
 
-  let finalScore = rawScore;
+  let scoreAfterSafeguards = rawScorePreBonus;
   let floorApplied = false;
   let ceilingApplied = false;
   let floorReason: string | undefined;
   let ceilingReason: string | undefined;
 
-  // Apply floor (minimum 20 if peer-reviewed support)
-  if (floorCheck.applies && finalScore < 20) {
-    finalScore = 20;
+  // Apply floor FIRST (on pre-bonus score)
+  if (floorCheck.applies && scoreAfterSafeguards < 20) {
+    scoreAfterSafeguards = 20;
     floorApplied = true;
     floorReason = floorCheck.reason;
   }
 
-  // Apply ceiling (maximum 75 if primarily model-based)
-  if (ceilingCheck.applies && finalScore > 75) {
-    finalScore = 75;
+  // Apply ceiling (on pre-bonus score)
+  if (ceilingCheck.applies && scoreAfterSafeguards > 75) {
+    scoreAfterSafeguards = 75;
     ceilingApplied = true;
     ceilingReason = ceilingCheck.reason;
   }
 
-  // Step 4: Clamp to 0-100
-  finalScore = Math.max(0, Math.min(100, Math.round(finalScore)));
+  // Step 4: NOW apply bonus, but respect ceiling if it was triggered
+  let rawScore = scoreAfterSafeguards + corroborationBonus.bonus;
+
+  if (corroborationBonus.bonus > 0) {
+    console.log(`[Scoring] Applied corroboration bonus: +${corroborationBonus.bonus} (${corroborationBonus.reason})`);
+  }
+
+  // If ceiling applies, bonus cannot push above ceiling
+  if (ceilingApplied) {
+    rawScore = Math.min(rawScore, 75);
+  }
+
+  // Step 5: Clamp to 0-100
+  let finalScore = Math.max(0, Math.min(100, Math.round(rawScore)));
 
   // Step 5: Map to score band
   const { key: scoreBandKey, band: scoreBand } = getScoreBand(finalScore);

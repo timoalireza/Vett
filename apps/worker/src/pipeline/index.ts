@@ -945,7 +945,20 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       /\bspecific context and scope\b/i,
       /\bthis statement involves?\b/i,
     ];
-    
+
+    // Generic filler patterns that indicate the context generation failed to produce useful content
+    const genericFillerPatterns = [
+      /^background information (about|for) .{0,40} is limited/i,
+      /^limited (public )?information exists/i,
+      /^this topic (requires|involves) (careful )?consideration/i,
+      /^more research is needed/i,
+      /^additional context was not available/i,
+      /^no specific information/i,
+      /^I (cannot|can't|am unable to)/i,
+      /^sorry,?\s+I/i,
+      /^I don't have (enough )?information/i,
+    ];
+
     // Internal diagnostic patterns from generateEvidenceSummary (not user-facing)
     // generateEvidenceSummary() produces multi-part output like:
     // "3 supporting sources found. Includes 2 peer-reviewed sources. Evidence from 5 independent sources."
@@ -960,7 +973,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       /^no sources available/i,                              // "No sources available..."
       /^evidence reviewed\b/i,                               // "Evidence reviewed..."
     ];
-    
+
     // Diagnostic phrases that can appear anywhere (secondary sentences in multi-part output)
     // These use \b word boundaries instead of ^ or $ to avoid false positives
     const diagnosticAnywherePatterns = [
@@ -968,7 +981,7 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       /\bevidence from \d+ independent sources\b/i,          // "...Evidence from 5 independent sources..."
       /\bevidence concentrated from\s+\S+\b/i,               // "...Evidence concentrated from example.com..."
     ];
-    
+
     // Post-normalization variants (after deAttribution replaces "sources" → "available information")
     const normalizedDiagnosticPatterns = [
       /^\d+\s+supporting\s+available information\s+found\b/i,
@@ -979,8 +992,9 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       /\bavailable information from \d+ independent confirmation\b/i,
       /\bavailable information concentrated from\s+\S+\b/i,
     ];
-    
-    return metaPatterns.some(pattern => pattern.test(text)) || 
+
+    return metaPatterns.some(pattern => pattern.test(text)) ||
+           genericFillerPatterns.some(pattern => pattern.test(text)) ||
            diagnosticStartPatterns.some(pattern => pattern.test(text)) ||
            diagnosticAnywherePatterns.some(pattern => pattern.test(text)) ||
            normalizedDiagnosticPatterns.some(pattern => pattern.test(text));
@@ -1006,16 +1020,18 @@ export async function runAnalysisPipeline(payload: AnalysisJobPayload): Promise<
       console.log("[Pipeline] Using GPT-4o generated context as Context card");
     } else {
       // Ultimate fallback - only used if GPT-4o also fails
+      // Provide topic-aware context that doesn't sound like an error message
       const topicLower = classification.topic.toLowerCase();
       const genericTopics = ["general", "other", "unknown", "misc", "miscellaneous"];
-      
+
       if (genericTopics.includes(topicLower)) {
-        // For generic topics, provide a minimal but grammatically correct statement
-        adjustedVerdictData.recommendation = "Background information for this topic is limited.";
+        // For generic topics, don't mention "background information" - sounds like an error
+        adjustedVerdictData.recommendation = "This claim could not be matched to specific factual context. The analysis is based on available evidence.";
       } else {
-        adjustedVerdictData.recommendation = `Background information about ${topicLower} is limited.`;
+        // For specific topics, provide a topic-aware statement
+        adjustedVerdictData.recommendation = `This claim relates to ${topicLower}. The analysis is based on available evidence about this topic.`;
       }
-      console.warn("[Pipeline] All context generation failed, using minimal fallback");
+      console.warn("[Pipeline] All context generation failed, using topic-aware fallback");
     }
   }
 
